@@ -1,0 +1,698 @@
+// ============================================================
+// ERP HAX V1 — Prisma Schema (PostgreSQL)
+// HAX ESTUDIO CREATIVO EIRL | RNC: 133290251
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  ACCOUNTANT
+}
+
+enum BusinessUnit {
+  HAX
+  KODER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENDING
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+}
+
+enum InvoiceType {
+  CREDITO_FISCAL
+  CONSUMO
+  NOTA_DEBITO
+  NOTA_CREDITO
+}
+
+enum PaymentMethod {
+  TRANSFER
+  CASH
+  CHECK
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+enum ExpenseStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum ExpenseCategory {
+  OPERATIONS
+  MARKETING
+  TECHNOLOGY
+  RENT
+  UTILITIES
+  SALARIES
+  TAXES
+  OTHER
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum JournalEntryType {
+  INVOICE
+  PAYMENT
+  EXPENSE
+  PAYROLL
+  ADJUSTMENT
+  CREDIT_NOTE
+}
+
+enum BankTransactionStatus {
+  UNMATCHED
+  MATCHED
+  IGNORED
+}
+
+enum LeadStatus {
+  LEAD
+  CONTACT
+  PROPOSAL
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CONVERTED
+}
+
+enum EmployeeType {
+  SALARIED
+  CONTRACTOR
+}
+
+enum PayrollStatus {
+  CALCULATED
+  APPROVED
+  PAID
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  CANCEL
+  SEND
+  PAY
+  CLOSE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum FiscalReportType {
+  REPORT_606
+  REPORT_607
+}
+
+// ============================================================
+// USUARIOS
+// ============================================================
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  password  String
+  role      UserRole  @default(ACCOUNTANT)
+  isActive  Boolean   @default(true)
+  lastLogin DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  auditLogs        AuditLog[]
+  approvalRequests ApprovalRequest[] @relation("RequestedBy")
+  approvals        ApprovalRequest[] @relation("ApprovedBy")
+
+  @@index([email])
+  @@index([role, isActive])
+  @@map("users")
+}
+
+// ============================================================
+// CLIENTES
+// ============================================================
+
+model Client {
+  id           String   @id @default(cuid())
+  name         String
+  businessName String?
+  rnc          String?  @unique
+  cedula       String?  @unique
+  email        String?
+  phone        String?
+  address      String?
+  city         String?
+  notes        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  invoices         Invoice[]
+  quotes           Quote[]
+  crmOpportunities CrmOpportunity[]
+
+  @@index([name])
+  @@index([isActive])
+  @@map("clients")
+}
+
+// ============================================================
+// CRM + VENTAS
+// ============================================================
+
+model CrmOpportunity {
+  id           String       @id @default(cuid())
+  clientId     String
+  businessUnit BusinessUnit
+  title        String
+  description  String?
+  value        Float?
+  status       LeadStatus   @default(LEAD)
+  probability  Int          @default(0)
+  expectedDate DateTime?
+  closedAt     DateTime?
+  closedReason String?
+  assignedTo   String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  client Client  @relation(fields: [clientId], references: [id])
+  quotes Quote[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([businessUnit])
+  @@map("crm_opportunities")
+}
+
+// ============================================================
+// COTIZACIONES
+// ============================================================
+
+model Quote {
+  id            String       @id @default(cuid())
+  number        String       @unique
+  clientId      String
+  opportunityId String?
+  businessUnit  BusinessUnit
+  status        QuoteStatus  @default(DRAFT)
+  validUntil    DateTime?
+  notes         String?
+  terms         String?
+  subtotal      Float        @default(0)
+  taxAmount     Float        @default(0)
+  total         Float        @default(0)
+  convertedInvoiceId String? @unique
+  convertedAt   DateTime?
+  sentAt        DateTime?
+  acceptedAt    DateTime?
+  rejectedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  client      Client          @relation(fields: [clientId], references: [id])
+  opportunity CrmOpportunity? @relation(fields: [opportunityId], references: [id])
+  items       QuoteItem[]
+  invoice     Invoice?        @relation("QuoteInvoice")
+
+  @@index([clientId])
+  @@index([status])
+  @@index([businessUnit])
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  description String
+  quantity    Float
+  unitPrice   Float
+  taxRate     Float   @default(0.18)
+  taxAmount   Float   @default(0)
+  subtotal    Float
+  total       Float
+  isExempt    Boolean @default(false)
+  sortOrder   Int     @default(0)
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+  @@map("quote_items")
+}
+
+// ============================================================
+// FACTURAS
+// ============================================================
+
+model Invoice {
+  id              String        @id @default(cuid())
+  number          String        @unique
+  clientId        String
+  businessUnit    BusinessUnit
+  type            InvoiceType   @default(CREDITO_FISCAL)
+  status          InvoiceStatus @default(DRAFT)
+  paymentStatus   PaymentStatus @default(PENDING)
+  issueDate       DateTime      @default(now())
+  dueDate         DateTime?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  paidAt          DateTime?
+  cancelledAt     DateTime?
+  subtotal        Float         @default(0)
+  taxAmount       Float         @default(0)
+  total           Float         @default(0)
+  amountPaid      Float         @default(0)
+  amountDue       Float         @default(0)
+  notes           String?
+  ncf             String?
+  xml             String?       @db.Text
+  alanubeId       String?
+  alanubeStatus   String?
+  rejectionReason String?
+  originalInvoiceId String?
+  fromQuoteId     String?       @unique
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  client           Client           @relation(fields: [clientId], references: [id])
+  originalInvoice  Invoice?         @relation("CreditNoteRef", fields: [originalInvoiceId], references: [id])
+  creditNotes      Invoice[]        @relation("CreditNoteRef")
+  fromQuote        Quote?           @relation("QuoteInvoice", fields: [fromQuoteId], references: [convertedInvoiceId])
+  items            InvoiceItem[]
+  payments         Payment[]
+  alanubeRequests  AlanubeRequest[]
+  journalEntries   JournalEntry[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([businessUnit])
+  @@index([ncf])
+  @@index([issueDate])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Float
+  unitPrice   Float
+  taxRate     Float   @default(0.18)
+  taxAmount   Float   @default(0)
+  subtotal    Float
+  total       Float
+  isExempt    Boolean @default(false)
+  sortOrder   Int     @default(0)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+// ============================================================
+// ALANUBE — Trazabilidad fiscal
+// ============================================================
+
+model AlanubeRequest {
+  id              String    @id @default(cuid())
+  invoiceId       String
+  attempt         Int       @default(1)
+  requestPayload  Json
+  sentAt          DateTime  @default(now())
+  status          String?
+  responsePayload Json?
+  ncf             String?
+  xml             String?   @db.Text
+  errorCode       String?
+  errorMessage    String?
+  receivedAt      DateTime?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@index([status])
+  @@map("alanube_requests")
+}
+
+// ============================================================
+// PAGOS
+// ============================================================
+
+model Payment {
+  id         String        @id @default(cuid())
+  invoiceId  String
+  amount     Float
+  method     PaymentMethod @default(TRANSFER)
+  reference  String?
+  notes      String?
+  paidAt     DateTime      @default(now())
+  isReversed Boolean       @default(false)
+  reversedAt DateTime?
+  createdAt  DateTime      @default(now())
+
+  invoice          Invoice          @relation(fields: [invoiceId], references: [id])
+  journalEntries   JournalEntry[]
+  bankTransactions BankTransaction[] @relation("PaymentBankTx")
+
+  @@index([invoiceId])
+  @@index([paidAt])
+  @@map("payments")
+}
+
+// ============================================================
+// GASTOS
+// ============================================================
+
+model Expense {
+  id           String          @id @default(cuid())
+  businessUnit BusinessUnit
+  supplier     String
+  description  String
+  amount       Float
+  taxAmount    Float           @default(0)
+  total        Float
+  category     ExpenseCategory @default(OPERATIONS)
+  ncf          String?
+  receiptUrl   String?
+  status       ExpenseStatus   @default(ACTIVE)
+  expenseDate  DateTime        @default(now())
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  journalEntries JournalEntry[]
+
+  @@index([businessUnit])
+  @@index([category])
+  @@index([expenseDate])
+  @@index([status])
+  @@map("expenses")
+}
+
+// ============================================================
+// CATÁLOGO DE CUENTAS
+// ============================================================
+
+model Account {
+  id          String      @id @default(cuid())
+  code        String      @unique
+  name        String
+  type        AccountType
+  parentId    String?
+  isActive    Boolean     @default(true)
+  allowsEntry Boolean     @default(true)
+  description String?
+  createdAt   DateTime    @default(now())
+
+  parent   Account?  @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children Account[] @relation("AccountHierarchy")
+
+  debitEntries  JournalEntry[] @relation("DebitAccount")
+  creditEntries JournalEntry[] @relation("CreditAccount")
+
+  @@index([type])
+  @@index([parentId])
+  @@map("accounts")
+}
+
+// ============================================================
+// ASIENTOS CONTABLES
+// ============================================================
+
+model JournalEntry {
+  id              String           @id @default(cuid())
+  type            JournalEntryType
+  businessUnit    BusinessUnit
+  description     String
+  debitAccountId  String
+  creditAccountId String
+  amount          Float
+  period          String
+  entryDate       DateTime         @default(now())
+  isReversed      Boolean          @default(false)
+  reversedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  invoiceId       String?
+  paymentId       String?
+  expenseId       String?
+  payrollId       String?
+
+  debitAccount  Account  @relation("DebitAccount",  fields: [debitAccountId],  references: [id])
+  creditAccount Account  @relation("CreditAccount", fields: [creditAccountId], references: [id])
+  invoice       Invoice? @relation(fields: [invoiceId], references: [id])
+  payment       Payment? @relation(fields: [paymentId], references: [id])
+  expense       Expense? @relation(fields: [expenseId], references: [id])
+  payroll       Payroll? @relation(fields: [payrollId], references: [id])
+
+  @@index([businessUnit])
+  @@index([period])
+  @@index([type])
+  @@index([entryDate])
+  @@index([invoiceId])
+  @@index([paymentId])
+  @@index([expenseId])
+  @@map("journal_entries")
+}
+
+// ============================================================
+// CONCILIACIÓN BANCARIA
+// ============================================================
+
+model BankTransaction {
+  id              String                @id @default(cuid())
+  amount          Float
+  description     String
+  reference       String?
+  transactionDate DateTime
+  status          BankTransactionStatus @default(UNMATCHED)
+  matchedAt       DateTime?
+  createdAt       DateTime              @default(now())
+
+  payments Payment[] @relation("PaymentBankTx")
+
+  @@index([status])
+  @@index([transactionDate])
+  @@map("bank_transactions")
+}
+
+// ============================================================
+// NÓMINA
+// ============================================================
+
+model Employee {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  phone        String?
+  cedula       String?      @unique
+  type         EmployeeType @default(SALARIED)
+  businessUnit BusinessUnit
+  position     String?
+  baseSalary   Float
+  isActive     Boolean      @default(true)
+  hiredAt      DateTime     @default(now())
+  terminatedAt DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  payrollItems PayrollItem[]
+
+  @@index([businessUnit])
+  @@index([type, isActive])
+  @@map("employees")
+}
+
+model Payroll {
+  id                   String        @id @default(cuid())
+  businessUnit         BusinessUnit
+  period               String
+  status               PayrollStatus @default(CALCULATED)
+  totalGross           Float
+  totalAfpEmployee     Float         @default(0)
+  totalAfpEmployer     Float         @default(0)
+  totalSfsEmployee     Float         @default(0)
+  totalSfsEmployer     Float         @default(0)
+  totalIsr             Float         @default(0)
+  totalOtherDeductions Float         @default(0)
+  totalNet             Float
+  totalEmployerCost    Float         @default(0)
+  approvedAt           DateTime?
+  paidAt               DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  items          PayrollItem[]
+  journalEntries JournalEntry[]
+
+  @@unique([businessUnit, period])
+  @@index([status])
+  @@index([period])
+  @@map("payrolls")
+}
+
+model PayrollItem {
+  id               String   @id @default(cuid())
+  payrollId        String
+  employeeId       String
+  grossSalary      Float
+  afpEmployee      Float    @default(0)
+  sfsEmployee      Float    @default(0)
+  isr              Float    @default(0)
+  otherDeductions  Float    @default(0)
+  netSalary        Float
+  afpEmployer      Float    @default(0)
+  sfsEmployer      Float    @default(0)
+  sfsRiesgoLaboral Float    @default(0)
+  emailSent        Boolean  @default(false)
+  emailSentAt      DateTime?
+
+  payroll  Payroll  @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([payrollId, employeeId])
+  @@index([payrollId])
+  @@map("payroll_items")
+}
+
+// ============================================================
+// REPORTES FISCALES 606 / 607
+// ============================================================
+
+model FiscalReport {
+  id           String           @id @default(cuid())
+  type         FiscalReportType
+  period       String
+  businessUnit BusinessUnit
+  recordCount  Int              @default(0)
+  totalAmount  Float            @default(0)
+  totalItbis   Float            @default(0)
+  generatedAt  DateTime         @default(now())
+  fileUrl      String?
+
+  @@unique([type, period, businessUnit])
+  @@index([period])
+  @@map("fiscal_reports")
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  userId    String
+  action    AuditAction
+  entity    String
+  entityId  String
+  before    Json?
+  after     Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// APPROVAL REQUESTS
+// ============================================================
+
+model ApprovalRequest {
+  id              String         @id @default(cuid())
+  entity          String
+  entityId        String
+  changeRequested Json
+  reason          String?
+  status          ApprovalStatus @default(PENDING)
+  requestedById   String
+  approvedById    String?
+  adminNotes      String?
+  resolvedAt      DateTime?
+  createdAt       DateTime       @default(now())
+
+  requestedBy User  @relation("RequestedBy", fields: [requestedById], references: [id])
+  approvedBy  User? @relation("ApprovedBy",  fields: [approvedById],  references: [id])
+
+  @@index([entity, entityId])
+  @@index([status])
+  @@map("approval_requests")
+}
+
+// ============================================================
+// PERÍODOS FISCALES
+// ============================================================
+
+model FiscalPeriod {
+  id        String    @id @default(cuid())
+  period    String    @unique
+  isClosed  Boolean   @default(false)
+  closedAt  DateTime?
+  closedBy  String?
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  @@index([isClosed])
+  @@map("fiscal_periods")
+}
+
+// ============================================================
+// CONFIGURACIÓN DEL SISTEMA
+// ============================================================
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}

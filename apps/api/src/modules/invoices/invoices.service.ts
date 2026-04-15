@@ -2,6 +2,7 @@ import { prisma } from '../../config/database'
 import { NotFoundError, AppError } from '../../middleware/errorHandler'
 import { parsePagination } from '../../utils/response'
 import { InvoiceStatus, PaymentStatus, BusinessUnit } from '@prisma/client'
+import { invoiceEmitQueue } from '../../queues/invoice.queue'
 
 function generateInvoiceNumber(bu: string, count: number) {
   const prefix = bu === 'HAX' ? 'H' : 'K'
@@ -160,6 +161,100 @@ export async function addPayment(invoiceId: string, data: any) {
     }),
   ])
   return payment
+}
+
+export async function emitInvoice(id: string) {
+  const invoice = await prisma.invoice.findUnique({ where: { id } })
+  if (!invoice) throw new NotFoundError('Factura')
+  if (invoice.status !== InvoiceStatus.DRAFT) {
+    throw new AppError(`No se puede emitir una factura en estado ${invoice.status}`, 400)
+  }
+
+  // Transition to SENDING
+  const updated = await prisma.invoice.update({
+    where: { id },
+    data: { status: InvoiceStatus.SENDING, sentAt: new Date() },
+  })
+
+  // Enqueue emission job
+  await invoiceEmitQueue.add('emit', { invoiceId: id }, {
+    jobId: `emit-${id}`,
+    removeOnComplete: true,
+  })
+
+  return updated
+}
+
+export async function retryEmission(id: string) {
+  const invoice = await prisma.invoice.findUnique({ where: { id } })
+  if (!invoice) throw new NotFoundError('Factura')
+  if (invoice.status !== InvoiceStatus.REJECTED) {
+    throw new AppError('Solo se pueden reintentar facturas rechazadas', 400)
+  }
+
+  const updated = await prisma.invoice.update({
+    where: { id },
+    data: { status: InvoiceStatus.SENDING, rejectionReason: null, sentAt: new Date() },
+  })
+
+  await invoiceEmitQueue.add('emit', { invoiceId: id }, {
+    jobId: `emit-${id}-retry-${Date.now()}`,
+    removeOnComplete: true,
+  })
+
+  return updated
+}
+
+export async function createCreditNote(id: string, data: any) {
+  const original = await prisma.invoice.findUnique({
+    where: { id },
+    include: { items: true, client: true },
+  })
+  if (!original) throw new NotFoundError('Factura original')
+  if (original.status !== InvoiceStatus.APPROVED && original.status !== InvoiceStatus.PAID) {
+    throw new AppError('Solo se pueden crear notas de crédito para facturas aprobadas o pagadas', 400)
+  }
+
+  const count = await prisma.invoice.count({ where: { businessUnit: original.businessUnit } })
+  const prefix = original.businessUnit === 'HAX' ? 'H' : 'K'
+  const number = `${prefix}-${String(count + 1).padStart(6, '0')}`
+
+  const items = data.items ?? original.items.map((i) => ({
+    description: i.description,
+    quantity: i.quantity,
+    unitPrice: i.unitPrice,
+    taxRate: i.taxRate,
+    taxAmount: i.taxAmount,
+    subtotal: i.subtotal,
+    total: i.total,
+    isExempt: i.isExempt,
+    sortOrder: i.sortOrder,
+  }))
+
+  const subtotal: number = items.reduce((s: number, i: any) => s + (i.quantity * i.unitPrice), 0)
+  const taxAmount: number = items.reduce((s: number, i: any) => s + (i.taxAmount ?? 0), 0)
+  const total = subtotal + taxAmount
+
+  return prisma.invoice.create({
+    data: {
+      number,
+      clientId: original.clientId,
+      businessUnit: original.businessUnit,
+      type: 'NOTA_CREDITO',
+      status: InvoiceStatus.DRAFT,
+      issueDate: new Date(),
+      subtotal,
+      taxAmount,
+      total,
+      amountDue: total,
+      originalInvoiceId: id,
+      notes: data.notes ?? `Nota de crédito para factura ${original.number}`,
+      items: {
+        create: items.map((item: any, idx: number) => ({ ...item, sortOrder: idx })),
+      },
+    },
+    include: { client: true, items: { orderBy: { sortOrder: 'asc' } } },
+  })
 }
 
 export async function getInvoiceStats(businessUnit?: BusinessUnit) {

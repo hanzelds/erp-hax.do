@@ -12,5 +12,8 @@ router.post('/', ctrl.create)
 router.put('/:id', ctrl.update)
 router.patch('/:id/cancel', ctrl.cancel)
 router.post('/:id/payments', ctrl.addPayment)
+router.post('/:id/emit', ctrl.emit)
+router.post('/:id/retry', ctrl.retry)
+router.post('/:id/credit-note', ctrl.creditNote)
 
 export default router

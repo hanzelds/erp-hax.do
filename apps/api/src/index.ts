@@ -10,6 +10,7 @@ import { env } from './config/env'
 import { logger } from './config/logger'
 import { errorHandler } from './middleware/errorHandler'
 import { notFound } from './middleware/notFound'
+import './workers/invoice.worker'
 
 // Routes
 import authRoutes            from './modules/auth/auth.routes'

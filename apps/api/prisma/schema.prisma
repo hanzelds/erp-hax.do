@@ -29,6 +29,7 @@ enum BusinessUnit {
 enum InvoiceStatus {
   DRAFT
   SENDING
+  IN_PROCESS
   APPROVED
   REJECTED
   PAID
@@ -46,6 +47,7 @@ enum PaymentMethod {
   TRANSFER
   CASH
   CHECK
+  CARD
 }
 
 enum PaymentStatus {
@@ -334,6 +336,8 @@ model Invoice {
   alanubeStatus   String?
   rejectionReason String?
   originalInvoiceId String?
+  retryCount      Int           @default(0)
+  sentAt          DateTime?
   fromQuoteId     String?       @unique
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt

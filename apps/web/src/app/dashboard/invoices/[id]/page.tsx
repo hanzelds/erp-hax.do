@@ -3,22 +3,37 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, DollarSign, X, XCircle, RefreshCw } from 'lucide-react'
+import { ArrowLeft, DollarSign, X, XCircle, Send, RefreshCw, FileText, Copy } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { Button, Card, CardHeader, InvoiceStatusBadge, Skeleton } from '@/components/ui'
+import { EmissionModal } from '@/components/invoices/EmissionModal'
+import { useAuthStore } from '@/lib/auth-store'
 
 interface InvoiceDetail {
   id: string
   number: string
-  sequence: number
   businessUnit: 'HAX' | 'KODER'
+  type: string
   status: string
+  paymentStatus: string
   ncf: string | null
+  xml: string | null
+  alanubeId: string | null
+  alanubeStatus: string | null
+  rejectionReason: string | null
+  retryCount: number
+  sentAt: string | null
   issueDate: string
   dueDate: string | null
+  approvedAt: string | null
+  rejectedAt: string | null
+  paidAt: string | null
+  cancelledAt: string | null
   client: { id: string; name: string; rnc: string | null; email: string | null }
+  originalInvoiceId: string | null
+  creditNotes: { id: string; number: string; total: number; status: string }[]
   items: { id: string; description: string; quantity: number; unitPrice: number; taxRate: number; subtotal: number; taxAmount: number; total: number }[]
   subtotal: number
   taxAmount: number
@@ -27,96 +42,191 @@ interface InvoiceDetail {
   amountDue: number
   notes: string | null
   payments: { id: string; amount: number; method: string; reference: string | null; paidAt: string }[]
+  alanubeRequests: { id: string; attempt: number; status: string | null; errorMessage: string | null; sentAt: string }[]
   createdAt: string
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  CREDITO_FISCAL: 'Crédito Fiscal',
+  CONSUMO:        'Consumidor Final',
+  NOTA_DEBITO:    'Nota de Débito',
+  NOTA_CREDITO:   'Nota de Crédito',
+}
+
+const METHOD_LABELS: Record<string, string> = {
+  TRANSFER: 'Transferencia',
+  CASH:     'Efectivo',
+  CHECK:    'Cheque',
+  CARD:     'Tarjeta',
 }
 
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const router  = useRouter()
-  const qc      = useQueryClient()
+  const router   = useRouter()
+  const qc       = useQueryClient()
+  const user     = useAuthStore((s) => s.user)
+  const isAdmin  = user?.role === 'ADMIN'
 
-  const [payModal, setPayModal] = useState(false)
-  const [payForm, setPayForm]   = useState({ amount: 0, method: 'TRANSFER', reference: '' })
+  const [payModal, setPayModal]       = useState(false)
+  const [emitModal, setEmitModal]     = useState(false)
+  const [payForm, setPayForm]         = useState({ amount: 0, method: 'TRANSFER', reference: '' })
 
   const { data: invoice, isLoading } = useQuery<InvoiceDetail>({
     queryKey: ['invoice', id],
     queryFn: async () => {
       const { data } = await api.get(`/invoices/${id}`)
-      return data
+      return data.data ?? data
     },
     refetchInterval: (q) => {
-      const inv = q.state.data as InvoiceDetail | undefined
-      return inv?.status === 'SENDING' ? 5000 : false
+      const s = (q.state.data as InvoiceDetail | undefined)?.status
+      return (s === 'SENDING' || s === 'IN_PROCESS') ? 4000 : false
     },
   })
 
   const addPayment = useMutation({
-    mutationFn: async (body: typeof payForm) => {
-      await api.post(`/invoices/${id}/payments`, body)
-    },
+    mutationFn: async (body: typeof payForm) => api.post(`/invoices/${id}/payments`, body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setPayModal(false) },
   })
 
   const cancel = useMutation({
-    mutationFn: async () => api.post(`/invoices/${id}/cancel`),
+    mutationFn: async () => api.patch(`/invoices/${id}/cancel`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invoice', id] }),
   })
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-48 rounded-lg" />
-        <Skeleton className="h-64 w-full rounded-xl" />
-      </div>
-    )
-  }
+  const emit = useMutation({
+    mutationFn: async () => api.post(`/invoices/${id}/emit`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setEmitModal(true) },
+  })
+
+  const retry = useMutation({
+    mutationFn: async () => api.post(`/invoices/${id}/retry`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setEmitModal(true) },
+  })
+
+  const createCreditNote = useMutation({
+    mutationFn: async () => api.post(`/invoices/${id}/credit-note`, {}),
+    onSuccess: (res) => {
+      const noteId = res.data?.data?.id ?? res.data?.id
+      if (noteId) router.push(`/dashboard/invoices/${noteId}`)
+      else qc.invalidateQueries({ queryKey: ['invoices'] })
+    },
+  })
+
+  if (isLoading) return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-48 rounded-lg" />
+      <Skeleton className="h-64 w-full rounded-xl" />
+    </div>
+  )
 
   if (!invoice) return <p className="text-gray-500 text-sm">Factura no encontrada.</p>
 
-  const canCancel = invoice.status !== 'PAID' && invoice.status !== 'CANCELLED'
-  const canPay    = invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && invoice.amountDue > 0
+  const isPending = invoice.status === 'SENDING' || invoice.status === 'IN_PROCESS'
+  const canEmit   = invoice.status === 'DRAFT'
+  const canRetry  = invoice.status === 'REJECTED' && isAdmin
+  const canPay    = invoice.status === 'APPROVED' && invoice.amountDue > 0
+  const canCancel = invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && !isPending
+  const canCreditNote = (invoice.status === 'APPROVED' || invoice.status === 'PAID') && invoice.type !== 'NOTA_CREDITO'
 
   return (
     <div className="space-y-5 max-w-4xl">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-3">
-        <Link href="/dashboard/invoices">
-          <Button variant="ghost" size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />}>
-            Facturas
-          </Button>
-        </Link>
+      <div className="flex items-center gap-3 flex-wrap">
+        <Button asChild variant="ghost" size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />}>
+          <Link href="/dashboard/invoices">Facturas</Link>
+        </Button>
         <span className="text-gray-300">/</span>
         <span className="text-gray-600 text-sm font-mono">{invoice.number}</span>
         <InvoiceStatusBadge status={invoice.status} />
-        {invoice.status === 'SENDING' && (
-          <span className="flex items-center gap-1.5 text-xs text-yellow-600">
+        {isPending && (
+          <span className="flex items-center gap-1.5 text-xs text-blue-600">
             <RefreshCw className="w-3 h-3 animate-spin" />
-            Procesando e-CF…
+            {invoice.status === 'SENDING' ? 'Enviando e-CF…' : 'Validando con DGII…'}
           </span>
         )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Main info */}
+        {/* Main */}
         <div className="xl:col-span-2 space-y-4">
-          {/* Header card */}
+          {/* Header */}
           <Card>
             <div className="flex items-start justify-between mb-4">
               <div>
-                <p className="font-mono text-lg font-bold text-gray-900">{invoice.number}</p>
-                {invoice.ncf && <p className="font-mono text-sm text-gray-500">NCF: {invoice.ncf}</p>}
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="font-mono text-lg font-bold text-gray-900">{invoice.number}</p>
+                  <span className="text-xs text-gray-400 px-1.5 py-0.5 bg-gray-50 rounded border border-gray-100">
+                    {TYPE_LABELS[invoice.type] ?? invoice.type}
+                  </span>
+                </div>
+                {invoice.ncf && (
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-mono text-sm text-[#293c4f]">NCF: {invoice.ncf}</p>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(invoice.ncf!)}
+                      className="text-gray-300 hover:text-gray-500 transition-colors"
+                      title="Copiar NCF"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                {invoice.rejectionReason && (
+                  <p className="text-xs text-red-500 mt-1">Rechazo: {invoice.rejectionReason}</p>
+                )}
               </div>
-              <span className="px-2 py-0.5 rounded text-xs font-medium" style={invoice.businessUnit === 'HAX' ? { backgroundColor: '#eef1f4', color: '#293c4f' } : { backgroundColor: '#f1f5f9', color: '#475569' }}>
+              <span className="px-2 py-0.5 rounded text-xs font-medium shrink-0"
+                style={invoice.businessUnit === 'HAX' ? { backgroundColor: '#eef1f4', color: '#293c4f' } : { backgroundColor: '#f1f5f9', color: '#475569' }}>
                 {invoice.businessUnit}
               </span>
             </div>
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
-              <div><p className="text-xs text-gray-400">Cliente</p><p className="font-medium text-gray-800">{invoice.client.name}</p>{invoice.client.rnc && <p className="text-xs text-gray-400">{invoice.client.rnc}</p>}</div>
-              <div><p className="text-xs text-gray-400">Fecha emisión</p><p className="text-gray-700">{formatDate(invoice.issueDate)}</p></div>
-              <div><p className="text-xs text-gray-400">Vencimiento</p><p className="text-gray-700">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</p></div>
-              <div><p className="text-xs text-gray-400">Creada</p><p className="text-gray-700">{formatDate(invoice.createdAt)}</p></div>
+              <div>
+                <p className="text-xs text-gray-400">Cliente</p>
+                <p className="font-medium text-gray-800">{invoice.client.name}</p>
+                {invoice.client.rnc && <p className="text-xs text-gray-400">{invoice.client.rnc}</p>}
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Fecha emisión</p>
+                <p className="text-gray-700">{formatDate(invoice.issueDate)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Vencimiento</p>
+                <p className="text-gray-700">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Aprobada</p>
+                <p className="text-gray-700">{invoice.approvedAt ? formatDate(invoice.approvedAt) : '—'}</p>
+              </div>
             </div>
           </Card>
+
+          {/* Credit note notice */}
+          {invoice.originalInvoiceId && (
+            <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 text-xs text-orange-700">
+              Esta es una nota de crédito.{' '}
+              <Link href={`/dashboard/invoices/${invoice.originalInvoiceId}`} className="underline font-medium">
+                Ver factura original →
+              </Link>
+            </div>
+          )}
+
+          {/* Credit notes list */}
+          {invoice.creditNotes.length > 0 && (
+            <Card padding="sm">
+              <div className="px-1 pt-1 pb-3"><h3 className="font-semibold text-gray-900 text-sm">Notas de crédito</h3></div>
+              {invoice.creditNotes.map((cn) => (
+                <Link key={cn.id} href={`/dashboard/invoices/${cn.id}`} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5 text-orange-400" />
+                    <span className="font-mono text-xs text-gray-700">{cn.number}</span>
+                    <InvoiceStatusBadge status={cn.status} />
+                  </div>
+                  <span className="text-xs font-semibold text-gray-700">{formatCurrency(cn.total)}</span>
+                </Link>
+              ))}
+            </Card>
+          )}
 
           {/* Items */}
           <Card padding="sm">
@@ -143,7 +253,7 @@ export default function InvoiceDetailPage() {
             </table>
             <div className="border-t border-gray-100 mt-2 pt-3 px-3 space-y-1.5">
               <div className="flex justify-between text-xs text-gray-500"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span></div>
-              <div className="flex justify-between text-xs text-gray-500"><span>ITBIS</span><span>{formatCurrency(invoice.taxAmount)}</span></div>
+              <div className="flex justify-between text-xs text-gray-500"><span>ITBIS 18%</span><span>{formatCurrency(invoice.taxAmount)}</span></div>
               <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-100"><span>Total</span><span>{formatCurrency(invoice.total)}</span></div>
             </div>
           </Card>
@@ -164,7 +274,7 @@ export default function InvoiceDetailPage() {
                   {invoice.payments.map((p) => (
                     <tr key={p.id} className="border-b border-gray-50">
                       <td className="px-3 py-2.5 text-xs text-gray-500">{formatDate(p.paidAt)}</td>
-                      <td className="px-3 py-2.5 text-xs text-gray-600">{p.method}</td>
+                      <td className="px-3 py-2.5 text-xs text-gray-600">{METHOD_LABELS[p.method] ?? p.method}</td>
                       <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{p.reference ?? '—'}</td>
                       <td className="px-3 py-2.5 text-xs font-semibold text-green-600">{formatCurrency(p.amount)}</td>
                     </tr>
@@ -173,31 +283,136 @@ export default function InvoiceDetailPage() {
               </table>
             </Card>
           )}
+
+          {/* Alanube trace (admin only) */}
+          {isAdmin && invoice.alanubeRequests.length > 0 && (
+            <Card padding="sm">
+              <div className="px-1 pt-1 pb-3">
+                <h3 className="font-semibold text-gray-900 text-sm">Trazabilidad Alanube</h3>
+                <p className="text-xs text-gray-400">Historial de intentos de emisión e-CF</p>
+              </div>
+              <div className="space-y-2 px-1">
+                {invoice.alanubeRequests.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-xs">
+                    <div>
+                      <span className="font-medium text-gray-700">Intento #{r.attempt}</span>
+                      {r.errorMessage && <p className="text-red-500 mt-0.5">{r.errorMessage}</p>}
+                    </div>
+                    <div className="text-right">
+                      <span className={cn(
+                        'px-2 py-0.5 rounded-full font-medium',
+                        r.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
+                        r.status === 'REJECTED' ? 'bg-red-100 text-red-600' :
+                        r.status === 'IN_PROCESS' ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-100 text-gray-600'
+                      )}>{r.status ?? 'PENDIENTE'}</span>
+                      <p className="text-gray-400 mt-0.5">{formatDate(r.sentAt)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}
         <div className="space-y-4">
-          {/* Amounts */}
+          {/* Amounts + actions */}
           <Card>
             <CardHeader title="Resumen de cobro" />
             <div className="space-y-2.5">
-              <div className="flex justify-between text-sm"><span className="text-gray-500">Total factura</span><span className="font-semibold text-gray-900">{formatCurrency(invoice.total)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-gray-500">Cobrado</span><span className="font-semibold text-green-600">{formatCurrency(invoice.amountPaid)}</span></div>
-              <div className="flex justify-between text-sm border-t border-gray-100 pt-2"><span className="font-medium text-gray-800">Por cobrar</span><span className={cn('font-bold text-base', invoice.amountDue > 0 ? 'text-amber-500' : 'text-green-600')}>{formatCurrency(invoice.amountDue)}</span></div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Total factura</span>
+                <span className="font-semibold text-gray-900">{formatCurrency(invoice.total)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Cobrado</span>
+                <span className="font-semibold text-green-600">{formatCurrency(invoice.amountPaid)}</span>
+              </div>
+              <div className="flex justify-between text-sm border-t border-gray-100 pt-2">
+                <span className="font-medium text-gray-800">Por cobrar</span>
+                <span className={cn('font-bold text-base', invoice.amountDue > 0 ? 'text-amber-500' : 'text-green-600')}>
+                  {formatCurrency(invoice.amountDue)}
+                </span>
+              </div>
             </div>
+
             <div className="mt-4 space-y-2">
+              {canEmit && (
+                <Button
+                  variant="primary" size="sm" className="w-full"
+                  icon={<Send className="w-3.5 h-3.5" />}
+                  loading={emit.isPending}
+                  onClick={() => emit.mutate()}
+                >
+                  Emitir e-CF
+                </Button>
+              )}
+              {canRetry && (
+                <Button
+                  variant="secondary" size="sm" className="w-full"
+                  icon={<RefreshCw className="w-3.5 h-3.5" />}
+                  loading={retry.isPending}
+                  onClick={() => retry.mutate()}
+                >
+                  Reintentar emisión
+                </Button>
+              )}
               {canPay && (
-                <Button variant="primary" size="sm" className="w-full" icon={<DollarSign className="w-3.5 h-3.5" />} onClick={() => { setPayForm({ amount: invoice.amountDue, method: 'TRANSFER', reference: '' }); setPayModal(true) }}>
+                <Button
+                  variant="primary" size="sm" className="w-full"
+                  icon={<DollarSign className="w-3.5 h-3.5" />}
+                  onClick={() => { setPayForm({ amount: invoice.amountDue, method: 'TRANSFER', reference: '' }); setPayModal(true) }}
+                >
                   Registrar cobro
                 </Button>
               )}
+              {canCreditNote && (
+                <Button
+                  variant="secondary" size="sm" className="w-full"
+                  icon={<FileText className="w-3.5 h-3.5" />}
+                  loading={createCreditNote.isPending}
+                  onClick={() => createCreditNote.mutate()}
+                >
+                  Crear nota de crédito
+                </Button>
+              )}
               {canCancel && (
-                <Button variant="danger" size="sm" className="w-full" icon={<XCircle className="w-3.5 h-3.5" />} loading={cancel.isPending} onClick={() => cancel.mutate()}>
+                <Button
+                  variant="danger" size="sm" className="w-full"
+                  icon={<XCircle className="w-3.5 h-3.5" />}
+                  loading={cancel.isPending}
+                  onClick={() => cancel.mutate()}
+                >
                   Cancelar factura
                 </Button>
               )}
             </div>
           </Card>
+
+          {/* XML download */}
+          {invoice.xml && (
+            <Card padding="sm">
+              <div className="px-1 py-2 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-gray-800">Documento fiscal (XML)</p>
+                  <p className="text-xs text-gray-400">e-CF aceptado por DGII</p>
+                </div>
+                <Button
+                  variant="secondary" size="sm"
+                  onClick={() => {
+                    const blob = new Blob([invoice.xml!], { type: 'application/xml' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url; a.download = `${invoice.ncf ?? invoice.number}.xml`
+                    a.click(); URL.revokeObjectURL(url)
+                  }}
+                >
+                  Descargar XML
+                </Button>
+              </div>
+            </Card>
+          )}
 
           {/* Notes */}
           {invoice.notes && (
@@ -233,7 +448,9 @@ export default function InvoiceDetailPage() {
                 </select>
               </F>
               <F label="Referencia">
-                <input type="text" value={payForm.reference} onChange={(e) => setPayForm({ ...payForm, reference: e.target.value })} className={ic} placeholder="Número de transacción…" />
+                <input type="text" value={payForm.reference}
+                  onChange={(e) => setPayForm({ ...payForm, reference: e.target.value })}
+                  className={ic} placeholder="Número de transacción…" />
               </F>
             </div>
             <div className="flex justify-end gap-2 mt-6">
@@ -244,6 +461,17 @@ export default function InvoiceDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Emission modal */}
+      {emitModal && (
+        <EmissionModal
+          invoiceId={id}
+          invoiceNumber={invoice.number}
+          isAdmin={isAdmin}
+          onClose={() => { setEmitModal(false); qc.invalidateQueries({ queryKey: ['invoice', id] }) }}
+          onRetry={() => retry.mutate()}
+        />
       )}
     </div>
   )

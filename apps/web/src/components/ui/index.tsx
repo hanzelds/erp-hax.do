@@ -132,21 +132,23 @@ export function Badge({
 
 // ── Invoice status badge ────────────────────────────────────────
 const invoiceVariants: Record<string, BadgeVariant> = {
-  DRAFT:     'muted',
-  SENDING:   'info',
-  APPROVED:  'success',
-  REJECTED:  'danger',
-  PAID:      'success',
-  CANCELLED: 'warning',
+  DRAFT:      'muted',
+  SENDING:    'info',
+  IN_PROCESS: 'info',
+  APPROVED:   'success',
+  REJECTED:   'danger',
+  PAID:       'success',
+  CANCELLED:  'warning',
 }
 
 const invoiceLabels: Record<string, string> = {
-  DRAFT:     'Borrador',
-  SENDING:   'Enviando',
-  APPROVED:  'Aprobada',
-  REJECTED:  'Rechazada',
-  PAID:      'Pagada',
-  CANCELLED: 'Anulada',
+  DRAFT:      'Borrador',
+  SENDING:    'Enviando',
+  IN_PROCESS: 'En proceso',
+  APPROVED:   'Aprobada',
+  REJECTED:   'Rechazada',
+  PAID:       'Pagada',
+  CANCELLED:  'Anulada',
 }
 
 export function InvoiceStatusBadge({ status }: { status: string }) {

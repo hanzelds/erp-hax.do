@@ -1,9 +1,15 @@
 import { Router } from 'express'
 import { authenticate } from '../../middleware/auth'
+import * as ctrl from './reports.controller'
 
 const router = Router()
 router.use(authenticate)
 
-// TODO: implementar endpoints del módulo reports
+router.get('/dashboard', ctrl.dashboard)
+router.get('/pnl/:period', ctrl.pnl)
+router.get('/balance-sheet', ctrl.balanceSheet)
+router.get('/cash-flow/:period', ctrl.cashFlow)
+router.get('/606/:period', ctrl.report606)
+router.get('/607/:period', ctrl.report607)
 
 export default router

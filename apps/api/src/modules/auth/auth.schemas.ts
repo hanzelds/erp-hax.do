@@ -43,7 +43,7 @@ export const createUserSchema = z.object({
     .min(8, 'Mínimo 8 caracteres')
     .regex(/[A-Z]/, 'Debe contener al menos una mayúscula')
     .regex(/[0-9]/, 'Debe contener al menos un número'),
-  role: z.enum(['ADMIN', 'ACCOUNTANT']).default('ACCOUNTANT'),
+  role: z.enum(['ADMIN', 'ACCOUNTANT']).default('ACCOUNTANT') as z.ZodDefault<z.ZodEnum<['ADMIN', 'ACCOUNTANT']>>,
 })
 
 export const updateUserSchema = z.object({

@@ -19,7 +19,13 @@ interface AuditParams {
  */
 export async function createAuditLog(params: AuditParams): Promise<void> {
   try {
-    await prisma.auditLog.create({ data: params })
+    await prisma.auditLog.create({
+      data: {
+        ...params,
+        before: params.before ?? undefined,
+        after: params.after ?? undefined,
+      },
+    })
   } catch (error) {
     logger.error('Error creando audit log (no crítico):', error)
   }

@@ -70,7 +70,7 @@ export const authController = {
 
   // POST /auth/users
   async createUser(req: AuthRequest, res: Response) {
-    const data = parseBody(createUserSchema, req.body)
+    const data = parseBody(createUserSchema, req.body) as { name: string; email: string; password: string; role: "ADMIN" | "ACCOUNTANT" }
     const user = await authService.createUser(data, req.user!.id)
     return sendCreated(res, user)
   },

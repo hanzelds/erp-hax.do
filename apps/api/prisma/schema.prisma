@@ -55,8 +55,31 @@ enum PaymentStatus {
 }
 
 enum ExpenseStatus {
-  ACTIVE
+  DRAFT
+  APPROVED
+  PAID
   CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  CONFIRMED
+  RECEIVED
+  CANCELLED
+}
+
+enum RecurringFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum BankTransactionType {
+  CREDIT
+  DEBIT
 }
 
 enum ExpenseCategory {
@@ -404,12 +427,78 @@ model Payment {
 }
 
 // ============================================================
+// PROVEEDORES
+// ============================================================
+
+model Supplier {
+  id           String   @id @default(cuid())
+  name         String
+  businessName String?
+  rnc          String?  @unique
+  email        String?
+  phone        String?
+  address      String?
+  city         String?
+  category     ExpenseCategory @default(OPERATIONS)
+  notes        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  expenses       Expense[]
+  purchaseOrders PurchaseOrder[]
+
+  @@index([name])
+  @@index([isActive])
+  @@map("suppliers")
+}
+
+// ============================================================
+// PRODUCTOS
+// ============================================================
+
+model ProductCategory {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+
+  products Product[]
+
+  @@map("product_categories")
+}
+
+model Product {
+  id          String       @id @default(cuid())
+  businessUnit BusinessUnit
+  code        String?      @unique
+  name        String
+  description String?
+  categoryId  String?
+  type        String       @default("SERVICE") // SERVICE | PRODUCT
+  unitPrice   Float        @default(0)
+  taxRate     Float        @default(0.18)
+  isExempt    Boolean      @default(false)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  category ProductCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([businessUnit])
+  @@index([categoryId])
+  @@index([isActive])
+  @@map("products")
+}
+
+// ============================================================
 // GASTOS
 // ============================================================
 
 model Expense {
   id           String          @id @default(cuid())
   businessUnit BusinessUnit
+  supplierId   String?
   supplier     String
   description  String
   amount       Float
@@ -418,18 +507,99 @@ model Expense {
   category     ExpenseCategory @default(OPERATIONS)
   ncf          String?
   receiptUrl   String?
-  status       ExpenseStatus   @default(ACTIVE)
+  status       ExpenseStatus   @default(DRAFT)
+  approvedAt   DateTime?
+  paidAt       DateTime?
   expenseDate  DateTime        @default(now())
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
+  supplierRef    Supplier?      @relation(fields: [supplierId], references: [id])
   journalEntries JournalEntry[]
 
   @@index([businessUnit])
   @@index([category])
   @@index([expenseDate])
   @@index([status])
+  @@index([supplierId])
   @@map("expenses")
+}
+
+// ============================================================
+// ÓRDENES DE COMPRA
+// ============================================================
+
+model PurchaseOrder {
+  id           String              @id @default(cuid())
+  number       String              @unique
+  businessUnit BusinessUnit
+  supplierId   String
+  status       PurchaseOrderStatus @default(DRAFT)
+  notes        String?
+  subtotal     Float               @default(0)
+  taxAmount    Float               @default(0)
+  total        Float               @default(0)
+  sentAt       DateTime?
+  confirmedAt  DateTime?
+  receivedAt   DateTime?
+  cancelledAt  DateTime?
+  expenseId    String?             @unique
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  supplier Supplier        @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
+
+  @@index([businessUnit])
+  @@index([supplierId])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String @id @default(cuid())
+  purchaseOrderId String
+  description     String
+  quantity        Float
+  unitPrice       Float
+  taxRate         Float  @default(0.18)
+  taxAmount       Float  @default(0)
+  subtotal        Float
+  total           Float
+  sortOrder       Int    @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+  @@map("purchase_order_items")
+}
+
+// ============================================================
+// PAGOS RECURRENTES
+// ============================================================
+
+model RecurringPayment {
+  id           String             @id @default(cuid())
+  businessUnit BusinessUnit
+  name         String
+  description  String?
+  supplierId   String?
+  supplier     String
+  amount       Float
+  category     ExpenseCategory    @default(OPERATIONS)
+  frequency    RecurringFrequency @default(MONTHLY)
+  nextDueDate  DateTime
+  lastPaidAt   DateTime?
+  isActive     Boolean            @default(true)
+  autoGenerate Boolean            @default(true)
+  notes        String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([businessUnit])
+  @@index([nextDueDate])
+  @@index([isActive])
+  @@map("recurring_payments")
 }
 
 // ============================================================
@@ -498,12 +668,35 @@ model JournalEntry {
 }
 
 // ============================================================
-// CONCILIACIÓN BANCARIA
+// CUENTAS BANCARIAS + TRANSACCIONES
 // ============================================================
+
+model BankAccount {
+  id           String       @id @default(cuid())
+  businessUnit BusinessUnit
+  name         String
+  bank         String
+  accountNumber String?
+  type         String       @default("CHECKING") // CHECKING | SAVINGS
+  currency     String       @default("DOP")
+  balance      Float        @default(0)
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  transactions BankTransaction[]
+
+  @@index([businessUnit])
+  @@index([isActive])
+  @@map("bank_accounts")
+}
 
 model BankTransaction {
   id              String                @id @default(cuid())
+  bankAccountId   String
+  type            BankTransactionType   @default(CREDIT)
   amount          Float
+  balance         Float                 @default(0)
   description     String
   reference       String?
   transactionDate DateTime
@@ -511,8 +704,10 @@ model BankTransaction {
   matchedAt       DateTime?
   createdAt       DateTime              @default(now())
 
-  payments Payment[] @relation("PaymentBankTx")
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id])
+  payments    Payment[]   @relation("PaymentBankTx")
 
+  @@index([bankAccountId])
   @@index([status])
   @@index([transactionDate])
   @@map("bank_transactions")
@@ -695,4 +890,30 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+// ============================================================
+// CONFIGURACIÓN POR UNIDAD DE NEGOCIO
+// ============================================================
+
+model BusinessUnitConfig {
+  id           String       @id @default(cuid())
+  businessUnit BusinessUnit @unique
+  companyName  String?
+  rnc          String?
+  address      String?
+  phone        String?
+  email        String?
+  logoUrl      String?
+  // e-CF Alanube
+  alanubeApiKey    String?
+  alanubeEnabled   Boolean @default(false)
+  // NCF sequences
+  ncfCreditoFiscal Int @default(1)
+  ncfConsumidor    Int @default(1)
+  ncfNotaDebito    Int @default(1)
+  ncfNotaCredito   Int @default(1)
+  updatedAt    DateTime @updatedAt
+
+  @@map("business_unit_configs")
 }

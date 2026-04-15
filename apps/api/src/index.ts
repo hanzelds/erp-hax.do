@@ -12,14 +12,20 @@ import { errorHandler } from './middleware/errorHandler'
 import { notFound } from './middleware/notFound'
 
 // Routes
-import authRoutes       from './modules/auth/auth.routes'
-import clientRoutes     from './modules/clients/clients.routes'
-import invoiceRoutes    from './modules/invoices/invoices.routes'
-import expenseRoutes    from './modules/expenses/expenses.routes'
-import paymentRoutes    from './modules/payments/payments.routes'
-import accountingRoutes from './modules/accounting/accounting.routes'
-import reportRoutes     from './modules/reports/reports.routes'
-import payrollRoutes    from './modules/payroll/payroll.routes'
+import authRoutes            from './modules/auth/auth.routes'
+import clientRoutes          from './modules/clients/clients.routes'
+import supplierRoutes        from './modules/suppliers/suppliers.routes'
+import productRoutes         from './modules/products/products.routes'
+import invoiceRoutes         from './modules/invoices/invoices.routes'
+import expenseRoutes         from './modules/expenses/expenses.routes'
+import paymentRoutes         from './modules/payments/payments.routes'
+import purchaseOrderRoutes   from './modules/purchase-orders/purchase-orders.routes'
+import recurringRoutes       from './modules/recurring-payments/recurring-payments.routes'
+import bankAccountRoutes     from './modules/bank-accounts/bank-accounts.routes'
+import crmRoutes             from './modules/crm/crm.routes'
+import accountingRoutes      from './modules/accounting/accounting.routes'
+import reportRoutes          from './modules/reports/reports.routes'
+import payrollRoutes         from './modules/payroll/payroll.routes'
 
 const app = express()
 
@@ -76,14 +82,20 @@ app.get('/health', (_req, res) => {
 })
 
 // ── API Routes ────────────────────────────────────────────────
-app.use('/api/auth',       loginLimiter, authRoutes)
-app.use('/api/clients',    apiLimiter,   clientRoutes)
-app.use('/api/invoices',   apiLimiter,   invoiceRoutes)
-app.use('/api/expenses',   apiLimiter,   expenseRoutes)
-app.use('/api/payments',   apiLimiter,   paymentRoutes)
-app.use('/api/accounting', apiLimiter,   accountingRoutes)
-app.use('/api/reports',    apiLimiter,   reportRoutes)
-app.use('/api/payroll',    apiLimiter,   payrollRoutes)
+app.use('/api/auth',               loginLimiter, authRoutes)
+app.use('/api/clients',            apiLimiter,   clientRoutes)
+app.use('/api/suppliers',          apiLimiter,   supplierRoutes)
+app.use('/api/products',           apiLimiter,   productRoutes)
+app.use('/api/invoices',           apiLimiter,   invoiceRoutes)
+app.use('/api/expenses',           apiLimiter,   expenseRoutes)
+app.use('/api/payments',           apiLimiter,   paymentRoutes)
+app.use('/api/purchase-orders',    apiLimiter,   purchaseOrderRoutes)
+app.use('/api/recurring-payments', apiLimiter,   recurringRoutes)
+app.use('/api/bank-accounts',      apiLimiter,   bankAccountRoutes)
+app.use('/api/crm',                apiLimiter,   crmRoutes)
+app.use('/api/accounting',         apiLimiter,   accountingRoutes)
+app.use('/api/reports',            apiLimiter,   reportRoutes)
+app.use('/api/payroll',            apiLimiter,   payrollRoutes)
 
 // ── Error handling ────────────────────────────────────────────
 app.use(notFound)

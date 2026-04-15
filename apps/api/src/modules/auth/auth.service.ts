@@ -187,7 +187,7 @@ export const authService = {
         name:     data.name,
         email:    data.email,
         password: hashedPassword,
-        role:     data.role as UserRole,
+        role:     (data.role ?? 'ACCOUNTANT') as UserRole,
       },
       select: { id: true, name: true, email: true, role: true, createdAt: true },
     })

@@ -1,16 +1,15 @@
 import { Router } from 'express'
 import { authenticate } from '../../middleware/auth'
-import * as ctrl from './invoices.controller'
+import * as ctrl from './crm.controller'
 
 const router = Router()
 router.use(authenticate)
 
-router.get('/stats', ctrl.stats)
+router.get('/pipeline', ctrl.pipeline)
 router.get('/', ctrl.list)
 router.get('/:id', ctrl.get)
 router.post('/', ctrl.create)
 router.put('/:id', ctrl.update)
-router.patch('/:id/cancel', ctrl.cancel)
-router.post('/:id/payments', ctrl.addPayment)
+router.delete('/:id', ctrl.remove)
 
 export default router

@@ -9,6 +9,11 @@ import {
   BookOpen,
   UserCheck,
   Settings,
+  Truck,
+  Package,
+  Landmark,
+  ShoppingCart,
+  RefreshCcw,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -42,27 +47,55 @@ export const navigation: NavSection[] = [
     items: [
       {
         label: 'Facturación',
-        href: '/invoices',
+        href: '/dashboard/invoices',
         icon: FileText,
         description: 'Facturas electrónicas',
       },
       {
         label: 'Clientes',
-        href: '/clients',
+        href: '/dashboard/clients',
         icon: Users,
         description: 'Gestión de clientes',
       },
       {
-        label: 'Cobros',
-        href: '/payments',
-        icon: CreditCard,
-        description: 'Pagos y cobros',
-      },
-      {
         label: 'CRM',
-        href: '/crm',
+        href: '/dashboard/crm',
         icon: TrendingUp,
         description: 'Pipeline de ventas',
+      },
+    ],
+  },
+  {
+    title: 'Compras',
+    items: [
+      {
+        label: 'Proveedores',
+        href: '/dashboard/suppliers',
+        icon: Truck,
+        description: 'Gestión de proveedores',
+      },
+      {
+        label: 'Órdenes de Compra',
+        href: '/dashboard/purchase-orders',
+        icon: ShoppingCart,
+        description: 'Órdenes y recepción',
+      },
+      {
+        label: 'Gastos',
+        href: '/dashboard/expenses',
+        icon: Receipt,
+        description: 'Control de gastos',
+      },
+    ],
+  },
+  {
+    title: 'Inventario',
+    items: [
+      {
+        label: 'Productos',
+        href: '/dashboard/products',
+        icon: Package,
+        description: 'Productos y servicios',
       },
     ],
   },
@@ -70,20 +103,32 @@ export const navigation: NavSection[] = [
     title: 'Finanzas',
     items: [
       {
-        label: 'Gastos',
-        href: '/expenses',
-        icon: Receipt,
-        description: 'Control de gastos',
+        label: 'Cuentas Bancarias',
+        href: '/dashboard/bank-accounts',
+        icon: Landmark,
+        description: 'Cuentas y transacciones',
+      },
+      {
+        label: 'Pagos Recurrentes',
+        href: '/dashboard/recurring-payments',
+        icon: RefreshCcw,
+        description: 'Suscripciones y recurrentes',
+      },
+      {
+        label: 'Cobros',
+        href: '/dashboard/payments',
+        icon: CreditCard,
+        description: 'Pagos y cobros',
       },
       {
         label: 'Contabilidad',
-        href: '/accounting',
+        href: '/dashboard/accounting',
         icon: BookOpen,
         description: 'Asientos y cuentas',
       },
       {
         label: 'Reportes',
-        href: '/reports',
+        href: '/dashboard/reports',
         icon: BarChart3,
         description: '606 · 607 · P&L',
       },
@@ -94,7 +139,7 @@ export const navigation: NavSection[] = [
     items: [
       {
         label: 'Nómina',
-        href: '/payroll',
+        href: '/dashboard/payroll',
         icon: UserCheck,
         description: 'Empleados y pagos',
       },
@@ -105,7 +150,7 @@ export const navigation: NavSection[] = [
     items: [
       {
         label: 'Configuración',
-        href: '/settings',
+        href: '/dashboard/settings',
         icon: Settings,
         description: 'Ajustes del sistema',
       },

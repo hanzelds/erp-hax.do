@@ -1,3 +1,4 @@
+import { Slot } from '@radix-ui/react-slot'
 import { cn } from '@/lib/utils'
 
 // ── Card ────────────────────────────────────────────────────────
@@ -210,6 +211,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   size?: ButtonSize
   loading?: boolean
   icon?: React.ReactNode
+  asChild?: boolean
 }
 
 const buttonBase =
@@ -234,20 +236,30 @@ export function Button({
   size = 'md',
   loading = false,
   icon,
+  asChild = false,
   className,
   style,
   ...props
 }: ButtonProps) {
   const isPrimary = variant === 'primary'
+  const Comp = asChild ? Slot : 'button'
+
+  // When asChild, Slot requires exactly one child — render children only
+  if (asChild) {
+    return (
+      <Slot
+        className={cn(buttonBase, buttonVariantStyles[variant], buttonSizeStyles[size], className)}
+        style={isPrimary ? { backgroundColor: '#293c4f', ...style } : style}
+        {...props}
+      >
+        {children}
+      </Slot>
+    )
+  }
 
   return (
     <button
-      className={cn(
-        buttonBase,
-        buttonVariantStyles[variant],
-        buttonSizeStyles[size],
-        className
-      )}
+      className={cn(buttonBase, buttonVariantStyles[variant], buttonSizeStyles[size], className)}
       style={isPrimary ? { backgroundColor: '#293c4f', ...style } : style}
       disabled={loading || props.disabled}
       {...props}

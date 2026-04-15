@@ -32,10 +32,10 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true })
         try {
           const { data } = await api.post('/auth/login', { email, password })
-          const { user, token } = data.data
+          const { user, accessToken } = data.data
 
-          localStorage.setItem('hax_token', token)
-          set({ user, token, isAuthenticated: true, isLoading: false })
+          localStorage.setItem('hax_token', accessToken)
+          set({ user, token: accessToken, isAuthenticated: true, isLoading: false })
         } catch (error) {
           set({ isLoading: false })
           throw error

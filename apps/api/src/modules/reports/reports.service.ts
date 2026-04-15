@@ -11,33 +11,123 @@ function periodWhere(period: string) {
 export async function getDashboard(businessUnit?: BusinessUnit) {
   const buWhere: any = businessUnit ? { businessUnit } : {}
   const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const monthWhere = { ...buWhere, issueDate: { gte: monthStart } }
+  const monthStart  = new Date(now.getFullYear(), now.getMonth(), 1)
+  const prevStart   = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const prevEnd     = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+  const todayStart  = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const MONTHS      = 6
 
-  const [monthRevenue, receivable, monthExpenses, overdueInvoices] = await Promise.all([
+  // Build last 6 months date ranges
+  const months = Array.from({ length: MONTHS }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (MONTHS - 1 - i), 1)
+    return {
+      label: d.toLocaleDateString('es-DO', { month: 'short' }),
+      start: new Date(d.getFullYear(), d.getMonth(), 1),
+      end:   new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59),
+    }
+  })
+
+  const [
+    curRevenue, prevRevenue, receivables, curExpenses,
+    invoiceCount, approvedToday,
+    recentInvoices, pendingInvoices,
+    expensesByCategory,
+  ] = await Promise.all([
     prisma.invoice.aggregate({
-      where: { ...monthWhere, status: { not: InvoiceStatus.CANCELLED } },
-      _sum: { total: true, amountPaid: true },
+      where: { ...buWhere, issueDate: { gte: monthStart }, status: { not: InvoiceStatus.CANCELLED } },
+      _sum: { total: true },
+    }),
+    prisma.invoice.aggregate({
+      where: { ...buWhere, issueDate: { gte: prevStart, lte: prevEnd }, status: { not: InvoiceStatus.CANCELLED } },
+      _sum: { total: true },
     }),
     prisma.invoice.aggregate({
       where: { ...buWhere, paymentStatus: { in: ['PENDING', 'PARTIAL'] }, status: { not: InvoiceStatus.CANCELLED } },
       _sum: { amountDue: true },
+      _count: { id: true },
     }),
     prisma.expense.aggregate({
       where: { ...buWhere, expenseDate: { gte: monthStart }, status: { not: ExpenseStatus.CANCELLED } },
       _sum: { total: true },
     }),
     prisma.invoice.count({
-      where: { ...buWhere, paymentStatus: { in: ['PENDING', 'PARTIAL'] }, dueDate: { lt: now }, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, issueDate: { gte: monthStart }, status: { not: InvoiceStatus.CANCELLED } },
+    }),
+    prisma.invoice.count({
+      where: { ...buWhere, issueDate: { gte: todayStart }, status: InvoiceStatus.APPROVED },
+    }),
+    prisma.invoice.findMany({
+      where: { ...buWhere, status: { not: InvoiceStatus.CANCELLED } },
+      select: {
+        id: true, number: true, total: true, status: true, issueDate: true, businessUnit: true,
+        client: { select: { name: true } },
+      },
+      orderBy: { issueDate: 'desc' },
+      take: 5,
+    }),
+    prisma.invoice.findMany({
+      where: { ...buWhere, paymentStatus: { in: ['PENDING', 'PARTIAL'] }, status: { not: InvoiceStatus.CANCELLED } },
+      select: { amountDue: true, issueDate: true, client: { select: { name: true } } },
+      orderBy: { issueDate: 'asc' },
+      take: 8,
+    }),
+    prisma.expense.groupBy({
+      by: ['category'],
+      where: { ...buWhere, expenseDate: { gte: monthStart }, status: { not: ExpenseStatus.CANCELLED } },
+      _sum: { total: true },
     }),
   ])
 
+  // Revenue chart: last 6 months by BU
+  const revenueChart = await Promise.all(
+    months.map(async (m) => {
+      const [hax, koder] = await Promise.all([
+        prisma.invoice.aggregate({
+          where: { businessUnit: 'HAX', issueDate: { gte: m.start, lte: m.end }, status: { not: InvoiceStatus.CANCELLED } },
+          _sum: { total: true },
+        }),
+        prisma.invoice.aggregate({
+          where: { businessUnit: 'KODER', issueDate: { gte: m.start, lte: m.end }, status: { not: InvoiceStatus.CANCELLED } },
+          _sum: { total: true },
+        }),
+      ])
+      return { month: m.label, hax: hax._sum.total ?? 0, koder: koder._sum.total ?? 0 }
+    })
+  )
+
+  const current  = curRevenue._sum.total ?? 0
+  const previous = prevRevenue._sum.total ?? 0
+  const change   = previous > 0 ? ((current - previous) / previous) * 100 : 0
+  const expenses = curExpenses._sum.total ?? 0
+  const net      = current - expenses
+
+  const pendingReceivables = pendingInvoices.map((inv) => ({
+    client: inv.client.name,
+    amount: inv.amountDue,
+    days: Math.floor((now.getTime() - new Date(inv.issueDate).getTime()) / 86400000),
+  }))
+
+  const expenseChart = expensesByCategory.map((e) => ({
+    category: e.category.charAt(0) + e.category.slice(1).toLowerCase(),
+    amount: e._sum.total ?? 0,
+  })).sort((a, b) => b.amount - a.amount)
+
   return {
-    monthRevenue: monthRevenue._sum.total ?? 0,
-    monthCollected: monthRevenue._sum.amountPaid ?? 0,
-    accountsReceivable: receivable._sum.amountDue ?? 0,
-    monthExpenses: monthExpenses._sum.total ?? 0,
-    overdueInvoices,
+    revenue:     { current, previous, change },
+    expenses:    { current: expenses },
+    receivables: {
+      total:   receivables._sum.amountDue ?? 0,
+      count:   receivables._count.id ?? 0,
+      avgDays: pendingReceivables.length > 0
+        ? pendingReceivables.reduce((s, p) => s + p.days, 0) / pendingReceivables.length
+        : 0,
+    },
+    invoices:  { total: invoiceCount, approvedToday },
+    netIncome: { current: net, margin: current > 0 ? (net / current) * 100 : 0 },
+    recentInvoices,
+    pendingReceivables,
+    revenueChart,
+    expenseChart,
   }
 }
 

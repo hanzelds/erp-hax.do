@@ -903,20 +903,38 @@ model SystemSetting {
 model BusinessUnitConfig {
   id           String       @id @default(cuid())
   businessUnit BusinessUnit @unique
+
+  // ── Información legal ──────────────────────────────────
   companyName  String?
   rnc          String?
   address      String?
   phone        String?
   email        String?
   logoUrl      String?
-  // e-CF Alanube
-  alanubeApiKey    String?
+
+  // ── Alanube / e-CF ─────────────────────────────────────
   alanubeEnabled   Boolean @default(false)
-  // NCF sequences
-  ncfCreditoFiscal Int @default(1)
-  ncfConsumidor    Int @default(1)
-  ncfNotaDebito    Int @default(1)
-  ncfNotaCredito   Int @default(1)
+  alanubeApiKey    String?
+  alanubeEnv       String  @default("sandbox")  // "sandbox" | "production"
+  alanubeApiUrl    String  @default("https://api.alanube.com.do")
+
+  // ── Secuencias NCF (siguiente número a emitir) ─────────
+  ncfCreditoFiscal  Int @default(1)   // B01
+  ncfConsumidor     Int @default(1)   // B02
+  ncfNotaDebito     Int @default(1)   // B03
+  ncfNotaCredito    Int @default(1)   // B04
+  ncfCompras        Int @default(1)   // B11
+  ncfRegimen        Int @default(1)   // B14
+
+  // ── Reglas de emisión ──────────────────────────────────
+  itbisRate            Float   @default(0.18)   // tasa ITBIS (0.18 = 18%)
+  maxRetroactiveDays   Int     @default(5)      // días retroactivos permitidos
+  maxRetryCount        Int     @default(5)      // intentos antes de FALLO
+  autoJournalEntries   Boolean @default(true)   // asientos automáticos al aprobar
+  requireRncB01        Boolean @default(true)   // exigir RNC en crédito fiscal
+  pollIntervalSeconds  Int     @default(3)      // segundos entre polls de estado
+  pollTimeoutMinutes   Int     @default(5)      // minutos antes de timeout
+
   updatedAt    DateTime @updatedAt
 
   @@map("business_unit_configs")

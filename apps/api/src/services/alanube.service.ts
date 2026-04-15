@@ -1,25 +1,23 @@
 /**
  * Alanube e-CF Service — Dominican Republic electronic fiscal documents
- * Supports sandbox simulation (no API key) and production mode.
  *
- * DGII NCF types:
- *   B01 → Crédito Fiscal  (CREDITO_FISCAL)
- *   B02 → Consumidor Final (CONSUMO)
- *   B04 → Nota de Crédito  (NOTA_CREDITO)
- *   B03 → Nota de Débito   (NOTA_DEBITO)
+ * All configuration is read from BusinessUnitConfig in the database.
+ * NCF types: B01 B02 B03 B04 B11 B14
  */
 
 import axios from 'axios'
+import { prisma } from '../config/database'
 import { env } from '../config/env'
 import { logger } from '../config/logger'
+import { BusinessUnit } from '@prisma/client'
 
 export type AlanubeEmissionStatus = 'APPROVED' | 'IN_PROCESS' | 'REJECTED'
 
 export interface AlanubeEmitPayload {
   invoiceId: string
   ncf: string
-  businessUnit: 'HAX' | 'KODER'
-  type: string // InvoiceType enum value
+  businessUnit: BusinessUnit
+  type: string
   issueDate: string
   clientName: string
   clientRnc: string | null
@@ -45,12 +43,23 @@ export interface AlanubeEmitResult {
   errorMessage: string | null
 }
 
-// ── NCF prefix mapping ─────────────────────────────────────
-const NCF_PREFIX: Record<string, string> = {
+// ── NCF mappings ───────────────────────────────────────────
+export const NCF_PREFIX: Record<string, string> = {
   CREDITO_FISCAL: 'B01',
   CONSUMO:        'B02',
   NOTA_DEBITO:    'B03',
   NOTA_CREDITO:   'B04',
+  COMPRAS:        'B11',
+  REGIMEN:        'B14',
+}
+
+export const SEQ_FIELD: Record<string, string> = {
+  CREDITO_FISCAL: 'ncfCreditoFiscal',
+  CONSUMO:        'ncfConsumidor',
+  NOTA_DEBITO:    'ncfNotaDebito',
+  NOTA_CREDITO:   'ncfNotaCredito',
+  COMPRAS:        'ncfCompras',
+  REGIMEN:        'ncfRegimen',
 }
 
 export function buildNcf(type: string, sequence: number): string {
@@ -58,105 +67,53 @@ export function buildNcf(type: string, sequence: number): string {
   return `${prefix}${String(sequence).padStart(8, '0')}`
 }
 
-// ── Sandbox simulation ────────────────────────────────────
-function sandboxResult(payload: AlanubeEmitPayload): AlanubeEmitResult {
-  // Simulate ~10% IN_PROCESS (async) and ~5% rejection for realism
-  const roll = Math.random()
+export function getSeqField(type: string): string {
+  return SEQ_FIELD[type] ?? 'ncfConsumidor'
+}
 
-  if (roll < 0.05) {
-    return {
-      status: 'REJECTED',
-      alanubeId: `SANDBOX-${Date.now()}`,
-      ncf: payload.ncf,
-      xml: null,
-      errorCode: 'DGII-4001',
-      errorMessage: 'RNC del receptor no válido (simulación sandbox)',
-    }
-  }
-
-  if (roll < 0.15) {
-    return {
-      status: 'IN_PROCESS',
-      alanubeId: `SANDBOX-${Date.now()}`,
-      ncf: payload.ncf,
-      xml: null,
-      errorCode: null,
-      errorMessage: null,
-    }
-  }
-
-  const xml = buildMockXml(payload)
+// ── Load BU config from DB ─────────────────────────────────
+export async function getBuConfig(businessUnit: BusinessUnit) {
+  const c = await prisma.businessUnitConfig.findUnique({ where: { businessUnit } })
   return {
-    status: 'APPROVED',
-    alanubeId: `SANDBOX-${Date.now()}`,
-    ncf: payload.ncf,
-    xml,
-    errorCode: null,
-    errorMessage: null,
+    alanubeEnabled:      c?.alanubeEnabled      ?? false,
+    alanubeApiKey:       c?.alanubeApiKey        ?? env.ALANUBE_API_KEY,
+    alanubeEnv:          c?.alanubeEnv           ?? env.ALANUBE_ENV,
+    alanubeApiUrl:       c?.alanubeApiUrl        ?? env.ALANUBE_API_URL,
+    maxRetryCount:       c?.maxRetryCount        ?? 5,
+    pollIntervalSeconds: c?.pollIntervalSeconds  ?? 3,
+    pollTimeoutMinutes:  c?.pollTimeoutMinutes   ?? 5,
+    autoJournalEntries:  c?.autoJournalEntries   ?? true,
+    itbisRate:           c?.itbisRate            ?? 0.18,
+    maxRetroactiveDays:  c?.maxRetroactiveDays   ?? 5,
+    companyName:         c?.companyName          ?? env.COMPANY_NAME,
+    rnc:                 c?.rnc                  ?? env.COMPANY_RNC,
   }
 }
 
-function buildMockXml(payload: AlanubeEmitPayload): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<eCF version="1.0">
-  <Encabezado>
-    <IdDoc>
-      <TipoeCF>${NCF_PREFIX[payload.type] ?? 'B02'}</TipoeCF>
-      <eNCF>${payload.ncf}</eNCF>
-      <FechaVencimientoSecuencia>31-12-2027</FechaVencimientoSecuencia>
-      <FechaEmision>${payload.issueDate}</FechaEmision>
-    </IdDoc>
-    <Emisor>
-      <RNCEmisor>${env.COMPANY_RNC}</RNCEmisor>
-      <RazonSocialEmisor>${env.COMPANY_NAME}</RazonSocialEmisor>
-    </Emisor>
-    <Comprador>
-      <RNCComprador>${payload.clientRnc ?? ''}</RNCComprador>
-      <RazonSocialComprador>${payload.clientName}</RazonSocialComprador>
-    </Comprador>
-    <Totales>
-      <MontoGravadoTotal>${payload.subtotal.toFixed(2)}</MontoGravadoTotal>
-      <ITBIS1>${payload.taxAmount.toFixed(2)}</ITBIS1>
-      <MontoTotal>${payload.total.toFixed(2)}</MontoTotal>
-    </Totales>
-  </Encabezado>
-</eCF>`
+// ── Sandbox simulation ─────────────────────────────────────
+function sandboxResult(payload: AlanubeEmitPayload): AlanubeEmitResult {
+  const roll = Math.random()
+  if (roll < 0.05) return { status: 'REJECTED', alanubeId: `SANDBOX-${Date.now()}`, ncf: payload.ncf, xml: null, errorCode: 'DGII-4001', errorMessage: 'RNC del receptor no válido (simulación sandbox)' }
+  if (roll < 0.15) return { status: 'IN_PROCESS', alanubeId: `SANDBOX-${Date.now()}`, ncf: payload.ncf, xml: null, errorCode: null, errorMessage: null }
+  return { status: 'APPROVED', alanubeId: `SANDBOX-${Date.now()}`, ncf: payload.ncf, xml: buildMockXml(payload), errorCode: null, errorMessage: null }
+}
+
+function buildMockXml(p: AlanubeEmitPayload): string {
+  return `<?xml version="1.0" encoding="UTF-8"?><eCF version="1.0"><Encabezado><IdDoc><TipoeCF>${NCF_PREFIX[p.type] ?? 'B02'}</TipoeCF><eNCF>${p.ncf}</eNCF><FechaEmision>${p.issueDate}</FechaEmision></IdDoc><Emisor><RNCEmisor>${env.COMPANY_RNC}</RNCEmisor><RazonSocialEmisor>${env.COMPANY_NAME}</RazonSocialEmisor></Emisor><Comprador><RNCComprador>${p.clientRnc ?? ''}</RNCComprador><RazonSocialComprador>${p.clientName}</RazonSocialComprador></Comprador><Totales><MontoGravadoTotal>${p.subtotal.toFixed(2)}</MontoGravadoTotal><ITBIS1>${p.taxAmount.toFixed(2)}</ITBIS1><MontoTotal>${p.total.toFixed(2)}</MontoTotal></Totales></Encabezado></eCF>`
 }
 
 // ── Production HTTP call ───────────────────────────────────
-async function productionEmit(payload: AlanubeEmitPayload): Promise<AlanubeEmitResult> {
-  const apiKey = env.ALANUBE_API_KEY
-  const baseUrl = env.ALANUBE_API_URL
-
-  const body = {
+async function productionEmit(payload: AlanubeEmitPayload, config: Awaited<ReturnType<typeof getBuConfig>>): Promise<AlanubeEmitResult> {
+  const response = await axios.post(`${config.alanubeApiUrl}/v1/ecf/emit`, {
     ncf: payload.ncf,
     fechaEmision: payload.issueDate,
-    receptor: {
-      rnc: payload.clientRnc,
-      razonSocial: payload.clientName,
-    },
-    items: payload.items.map((i) => ({
-      descripcion: i.description,
-      cantidad: i.quantity,
-      precioUnitario: i.unitPrice,
-      itbis: i.taxAmount,
-      total: i.total,
-    })),
-    totales: {
-      subtotal: payload.subtotal,
-      itbis: payload.taxAmount,
-      total: payload.total,
-    },
-  }
-
-  const response = await axios.post(`${baseUrl}/v1/ecf/emit`, body, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    receptor: { rnc: payload.clientRnc, razonSocial: payload.clientName },
+    items: payload.items.map((i) => ({ descripcion: i.description, cantidad: i.quantity, precioUnitario: i.unitPrice, itbis: i.taxAmount, total: i.total })),
+    totales: { subtotal: payload.subtotal, itbis: payload.taxAmount, total: payload.total },
+  }, {
+    headers: { Authorization: `Bearer ${config.alanubeApiKey}`, 'Content-Type': 'application/json' },
     timeout: 30_000,
   })
-
   const d = response.data
   return {
     status: (d.status?.toUpperCase() ?? 'IN_PROCESS') as AlanubeEmissionStatus,
@@ -169,38 +126,21 @@ async function productionEmit(payload: AlanubeEmitPayload): Promise<AlanubeEmitR
 }
 
 // ── Poll IN_PROCESS status ─────────────────────────────────
-export async function pollStatus(alanubeId: string): Promise<AlanubeEmitResult | null> {
-  if (!env.ALANUBE_API_KEY) {
-    // Sandbox: 70% chance of resolution per poll
+export async function pollStatus(alanubeId: string, businessUnit: BusinessUnit): Promise<AlanubeEmitResult | null> {
+  const config = await getBuConfig(businessUnit)
+  if (!config.alanubeApiKey || config.alanubeEnv === 'sandbox') {
     if (Math.random() < 0.7) {
-      return {
-        status: Math.random() < 0.9 ? 'APPROVED' : 'REJECTED',
-        alanubeId,
-        ncf: '',
-        xml: Math.random() < 0.9 ? '<eCF>mock</eCF>' : null,
-        errorCode: Math.random() < 0.9 ? null : 'DGII-5001',
-        errorMessage: Math.random() < 0.9 ? null : 'Secuencia de NCF inválida (simulación)',
-      }
+      const ok = Math.random() < 0.9
+      return { status: ok ? 'APPROVED' : 'REJECTED', alanubeId, ncf: '', xml: ok ? '<eCF>mock</eCF>' : null, errorCode: ok ? null : 'DGII-5001', errorMessage: ok ? null : 'Secuencia NCF inválida (simulación)' }
     }
-    return null // still processing
+    return null
   }
-
   try {
-    const response = await axios.get(`${env.ALANUBE_API_URL}/v1/ecf/${alanubeId}`, {
-      headers: { Authorization: `Bearer ${env.ALANUBE_API_KEY}` },
-      timeout: 15_000,
-    })
+    const response = await axios.get(`${config.alanubeApiUrl}/v1/ecf/${alanubeId}`, { headers: { Authorization: `Bearer ${config.alanubeApiKey}` }, timeout: 15_000 })
     const d = response.data
     const status = (d.status?.toUpperCase() ?? 'IN_PROCESS') as AlanubeEmissionStatus
     if (status === 'IN_PROCESS') return null
-    return {
-      status,
-      alanubeId,
-      ncf: d.ncf ?? '',
-      xml: d.xml ?? null,
-      errorCode: d.errorCode ?? null,
-      errorMessage: d.errorMessage ?? null,
-    }
+    return { status, alanubeId, ncf: d.ncf ?? '', xml: d.xml ?? null, errorCode: d.errorCode ?? null, errorMessage: d.errorMessage ?? null }
   } catch (err) {
     logger.error('Alanube poll error', err)
     return null
@@ -209,9 +149,10 @@ export async function pollStatus(alanubeId: string): Promise<AlanubeEmitResult |
 
 // ── Main export ────────────────────────────────────────────
 export async function emitEcf(payload: AlanubeEmitPayload): Promise<AlanubeEmitResult> {
-  if (!env.ALANUBE_API_KEY || env.ALANUBE_ENV === 'sandbox') {
-    logger.info(`[Alanube] Sandbox mode — simulating emission for NCF ${payload.ncf}`)
+  const config = await getBuConfig(payload.businessUnit)
+  if (!config.alanubeEnabled || !config.alanubeApiKey || config.alanubeEnv === 'sandbox') {
+    logger.info(`[Alanube] Sandbox (${payload.businessUnit}) — NCF ${payload.ncf}`)
     return sandboxResult(payload)
   }
-  return productionEmit(payload)
+  return productionEmit(payload, config)
 }

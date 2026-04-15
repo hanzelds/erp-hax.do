@@ -27,6 +27,7 @@ import crmRoutes             from './modules/crm/crm.routes'
 import accountingRoutes      from './modules/accounting/accounting.routes'
 import reportRoutes          from './modules/reports/reports.routes'
 import payrollRoutes         from './modules/payroll/payroll.routes'
+import settingsRoutes        from './modules/settings/settings.routes'
 
 const app = express()
 
@@ -97,6 +98,7 @@ app.use('/api/crm',                apiLimiter,   crmRoutes)
 app.use('/api/accounting',         apiLimiter,   accountingRoutes)
 app.use('/api/reports',            apiLimiter,   reportRoutes)
 app.use('/api/payroll',            apiLimiter,   payrollRoutes)
+app.use('/api/settings',           apiLimiter,   settingsRoutes)
 
 // ── Error handling ────────────────────────────────────────────
 app.use(notFound)

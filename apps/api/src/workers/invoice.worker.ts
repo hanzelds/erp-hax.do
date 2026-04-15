@@ -10,12 +10,10 @@ import { InvoiceStatus } from '@prisma/client'
 import { prisma } from '../config/database'
 import { env } from '../config/env'
 import { logger } from '../config/logger'
-import { emitEcf, pollStatus, buildNcf } from '../services/alanube.service'
+import { emitEcf, pollStatus, buildNcf, getBuConfig, getSeqField } from '../services/alanube.service'
 import { invoicePollQueue } from '../queues/invoice.queue'
 
 const connection = { url: env.REDIS_URL }
-const MAX_RETRIES = 5
-const POLL_DELAY_MS = 2 * 60 * 1000  // 2 minutes
 
 // ── Emit worker ───────────────────────────────────────────
 export const emitWorker = new Worker(
@@ -42,15 +40,14 @@ export const emitWorker = new Worker(
       return
     }
 
-    // Get NCF sequence from BusinessUnitConfig
-    const config = await prisma.businessUnitConfig.findUnique({
-      where: { businessUnit: invoice.businessUnit },
-    })
+    // Load per-BU config (includes maxRetryCount, pollInterval, etc.)
+    const buConfig = await getBuConfig(invoice.businessUnit)
 
     let ncf = invoice.ncf
     if (!ncf) {
       const seqField = getSeqField(invoice.type)
-      const seq = (config as any)?.[seqField] ?? 1
+      const dbConfig = await prisma.businessUnitConfig.findUnique({ where: { businessUnit: invoice.businessUnit } })
+      const seq = (dbConfig as any)?.[seqField] ?? 1
       ncf = buildNcf(invoice.type, seq)
 
       // Increment sequence atomically
@@ -178,10 +175,11 @@ export const emitWorker = new Worker(
           sentAt: invoice.sentAt ?? new Date(),
         },
       })
+      const pollDelayMs = buConfig.pollIntervalSeconds * 1000
       await invoicePollQueue.add(
         'poll',
-        { invoiceId, alanubeId: result.alanubeId, pollCount: 0 },
-        { delay: POLL_DELAY_MS },
+        { invoiceId, alanubeId: result.alanubeId, pollCount: 0, businessUnit: invoice.businessUnit },
+        { delay: pollDelayMs },
       )
       logger.info(`[EmitWorker] Invoice ${invoiceId} IN_PROCESS — scheduled poll`)
     }
@@ -192,8 +190,8 @@ export const emitWorker = new Worker(
 // ── Poll worker ───────────────────────────────────────────
 export const pollWorker = new Worker(
   'invoice-poll',
-  async (job: Job<{ invoiceId: string; alanubeId: string | null; pollCount: number }>) => {
-    const { invoiceId, alanubeId, pollCount } = job.data
+  async (job: Job<{ invoiceId: string; alanubeId: string | null; pollCount: number; businessUnit?: string }>) => {
+    const { invoiceId, alanubeId, pollCount, businessUnit } = job.data
     logger.info(`[PollWorker] Polling invoice ${invoiceId}, attempt ${pollCount + 1}`)
 
     const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
@@ -203,27 +201,29 @@ export const pollWorker = new Worker(
       return
     }
 
-    const result = alanubeId ? await pollStatus(alanubeId) : null
+    const buConfig = await getBuConfig(invoice.businessUnit)
+    const maxPolls = Math.ceil((buConfig.pollTimeoutMinutes * 60) / buConfig.pollIntervalSeconds)
+    const pollDelayMs = buConfig.pollIntervalSeconds * 1000
+
+    const result = alanubeId ? await pollStatus(alanubeId, invoice.businessUnit) : null
 
     if (!result) {
-      // Still processing
-      if (pollCount + 1 >= MAX_RETRIES) {
-        // Give up — mark as REJECTED with timeout reason
+      if (pollCount + 1 >= maxPolls) {
         await prisma.invoice.update({
           where: { id: invoiceId },
           data: {
             status: InvoiceStatus.REJECTED,
             rejectedAt: new Date(),
-            rejectionReason: 'Timeout: DGII no respondió después de 10 minutos',
+            rejectionReason: `Timeout: DGII no respondió en ${buConfig.pollTimeoutMinutes} minutos`,
             alanubeStatus: 'TIMEOUT',
           },
         })
-        logger.warn(`[PollWorker] Invoice ${invoiceId} timed out after ${MAX_RETRIES} polls`)
+        logger.warn(`[PollWorker] Invoice ${invoiceId} timed out after ${maxPolls} polls`)
       } else {
         await invoicePollQueue.add(
           'poll',
-          { invoiceId, alanubeId, pollCount: pollCount + 1 },
-          { delay: POLL_DELAY_MS },
+          { invoiceId, alanubeId, pollCount: pollCount + 1, businessUnit: invoice.businessUnit },
+          { delay: pollDelayMs },
         )
         logger.info(`[PollWorker] Invoice ${invoiceId} still IN_PROCESS, scheduled poll ${pollCount + 2}`)
       }
@@ -265,13 +265,3 @@ pollWorker.on('failed', (job, err) => {
   logger.error(`[PollWorker] Job ${job?.id} failed:`, err.message)
 })
 
-// ── Helpers ───────────────────────────────────────────────
-function getSeqField(type: string): string {
-  switch (type) {
-    case 'CREDITO_FISCAL': return 'ncfCreditoFiscal'
-    case 'CONSUMO':        return 'ncfConsumidor'
-    case 'NOTA_DEBITO':    return 'ncfNotaDebito'
-    case 'NOTA_CREDITO':   return 'ncfNotaCredito'
-    default:               return 'ncfConsumidor'
-  }
-}

@@ -96,12 +96,9 @@ export function DashboardClient() {
         title="Dashboard"
         subtitle={`Resumen financiero — ${currentMonth}`}
         actions={
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm">Exportar</Button>
-            <Button asChild variant="primary" size="sm" icon={<ArrowUpRight className="w-3.5 h-3.5" />}>
-              <Link href="/dashboard/invoices/new">Nueva factura</Link>
-            </Button>
-          </div>
+          <Button asChild variant="primary" size="sm" icon={<ArrowUpRight className="w-3.5 h-3.5" />}>
+            <Link href="/dashboard/invoices/new">Nueva factura</Link>
+          </Button>
         }
       />
 
@@ -153,7 +150,7 @@ export function DashboardClient() {
                   Hax
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full inline-block bg-slate-400" />
+                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: '#4621a3' }} />
                   Koder
                 </span>
               </div>
@@ -167,8 +164,8 @@ export function DashboardClient() {
                   <stop offset="95%" stopColor="#293c4f" stopOpacity={0}    />
                 </linearGradient>
                 <linearGradient id="koderGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#94a3b8" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#94a3b8" stopOpacity={0}    />
+                  <stop offset="5%"  stopColor="#4621a3" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#4621a3" stopOpacity={0}    />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -178,7 +175,7 @@ export function DashboardClient() {
               />
               <Tooltip content={<CustomTooltip />} />
               <Area type="monotone" dataKey="hax"   stroke="#293c4f" strokeWidth={2} fill="url(#haxGrad)"   />
-              <Area type="monotone" dataKey="koder" stroke="#94a3b8" strokeWidth={2} fill="url(#koderGrad)" />
+              <Area type="monotone" dataKey="koder" stroke="#4621a3" strokeWidth={2} fill="url(#koderGrad)" />
             </AreaChart>
           </ResponsiveContainer>
         </Card>
@@ -227,7 +224,7 @@ export function DashboardClient() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-50">
-                    {['Número', 'Cliente', 'Unidad', 'Monto', 'Estado', 'Fecha'].map((h) => (
+                    {['Número', 'Cliente', 'Monto', 'Estado', 'Fecha'].map((h) => (
                       <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2">
                         {h}
                       </th>
@@ -242,12 +239,6 @@ export function DashboardClient() {
                       </td>
                       <td className="px-3 py-2.5">
                         <span className="text-gray-800 text-xs font-medium">{inv.client.name}</span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className="px-1.5 py-0.5 rounded text-xs font-medium"
-                          style={inv.businessUnit === 'HAX' ? { backgroundColor: '#eef1f4', color: '#293c4f' } : { backgroundColor: '#f1f5f9', color: '#475569' }}>
-                          {inv.businessUnit}
-                        </span>
                       </td>
                       <td className="px-3 py-2.5">
                         <span className="text-gray-900 text-xs font-semibold">{formatCurrency(inv.total)}</span>

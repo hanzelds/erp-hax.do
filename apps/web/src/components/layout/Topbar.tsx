@@ -1,14 +1,25 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
-import { Bell, Search, HelpCircle, ChevronRight } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Bell, Search, ChevronRight, CheckCircle2, AlertCircle, Info, AlertTriangle, X, ExternalLink } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { navigation } from '@/lib/navigation'
 import { useAuthStore } from '@/lib/auth-store'
-import { cn } from '@/lib/utils'
-import { formatDate } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
+import api from '@/lib/api'
 
 interface TopbarProps {
   sidebarCollapsed: boolean
+}
+
+interface Notification {
+  id: string
+  type: 'error' | 'warning' | 'info' | 'success'
+  title: string
+  message: string
+  href?: string
+  createdAt: string
 }
 
 function getBreadcrumb(pathname: string) {
@@ -21,11 +32,77 @@ function getBreadcrumb(pathname: string) {
   return current ?? { label: 'ERP Hax', description: '' }
 }
 
+const TYPE_ICON: Record<string, React.ReactNode> = {
+  error:   <AlertCircle   className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />,
+  warning: <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />,
+  info:    <Info          className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />,
+  success: <CheckCircle2  className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />,
+}
+
+const TYPE_DOT: Record<string, string> = {
+  error:   'bg-red-500',
+  warning: 'bg-amber-400',
+  info:    'bg-blue-500',
+  success: 'bg-green-500',
+}
+
 export function Topbar({ sidebarCollapsed }: TopbarProps) {
   const pathname = usePathname()
-  const { user }  = useAuthStore()
-  const crumb     = getBreadcrumb(pathname)
-  const today     = formatDate(new Date())
+  const router   = useRouter()
+  const { user } = useAuthStore()
+  const crumb    = getBreadcrumb(pathname)
+  const today    = formatDate(new Date())
+
+  const [open, setOpen]         = useState(false)
+  const [readAt, setReadAt]     = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      return parseInt(localStorage.getItem('notif_read_at') ?? '0', 10)
+    }
+    return 0
+  })
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Fetch notifications
+  const { data: notifications = [], isLoading: notifLoading } = useQuery<Notification[]>({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const { data } = await api.get('/notifications')
+      return data.data ?? data
+    },
+    refetchInterval: 60_000,
+  })
+
+  const unreadCount = notifications.filter(
+    (n) => new Date(n.createdAt).getTime() > readAt
+  ).length
+
+  function markAllRead() {
+    const now = Date.now()
+    setReadAt(now)
+    if (typeof window !== 'undefined') localStorage.setItem('notif_read_at', String(now))
+  }
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    function onClickOutside(e: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [open])
+
+  function handleOpen() {
+    setOpen((v) => !v)
+    if (!open && unreadCount > 0) markAllRead()
+  }
+
+  function handleNotifClick(n: Notification) {
+    setOpen(false)
+    if (n.href) router.push(n.href)
+  }
 
   return (
     <header
@@ -72,30 +149,88 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
           {today}
         </span>
 
-        {/* ── Units badge ──────────────────────────────── */}
-        <div className="hidden sm:flex items-center gap-1.5">
-          <span
-            className="px-2 py-0.5 rounded-full text-xs font-medium"
-            style={{ backgroundColor: '#eef1f4', color: '#293c4f' }}
-          >
-            Hax
-          </span>
-          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
-            Koder
-          </span>
-        </div>
-
         {/* ── Notifications ────────────────────────────── */}
-        <button className="relative w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors">
-          <Bell className="w-4 h-4" />
-          {/* Notification dot */}
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />
-        </button>
+        <div className="relative" ref={panelRef}>
+          <button
+            onClick={handleOpen}
+            className="relative w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+          >
+            <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
 
-        {/* ── Help ─────────────────────────────────────── */}
-        <button className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors hidden sm:flex">
-          <HelpCircle className="w-4 h-4" />
-        </button>
+          {/* Dropdown panel */}
+          {open && (
+            <div className="absolute right-0 top-10 w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+                <h3 className="text-sm font-semibold text-gray-900">Notificaciones</h3>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* List */}
+              <div className="max-h-96 overflow-y-auto divide-y divide-gray-50">
+                {notifLoading ? (
+                  <div className="py-8 flex items-center justify-center">
+                    <div className="w-5 h-5 rounded-full border-2 border-gray-200 border-t-[#293c4f] animate-spin" />
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="py-10 text-center">
+                    <CheckCircle2 className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                    <p className="text-sm text-gray-400">Sin notificaciones pendientes</p>
+                  </div>
+                ) : (
+                  notifications.map((n) => {
+                    const isUnread = new Date(n.createdAt).getTime() > readAt
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => handleNotifClick(n)}
+                        className={cn(
+                          'w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition-colors',
+                          isUnread && 'bg-blue-50/40'
+                        )}
+                      >
+                        {TYPE_ICON[n.type]}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs font-medium text-gray-800 leading-tight">{n.title}</p>
+                            {isUnread && <span className={cn('w-1.5 h-1.5 rounded-full shrink-0 mt-1', TYPE_DOT[n.type])} />}
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5 leading-snug truncate">{n.message}</p>
+                          <p className="text-[10px] text-gray-300 mt-1">{formatDate(n.createdAt)}</p>
+                        </div>
+                        {n.href && <ExternalLink className="w-3 h-3 text-gray-300 shrink-0 mt-0.5" />}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+
+              {/* Footer */}
+              {notifications.length > 0 && (
+                <div className="px-4 py-2.5 border-t border-gray-50 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{notifications.length} notificaciones</span>
+                  <button
+                    onClick={markAllRead}
+                    className="text-xs text-[#293c4f] font-medium hover:underline"
+                  >
+                    Marcar todas como leídas
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* ── User avatar ──────────────────────────────── */}
         <div className="flex items-center gap-2.5 pl-1 border-l border-gray-100">

@@ -28,6 +28,7 @@ import accountingRoutes      from './modules/accounting/accounting.routes'
 import reportRoutes          from './modules/reports/reports.routes'
 import payrollRoutes         from './modules/payroll/payroll.routes'
 import settingsRoutes        from './modules/settings/settings.routes'
+import notificationRoutes   from './modules/notifications/notifications.routes'
 
 const app = express()
 
@@ -99,6 +100,7 @@ app.use('/api/accounting',         apiLimiter,   accountingRoutes)
 app.use('/api/reports',            apiLimiter,   reportRoutes)
 app.use('/api/payroll',            apiLimiter,   payrollRoutes)
 app.use('/api/settings',           apiLimiter,   settingsRoutes)
+app.use('/api/notifications',      apiLimiter,   notificationRoutes)
 
 // ── Error handling ────────────────────────────────────────────
 app.use(notFound)

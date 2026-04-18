@@ -16,20 +16,40 @@ interface Client {
   email: string | null
   phone: string | null
   address: string | null
-  businessUnit: 'HAX' | 'KODER'
   isActive: boolean
   createdAt: string
 }
 
-const EMPTY: Partial<Client> = {
-  name: '', rnc: '', email: '', phone: '', address: '', businessUnit: 'HAX', isActive: true,
+interface ClientForm {
+  id?: string
+  name: string
+  rnc: string
+  email: string
+  phone: string
+  address: string
+}
+
+const EMPTY: ClientForm = {
+  name: '', rnc: '', email: '', phone: '', address: '',
+}
+
+/** Convert empty strings to null for nullable DB fields */
+function sanitize(f: ClientForm) {
+  return {
+    name:    f.name.trim(),
+    rnc:     f.rnc.trim()     || null,
+    email:   f.email.trim()   || null,
+    phone:   f.phone.trim()   || null,
+    address: f.address.trim() || null,
+  }
 }
 
 export default function ClientsPage() {
   const qc = useQueryClient()
-  const [search, setSearch]     = useState('')
-  const [editing, setEditing]   = useState<Partial<Client> | null>(null)
-  const [isNew, setIsNew]       = useState(false)
+  const [search, setSearch]   = useState('')
+  const [editing, setEditing] = useState<ClientForm | null>(null)
+  const [isNew, setIsNew]     = useState(false)
+  const [error, setError]     = useState<string | null>(null)
 
   const { data: clients = [], isLoading } = useQuery<Client[]>({
     queryKey: ['clients', search],
@@ -40,17 +60,23 @@ export default function ClientsPage() {
   })
 
   const save = useMutation({
-    mutationFn: async (body: Partial<Client>) => {
+    mutationFn: async (form: ClientForm) => {
+      const body = sanitize(form)
       if (isNew) {
         await api.post('/clients', body)
       } else {
-        await api.patch(`/clients/${body.id}`, body)
+        await api.patch(`/clients/${form.id}`, body)
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients'] })
       setEditing(null)
       setIsNew(false)
+      setError(null)
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error ?? err?.message ?? 'Error al guardar el cliente'
+      setError(msg)
     },
   })
 
@@ -64,10 +90,23 @@ export default function ClientsPage() {
   function openNew() {
     setEditing({ ...EMPTY })
     setIsNew(true)
+    setError(null)
   }
   function openEdit(c: Client) {
-    setEditing({ ...c })
+    setEditing({
+      id:      c.id,
+      name:    c.name,
+      rnc:     c.rnc    ?? '',
+      email:   c.email  ?? '',
+      phone:   c.phone  ?? '',
+      address: c.address ?? '',
+    })
     setIsNew(false)
+    setError(null)
+  }
+
+  function handleChange(field: keyof ClientForm, value: string) {
+    setEditing((f) => f ? { ...f, [field]: value } : f)
   }
 
   return (
@@ -112,7 +151,7 @@ export default function ClientsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                {['Nombre', 'RNC', 'Email', 'Teléfono', 'Unidad', 'Creado', ''].map((h) => (
+                {['Nombre', 'RNC / Cédula', 'Email', 'Teléfono', 'Creado', ''].map((h) => (
                   <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2.5">{h}</th>
                 ))}
               </tr>
@@ -126,14 +165,6 @@ export default function ClientsPage() {
                   <td className="px-3 py-3 font-mono text-xs text-gray-500">{c.rnc ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500">{c.email ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500">{c.phone ?? '—'}</td>
-                  <td className="px-3 py-3">
-                    <span
-                      className="px-1.5 py-0.5 rounded text-xs font-medium"
-                      style={c.businessUnit === 'HAX' ? { backgroundColor: '#eef1f4', color: '#293c4f' } : { backgroundColor: '#f1f5f9', color: '#475569' }}
-                    >
-                      {c.businessUnit}
-                    </span>
-                  </td>
                   <td className="px-3 py-3 text-xs text-gray-400">{formatDate(c.createdAt)}</td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
@@ -163,38 +194,78 @@ export default function ClientsPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-gray-900 font-semibold">{isNew ? 'Nuevo cliente' : 'Editar cliente'}</h2>
-              <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setEditing(null); setError(null) }} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {error && (
+              <div className="mb-4 px-3 py-2.5 rounded-lg bg-red-50 border border-red-100 text-xs text-red-600">
+                {error}
+              </div>
+            )}
+
             <div className="space-y-3">
               <Field label="Nombre *">
-                <input type="text" value={editing.name ?? ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className={inputCls} />
+                <input
+                  type="text"
+                  value={editing.name}
+                  onChange={(e) => handleChange('name', e.target.value)}
+                  className={inputCls}
+                  placeholder="Nombre o razón social"
+                  autoFocus
+                />
               </Field>
               <Field label="RNC / Cédula">
-                <input type="text" value={editing.rnc ?? ''} onChange={(e) => setEditing({ ...editing, rnc: e.target.value })} className={inputCls} />
+                <input
+                  type="text"
+                  value={editing.rnc}
+                  onChange={(e) => handleChange('rnc', e.target.value)}
+                  className={inputCls}
+                  placeholder="Opcional"
+                />
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Email">
-                  <input type="email" value={editing.email ?? ''} onChange={(e) => setEditing({ ...editing, email: e.target.value })} className={inputCls} />
+                  <input
+                    type="email"
+                    value={editing.email}
+                    onChange={(e) => handleChange('email', e.target.value)}
+                    className={inputCls}
+                    placeholder="Opcional"
+                  />
                 </Field>
                 <Field label="Teléfono">
-                  <input type="text" value={editing.phone ?? ''} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} className={inputCls} />
+                  <input
+                    type="text"
+                    value={editing.phone}
+                    onChange={(e) => handleChange('phone', e.target.value)}
+                    className={inputCls}
+                    placeholder="Opcional"
+                  />
                 </Field>
               </div>
               <Field label="Dirección">
-                <input type="text" value={editing.address ?? ''} onChange={(e) => setEditing({ ...editing, address: e.target.value })} className={inputCls} />
-              </Field>
-              <Field label="Unidad de negocio">
-                <select value={editing.businessUnit} onChange={(e) => setEditing({ ...editing, businessUnit: e.target.value as 'HAX' | 'KODER' })} className={inputCls}>
-                  <option value="HAX">HAX</option>
-                  <option value="KODER">KODER</option>
-                </select>
+                <input
+                  type="text"
+                  value={editing.address}
+                  onChange={(e) => handleChange('address', e.target.value)}
+                  className={inputCls}
+                  placeholder="Opcional"
+                />
               </Field>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <Button variant="secondary" size="sm" onClick={() => setEditing(null)}>Cancelar</Button>
-              <Button variant="primary" size="sm" loading={save.isPending} onClick={() => save.mutate(editing)}>
+              <Button variant="secondary" size="sm" onClick={() => { setEditing(null); setError(null) }}>
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={save.isPending}
+                disabled={!editing.name.trim()}
+                onClick={() => save.mutate(editing)}
+              >
                 {isNew ? 'Crear' : 'Guardar'}
               </Button>
             </div>

@@ -58,9 +58,6 @@ npm run db:generate     # Generar Prisma Client
 npm run db:seed         # Datos iniciales (usuario admin + catálogo de cuentas)
 ```
 
-Credenciales del admin inicial:
-- Email: `hanzel@hax.com.do`
-- Password: `Hax2025!` ← cambiar en producción
 
 ### 5. Iniciar en desarrollo
 

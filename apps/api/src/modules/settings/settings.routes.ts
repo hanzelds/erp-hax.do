@@ -5,8 +5,9 @@ import * as ctrl from './settings.controller'
 const router = Router()
 router.use(authenticate)
 
-router.get('/', ctrl.getAll)
-router.get('/:bu', ctrl.getOne)
-router.put('/:bu', requireAdmin, ctrl.update)
+router.get('/company',       ctrl.getCompany)
+router.put('/company',       requireAdmin, ctrl.updateCompany)
+router.get('/ecf',           ctrl.getEcf)
+router.put('/ecf',           requireAdmin, ctrl.updateEcf)
 
 export default router

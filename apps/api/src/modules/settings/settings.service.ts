@@ -1,71 +1,78 @@
 import { prisma } from '../../config/database'
-import { BusinessUnit } from '@prisma/client'
 
-const DEFAULTS = {
-  companyName: null,
-  rnc: null,
-  address: null,
-  phone: null,
-  email: null,
-  logoUrl: null,
-  alanubeEnabled: false,
-  alanubeApiKey: null,
-  alanubeEnv: 'sandbox',
-  alanubeApiUrl: 'https://api.alanube.com.do',
-  ncfCreditoFiscal: 1,
-  ncfConsumidor: 1,
-  ncfNotaDebito: 1,
-  ncfNotaCredito: 1,
-  ncfCompras: 1,
-  ncfRegimen: 1,
-  itbisRate: 0.18,
-  maxRetroactiveDays: 5,
-  maxRetryCount: 5,
-  autoJournalEntries: true,
-  requireRncB01: true,
+const ECF_DEFAULTS = {
+  alanubeEnabled:      false,
+  alanubeApiKey:       null as string | null,
+  alanubeEnv:          'sandbox',
+  alanubeApiUrl:       'https://api.alanube.com.do',
+  ncfCreditoFiscal:    1,
+  ncfConsumidor:       1,
+  ncfNotaDebito:       1,
+  ncfNotaCredito:      1,
+  ncfCompras:          1,
+  ncfRegimen:          1,
+  itbisRate:           0.18,
+  maxRetroactiveDays:  5,
+  maxRetryCount:       5,
+  autoJournalEntries:  true,
+  requireRncB01:       true,
   pollIntervalSeconds: 3,
-  pollTimeoutMinutes: 5,
+  pollTimeoutMinutes:  5,
 }
 
-export async function getEcfConfig(businessUnit: BusinessUnit) {
-  const config = await prisma.businessUnitConfig.findUnique({ where: { businessUnit } })
-  if (!config) return { businessUnit, ...DEFAULTS }
+const COMPANY_DEFAULTS = {
+  companyName: 'HAX ESTUDIO CREATIVO EIRL',
+  rnc:         '133290251',
+  address:     null as string | null,
+  phone:       null as string | null,
+  email:       null as string | null,
+  logoUrl:     null as string | null,
+}
 
-  // Never expose the full API key — return masked version
-  const result = { ...config } as any
+// ── Company config ────────────────────────────────────────
+export async function getCompanyConfig() {
+  const c = await prisma.companyConfig.findUnique({ where: { id: 'main' } })
+  return c ?? { id: 'main', ...COMPANY_DEFAULTS, updatedAt: new Date() }
+}
+
+export async function updateCompanyConfig(data: any) {
+  return prisma.companyConfig.upsert({
+    where:  { id: 'main' },
+    update: data,
+    create: { id: 'main', ...COMPANY_DEFAULTS, ...data },
+  })
+}
+
+// ── e-CF config ───────────────────────────────────────────
+export async function getEcfConfig() {
+  const c = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  const base = c ?? { id: 'main', ...ECF_DEFAULTS, updatedAt: new Date() }
+
+  const result: any = { ...base }
   if (result.alanubeApiKey) {
     result.alanubeApiKeyMasked = `****${result.alanubeApiKey.slice(-4)}`
-    result.alanubeApiKey = undefined
     result.hasApiKey = true
+    delete result.alanubeApiKey
   } else {
     result.hasApiKey = false
   }
   return result
 }
 
-export async function getAllEcfConfigs() {
-  const [hax, koder] = await Promise.all([
-    getEcfConfig('HAX'),
-    getEcfConfig('KODER'),
-  ])
-  return { HAX: hax, KODER: koder }
-}
-
-export async function updateEcfConfig(businessUnit: BusinessUnit, data: any) {
+export async function updateEcfConfig(data: any) {
   const { alanubeApiKey, ...rest } = data
 
-  // Separate the API key: only update if a non-empty value was sent
   const update: any = { ...rest }
+  // Only update API key if a real new value is provided
   if (alanubeApiKey && alanubeApiKey.trim() && !alanubeApiKey.startsWith('****')) {
     update.alanubeApiKey = alanubeApiKey.trim()
   }
 
-  // Remove undefined / null for fields that shouldn't be cleared
-  Object.keys(update).forEach((k) => update[k] === undefined && delete update[k])
-
-  return prisma.businessUnitConfig.upsert({
-    where: { businessUnit },
+  await prisma.ecfConfig.upsert({
+    where:  { id: 'main' },
     update,
-    create: { businessUnit, ...DEFAULTS, ...update },
+    create: { id: 'main', ...ECF_DEFAULTS, ...update },
   })
+
+  return getEcfConfig()
 }

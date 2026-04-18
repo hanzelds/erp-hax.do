@@ -72,8 +72,11 @@ export function getSeqField(type: string): string {
 }
 
 // ── Load BU config from DB ─────────────────────────────────
-export async function getBuConfig(businessUnit: BusinessUnit) {
-  const c = await prisma.businessUnitConfig.findUnique({ where: { businessUnit } })
+export async function getBuConfig(_businessUnit?: BusinessUnit) {
+  const [c, co] = await Promise.all([
+    prisma.ecfConfig.findUnique({ where: { id: 'main' } }),
+    prisma.companyConfig.findUnique({ where: { id: 'main' } }),
+  ])
   return {
     alanubeEnabled:      c?.alanubeEnabled      ?? false,
     alanubeApiKey:       c?.alanubeApiKey        ?? env.ALANUBE_API_KEY,
@@ -85,8 +88,8 @@ export async function getBuConfig(businessUnit: BusinessUnit) {
     autoJournalEntries:  c?.autoJournalEntries   ?? true,
     itbisRate:           c?.itbisRate            ?? 0.18,
     maxRetroactiveDays:  c?.maxRetroactiveDays   ?? 5,
-    companyName:         c?.companyName          ?? env.COMPANY_NAME,
-    rnc:                 c?.rnc                  ?? env.COMPANY_RNC,
+    companyName:         co?.companyName         ?? env.COMPANY_NAME,
+    rnc:                 co?.rnc                 ?? env.COMPANY_RNC,
   }
 }
 

@@ -46,19 +46,15 @@ export const emitWorker = new Worker(
     let ncf = invoice.ncf
     if (!ncf) {
       const seqField = getSeqField(invoice.type)
-      const dbConfig = await prisma.businessUnitConfig.findUnique({ where: { businessUnit: invoice.businessUnit } })
+      const dbConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
       const seq = (dbConfig as any)?.[seqField] ?? 1
       ncf = buildNcf(invoice.type, seq)
 
       // Increment sequence atomically
-      await prisma.businessUnitConfig.upsert({
-        where: { businessUnit: invoice.businessUnit },
+      await prisma.ecfConfig.upsert({
+        where:  { id: 'main' },
         update: { [seqField]: { increment: 1 } },
-        create: {
-          businessUnit: invoice.businessUnit,
-          [seqField]: 2,
-          updatedAt: new Date(),
-        },
+        create: { id: 'main', [seqField]: 2 },
       })
     }
 

@@ -2,10 +2,10 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Settings, Users, Building2, Zap, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
 import api from '@/lib/api'
 import { formatDate, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, CardHeader, Badge } from '@/components/ui'
+import { PageHeader, Button, Card, CardHeader } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
 const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF'] as const
@@ -34,7 +34,7 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {tab === 'Empresa'           && <CompanyTab />}
+      {tab === 'Empresa'           && <CompanyTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Usuarios'          && <UsersTab />}
       {tab === 'Facturación e-CF'  && <EcfTab isAdmin={user?.role === 'ADMIN'} />}
     </div>
@@ -43,16 +43,80 @@ export default function SettingsPage() {
 
 // ── Company tab ──────────────────────────────────────────────
 
-function CompanyTab() {
+interface CompanyConfig {
+  companyName: string
+  rnc: string
+  address: string | null
+  phone: string | null
+  email: string | null
+  logoUrl: string | null
+}
+
+function CompanyTab({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient()
+  const [saved, setSaved] = useState(false)
+
+  const { data: config, isLoading } = useQuery<CompanyConfig>({
+    queryKey: ['company-config'],
+    queryFn: async () => {
+      const { data } = await api.get('/settings/company')
+      return data.data ?? data
+    },
+  })
+
+  const [form, setForm] = useState<CompanyConfig | null>(null)
+  if (config && form === null) setForm({ ...config })
+
+  const save = useMutation({
+    mutationFn: async (body: CompanyConfig) => api.put('/settings/company', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['company-config'] })
+      setForm(null)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    },
+  })
+
+  const set = (key: keyof CompanyConfig, value: string) =>
+    setForm((f) => f ? { ...f, [key]: value } : f)
+
+  if (isLoading || !form) return <div className="animate-pulse bg-gray-100 rounded-xl h-48" />
+
+  const readOnly = !isAdmin
+
   return (
     <Card>
-      <CardHeader title="Información de la empresa" />
-      <div className="space-y-3 text-sm">
-        <Row label="Nombre" value="HAX ESTUDIO CREATIVO EIRL" />
-        <Row label="RNC" value="133290251" />
-        <Row label="Dominio" value="erp.hax.com.do" />
-        <Row label="Unidades de negocio" value="HAX · KODER" />
+      <CardHeader title="Información de la empresa" subtitle="Datos fiscales y de contacto de la organización" />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <F label="Razón social">
+          <input type="text" value={form.companyName} onChange={(e) => set('companyName', e.target.value)} className={ic} disabled={readOnly} />
+        </F>
+        <F label="RNC">
+          <input type="text" value={form.rnc} onChange={(e) => set('rnc', e.target.value)} className={ic} disabled={readOnly} />
+        </F>
+        <F label="Dirección">
+          <input type="text" value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} className={ic} disabled={readOnly} placeholder="Dirección fiscal" />
+        </F>
+        <F label="Teléfono">
+          <input type="text" value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value)} className={ic} disabled={readOnly} placeholder="(809) 000-0000" />
+        </F>
+        <F label="Email de contacto">
+          <input type="email" value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} className={ic} disabled={readOnly} placeholder="facturacion@empresa.com" />
+        </F>
       </div>
+
+      {isAdmin && (
+        <div className="flex items-center justify-end gap-3 mt-4 pt-4 border-t border-gray-50">
+          {saved && (
+            <span className="flex items-center gap-1.5 text-green-600 text-sm">
+              <CheckCircle2 className="w-4 h-4" /> Guardado
+            </span>
+          )}
+          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(form)}>
+            Guardar
+          </Button>
+        </div>
+      )}
     </Card>
   )
 }
@@ -140,38 +204,7 @@ function UsersTab() {
 
 // ── e-CF tab ──────────────────────────────────────────────────
 
-type Bu = 'HAX' | 'KODER'
-
-function EcfTab({ isAdmin }: { isAdmin: boolean }) {
-  const [activeBu, setActiveBu] = useState<Bu>('HAX')
-
-  return (
-    <div className="space-y-4">
-      {/* BU selector */}
-      <div className="flex gap-2">
-        {(['HAX', 'KODER'] as Bu[]).map((bu) => (
-          <button
-            key={bu}
-            onClick={() => setActiveBu(bu)}
-            className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
-              activeBu === bu
-                ? 'bg-[#293c4f] text-white border-[#293c4f]'
-                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-            )}
-          >
-            {bu}
-          </button>
-        ))}
-      </div>
-
-      <EcfBuPanel bu={activeBu} isAdmin={isAdmin} />
-    </div>
-  )
-}
-
 interface EcfConfig {
-  businessUnit: string
   alanubeEnabled: boolean
   hasApiKey: boolean
   alanubeApiKeyMasked?: string
@@ -190,25 +223,22 @@ interface EcfConfig {
   requireRncB01: boolean
   pollIntervalSeconds: number
   pollTimeoutMinutes: number
-  companyName: string | null
-  rnc: string | null
 }
 
-function EcfBuPanel({ bu, isAdmin }: { bu: Bu; isAdmin: boolean }) {
+function EcfTab({ isAdmin }: { isAdmin: boolean }) {
   const qc = useQueryClient()
   const [showKey, setShowKey] = useState(false)
   const [saved, setSaved]     = useState(false)
 
   const { data: config, isLoading } = useQuery<EcfConfig>({
-    queryKey: ['ecf-config', bu],
+    queryKey: ['ecf-config'],
     queryFn: async () => {
-      const { data } = await api.get(`/settings/${bu}`)
+      const { data } = await api.get('/settings/ecf')
       return data.data ?? data
     },
   })
 
   const [form, setForm] = useState<any>(null)
-  // Sync form when config loads
   if (config && form === null) {
     setForm({
       alanubeEnabled:      config.alanubeEnabled,
@@ -232,10 +262,10 @@ function EcfBuPanel({ bu, isAdmin }: { bu: Bu; isAdmin: boolean }) {
   }
 
   const save = useMutation({
-    mutationFn: async (body: any) => api.put(`/settings/${bu}`, body),
+    mutationFn: async (body: any) => api.put('/settings/ecf', body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ecf-config', bu] })
-      setForm(null) // will re-sync from fresh config
+      qc.invalidateQueries({ queryKey: ['ecf-config'] })
+      setForm(null)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     },
@@ -243,9 +273,7 @@ function EcfBuPanel({ bu, isAdmin }: { bu: Bu; isAdmin: boolean }) {
 
   const set = (key: string, value: any) => setForm((f: any) => ({ ...f, [key]: value }))
 
-  if (isLoading || !form) {
-    return <div className="animate-pulse bg-gray-100 rounded-xl h-48" />
-  }
+  if (isLoading || !form) return <div className="animate-pulse bg-gray-100 rounded-xl h-48" />
 
   const readOnly = !isAdmin
 
@@ -445,7 +473,7 @@ function EcfBuPanel({ bu, isAdmin }: { bu: Bu; isAdmin: boolean }) {
             loading={save.isPending}
             onClick={() => save.mutate(form)}
           >
-            Guardar configuración {bu}
+            Guardar configuración
           </Button>
         </div>
       )}
@@ -482,15 +510,6 @@ function Toggle({ label, description, value, onChange, disabled }: {
           value ? 'translate-x-4' : 'translate-x-0'
         )} />
       </button>
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-50">
-      <span className="text-gray-500 text-xs">{label}</span>
-      <span className="font-medium text-gray-800 text-xs">{value}</span>
     </div>
   )
 }

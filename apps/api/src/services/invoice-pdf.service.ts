@@ -5,6 +5,8 @@ import * as path from 'path'
 import * as crypto from 'crypto'
 import { prisma } from '../config/database'
 import { logger } from '../config/logger'
+import { getActiveTemplate } from '../modules/pdf-templates/pdf-templates.service'
+import { renderTemplateToPdf } from './template-renderer.service'
 
 const BRAND  = rgb(0.161, 0.235, 0.310)  // #293C4F
 const GRAY   = rgb(0.45,  0.45,  0.45)
@@ -216,6 +218,60 @@ export async function generateInvoicePdf(invoice: any): Promise<Uint8Array> {
   return doc.save()
 }
 
+/** Generate PDF — uses custom template if one is active, falls back to built-in */
+export async function generateInvoicePdfWithTemplate(invoice: any): Promise<Uint8Array> {
+  const templateType = invoice.type === 'NOTA_CREDITO' ? 'CREDIT_NOTE' : 'INVOICE'
+  const customTpl    = await getActiveTemplate(templateType as any)
+
+  if (customTpl) {
+    logger.info(`[PDF] Using custom template "${customTpl.name}" for ${invoice.id}`)
+    const data = buildInvoiceTemplateData(invoice)
+    return renderTemplateToPdf(customTpl.html, data)
+  }
+
+  // Fall back to built-in pdf-lib renderer
+  return generateInvoicePdf(invoice)
+}
+
+function buildInvoiceTemplateData(invoice: any) {
+  return {
+    company: { name: 'HAX ESTUDIO CREATIVO EIRL', rnc: '133-290251', address: 'Santo Domingo, RD' },
+    invoice: {
+      number: invoice.number,
+      ncf: invoice.ncf,
+      type: invoice.type === 'NOTA_CREDITO' ? 'NOTA DE CRÉDITO' :
+            invoice.type === 'CONSUMIDOR_FINAL' ? 'FACTURA CONSUMIDOR FINAL' : 'FACTURA DE CRÉDITO FISCAL',
+      issueDate: invoice.issueDate,
+      dueDate: invoice.dueDate,
+      subtotal: invoice.subtotal,
+      taxAmount: invoice.taxAmount,
+      total: invoice.total,
+      amountPaid: invoice.amountPaid ?? 0,
+      amountDue: invoice.amountDue ?? 0,
+      status: invoice.status,
+      paymentStatus: invoice.paymentStatus,
+      businessUnit: invoice.businessUnit,
+      notes: invoice.notes,
+    },
+    client: invoice.client ?? {},
+    items: (invoice.items ?? []).map((i: any) => ({
+      description: i.description,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      taxRate: i.taxRate,
+      taxAmount: i.taxAmount,
+      subtotal: i.subtotal,
+      total: i.total,
+      isExempt: i.isExempt,
+    })),
+    isApproved: invoice.status === 'APPROVED',
+    isCancelled: invoice.status === 'CANCELLED',
+    isPaid: invoice.paymentStatus === 'PAID' || invoice.status === 'PAID',
+    originalNcf: invoice.originalInvoice?.ncf ?? null,
+    generatedAt: new Date().toLocaleDateString('es-DO'),
+  }
+}
+
 /** Generate and persist PDF to disk, update Invoice record */
 export async function generateAndSaveInvoicePdf(invoiceId: string): Promise<string | null> {
   let invoice: any
@@ -233,7 +289,7 @@ export async function generateAndSaveInvoicePdf(invoiceId: string): Promise<stri
     // Mark as generating
     await prisma.invoice.update({ where: { id: invoiceId }, data: { pdfStatus: 'GENERATING' } })
 
-    const bytes = await generateInvoicePdf(invoice)
+    const bytes = await generateInvoicePdfWithTemplate(invoice)
 
     // Determine sub-folder
     const subfolder = invoice.type === 'NOTA_CREDITO' ? 'notas-credito' : 'facturas'
@@ -288,8 +344,8 @@ export async function getInvoicePdfBytes(invoiceId: string): Promise<{ bytes: Ui
     }
   }
 
-  // Fall back to on-the-fly generation
-  const bytes = await generateInvoicePdf(invoice)
+  // Fall back to on-the-fly generation (with custom template support)
+  const bytes = await generateInvoicePdfWithTemplate(invoice)
   const filename = `factura-${invoice.number}.pdf`
   return { bytes, filename }
 }

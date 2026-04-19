@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, CheckCircle2, AlertCircle, FileText, Upload, Trash2, Play, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Copy } from 'lucide-react'
+import { openPdf } from '@/lib/utils'
 import api from '@/lib/api'
 import { formatDate, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
-const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Presupuestos', 'Activos Fijos', 'Nómina', 'Cuentas Contables', 'Correo'] as const
+const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Presupuestos', 'Activos Fijos', 'Nómina', 'Cuentas Contables', 'Correo', 'Plantillas PDF'] as const
 type Tab = typeof TABS[number]
 
 export default function SettingsPage() {
@@ -43,6 +44,7 @@ export default function SettingsPage() {
       {tab === 'Nómina'               && <PayrollTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Cuentas Contables'    && <AccountsTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Correo'               && <EmailTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Plantillas PDF'       && <PdfTemplatesTab isAdmin={user?.role === 'ADMIN'} />}
     </div>
   )
 }
@@ -1215,4 +1217,547 @@ function Toggle({ label, description, value, onChange, disabled }: {
 const ic = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#293c4f] disabled:bg-gray-50 disabled:text-gray-400'
 function F({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>{children}</div>
+}
+
+// ── PDF Templates tab ─────────────────────────────────────────
+
+const TEMPLATE_TYPES = [
+  { value: 'INVOICE',         label: 'Factura',           desc: 'Crédito fiscal y consumidor final' },
+  { value: 'CREDIT_NOTE',     label: 'Nota de Crédito',   desc: 'Notas de crédito aprobadas' },
+  { value: 'PAYROLL_SLIP',    label: 'Comprobante Nómina', desc: 'Recibo de pago por empleado' },
+  { value: 'REPORT_PNL',      label: 'Reporte P&L',       desc: 'Estado de resultados' },
+  { value: 'REPORT_BALANCE',  label: 'Balance General',   desc: 'Balance general del período' },
+  { value: 'REPORT_CASHFLOW', label: 'Flujo de Caja',     desc: 'Flujo de efectivo mensual' },
+]
+
+const VARS: Record<string, { name: string; example: string }[]> = {
+  INVOICE: [
+    { name: '{{invoice.number}}',     example: 'INV-0001' },
+    { name: '{{invoice.ncf}}',        example: 'E310000000001' },
+    { name: '{{invoice.type}}',       example: 'FACTURA DE CRÉDITO FISCAL' },
+    { name: '{{date invoice.issueDate}}', example: '19 de abril de 2026' },
+    { name: '{{date invoice.dueDate}}',   example: '19 de mayo de 2026' },
+    { name: '{{fmt invoice.subtotal}}',   example: 'RD$ 10,000.00' },
+    { name: '{{fmt invoice.taxAmount}}',  example: 'RD$ 1,800.00' },
+    { name: '{{fmt invoice.total}}',      example: 'RD$ 11,800.00' },
+    { name: '{{client.name}}',        example: 'Empresa Ejemplo SRL' },
+    { name: '{{client.rnc}}',         example: '1-31-12345-6' },
+    { name: '{{client.email}}',       example: 'info@empresa.com' },
+    { name: '{{client.address}}',     example: 'Av. Principal #1' },
+    { name: '{{company.name}}',       example: 'HAX ESTUDIO CREATIVO EIRL' },
+    { name: '{{company.rnc}}',        example: '133-290251' },
+    { name: '{{#each items}}…{{/each}}', example: 'Loop de ítems' },
+    { name: '{{description}}',        example: 'Dentro del loop de ítems' },
+    { name: '{{fmt unitPrice}}',      example: 'Dentro del loop de ítems' },
+    { name: '{{fmt total}}',          example: 'Dentro del loop de ítems' },
+    { name: '{{#if isApproved}}',     example: 'Bloque condicional' },
+    { name: '{{#if isCancelled}}',    example: 'Bloque condicional' },
+    { name: '{{#if isPaid}}',         example: 'Bloque condicional' },
+  ],
+  CREDIT_NOTE: [
+    { name: '{{invoice.number}}',     example: 'NC-0001' },
+    { name: '{{invoice.ncf}}',        example: 'E340000000001' },
+    { name: '{{originalNcf}}',        example: 'NCF de la factura original' },
+    { name: '{{fmt invoice.total}}',  example: 'RD$ 5,900.00' },
+    { name: '{{client.name}}',        example: 'Empresa Ejemplo SRL' },
+  ],
+  PAYROLL_SLIP: [
+    { name: '{{employee.name}}',       example: 'Juan Pérez' },
+    { name: '{{employee.position}}',   example: 'Diseñador Senior' },
+    { name: '{{employee.cedula}}',     example: '001-1234567-8' },
+    { name: '{{periodLabel}}',         example: 'Abril 2026' },
+    { name: '{{fmt grossSalary}}',     example: 'RD$ 60,000.00' },
+    { name: '{{fmt afpEmployee}}',     example: 'RD$ 1,722.00' },
+    { name: '{{fmt sfsEmployee}}',     example: 'RD$ 1,824.00' },
+    { name: '{{fmt isr}}',             example: 'RD$ 0.00' },
+    { name: '{{fmt netSalary}}',       example: 'RD$ 56,454.00' },
+    { name: '{{fmt totalDeductions}}', example: 'RD$ 3,546.00' },
+    { name: '{{date payroll.paidAt}}', example: '19 de abril de 2026' },
+    { name: '{{company.name}}',        example: 'HAX ESTUDIO CREATIVO EIRL' },
+  ],
+  REPORT_PNL: [
+    { name: '{{periodLabel}}',          example: 'Abril 2026' },
+    { name: '{{businessUnit}}',         example: 'HAX / Consolidado' },
+    { name: '{{fmt grossRevenue}}',     example: 'RD$ 850,000.00' },
+    { name: '{{fmt totalExpenses}}',    example: 'RD$ 320,000.00' },
+    { name: '{{fmt netIncome}}',        example: 'RD$ 530,000.00' },
+    { name: '{{fmt collectedRevenue}}', example: 'RD$ 720,000.00' },
+    { name: '{{margin}}',               example: '62.4%' },
+    { name: '{{company.name}}',         example: 'HAX ESTUDIO CREATIVO EIRL' },
+  ],
+  REPORT_BALANCE: [
+    { name: '{{fmt assets.cash}}',              example: 'RD$ 450,000.00' },
+    { name: '{{fmt assets.accountsReceivable}}',example: 'RD$ 180,000.00' },
+    { name: '{{fmt assets.total}}',             example: 'RD$ 630,000.00' },
+    { name: '{{fmt equity}}',                   example: 'RD$ 310,000.00' },
+    { name: '{{generatedAt}}',                  example: '19 de abril de 2026' },
+  ],
+  REPORT_CASHFLOW: [
+    { name: '{{periodLabel}}',         example: 'Abril 2026' },
+    { name: '{{fmt totalInflows}}',    example: 'RD$ 720,000.00' },
+    { name: '{{fmt totalOutflows}}',   example: 'RD$ 320,000.00' },
+    { name: '{{fmt netCashFlow}}',     example: 'RD$ 400,000.00' },
+    { name: '{{#each inflows}}…{{/each}}',  example: 'Loop de cobros' },
+    { name: '{{#each outflows}}…{{/each}}', example: 'Loop de pagos' },
+  ],
+}
+
+interface PdfTemplate { id: string; type: string; name: string; description?: string; isActive: boolean; createdAt: string }
+
+function PdfTemplatesTab({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient()
+  const [selectedType, setSelectedType] = useState('INVOICE')
+  const [showEditor, setShowEditor]     = useState(false)
+  const [editingId, setEditingId]       = useState<string | null>(null)
+  const [form, setForm] = useState({ name: '', description: '', html: '' })
+  const [showVars, setShowVars]         = useState(false)
+  const [saving, setSaving]             = useState(false)
+  const [msg, setMsg]                   = useState<{ ok: boolean; text: string } | null>(null)
+
+  const { data: templates = [], isLoading } = useQuery<PdfTemplate[]>({
+    queryKey: ['pdf-templates', selectedType],
+    queryFn: async () => {
+      const { data } = await api.get(`/pdf-templates?type=${selectedType}`)
+      return data.data ?? []
+    },
+  })
+
+  const activate = useMutation({
+    mutationFn: (id: string) => api.post(`/pdf-templates/${id}/activate`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pdf-templates'] }),
+  })
+
+  const deactivate = useMutation({
+    mutationFn: (type: string) => api.post(`/pdf-templates/type/${type}/deactivate`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pdf-templates'] }),
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/pdf-templates/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pdf-templates'] }),
+  })
+
+  function startCreate() {
+    setEditingId(null)
+    setForm({ name: '', description: '', html: DEFAULT_HTML[selectedType] ?? '' })
+    setShowEditor(true)
+  }
+
+  function startEdit(t: any) {
+    setEditingId(t.id)
+    setForm({ name: t.name, description: t.description ?? '', html: '' })
+    // Load full html
+    api.get(`/pdf-templates/${t.id}`).then(({ data }) => {
+      setForm(f => ({ ...f, html: data.data?.html ?? '' }))
+    })
+    setShowEditor(true)
+  }
+
+  async function handleSave() {
+    setSaving(true); setMsg(null)
+    try {
+      if (editingId) {
+        await api.put(`/pdf-templates/${editingId}`, form)
+      } else {
+        await api.post('/pdf-templates', { ...form, type: selectedType })
+      }
+      qc.invalidateQueries({ queryKey: ['pdf-templates'] })
+      setShowEditor(false)
+      setMsg({ ok: true, text: 'Plantilla guardada.' })
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.response?.data?.error ?? 'Error al guardar' })
+    } finally {
+      setSaving(false) }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const html = await file.text()
+    setForm(f => ({ ...f, html, name: f.name || file.name.replace('.html','') }))
+    e.target.value = ''
+  }
+
+  const typeInfo = TEMPLATE_TYPES.find(t => t.value === selectedType)!
+  const vars     = VARS[selectedType] ?? []
+  const activeTemplate = templates.find(t => t.isActive)
+
+  return (
+    <div className="space-y-5">
+      {/* Header info */}
+      <Card padding="sm">
+        <div className="px-4 py-3 flex items-start gap-3">
+          <FileText className="w-5 h-5 text-[#293c4f] mt-0.5 shrink-0" />
+          <div className="text-sm text-gray-600 leading-relaxed">
+            <p className="font-semibold text-gray-800 mb-1">Plantillas HTML personalizadas</p>
+            <p>Diseña tus plantillas en cualquier editor HTML (VS Code, Dreamweaver, etc.) e impórtalas aquí.
+              El sistema inyecta los datos automáticamente usando variables <code className="bg-gray-100 px-1 rounded text-xs font-mono">{'{{variable}}'}</code>.
+              Cuando no hay plantilla activa, se usa la plantilla integrada.</p>
+          </div>
+        </div>
+      </Card>
+
+      {msg && (
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm ${msg.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {msg.ok ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />} {msg.text}
+        </div>
+      )}
+
+      {/* Type selector */}
+      <div className="flex flex-wrap gap-2">
+        {TEMPLATE_TYPES.map(t => (
+          <button key={t.value} onClick={() => { setSelectedType(t.value); setShowEditor(false) }}
+            className={cn('px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors',
+              selectedType === t.value ? 'bg-[#293c4f] text-white border-[#293c4f]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#293c4f]')}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Active status for selected type */}
+      <Card padding="sm">
+        <div className="px-4 py-3 flex items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-gray-800 text-sm">{typeInfo.label}</p>
+            <p className="text-xs text-gray-400">{typeInfo.desc}</p>
+            {activeTemplate
+              ? <p className="text-xs text-green-700 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Usando: <strong>{activeTemplate.name}</strong></p>
+              : <p className="text-xs text-gray-400 mt-1">Usando plantilla integrada del sistema</p>}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {activeTemplate && isAdmin && (
+              <Button variant="secondary" size="sm"
+                onClick={() => confirm('¿Desactivar y volver a la plantilla integrada?') && deactivate.mutate(selectedType)}>
+                Usar integrada
+              </Button>
+            )}
+            {isAdmin && (
+              <Button variant="primary" size="sm" icon={<Upload className="w-3.5 h-3.5" />} onClick={startCreate}>
+                Nueva plantilla
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Template list */}
+      {isLoading ? (
+        <div className="text-sm text-gray-400 px-1">Cargando…</div>
+      ) : templates.length === 0 ? (
+        <div className="text-sm text-gray-400 px-1 py-4 text-center border border-dashed border-gray-200 rounded-xl">
+          No hay plantillas para este tipo. Crea una con el botón de arriba.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {templates.map(t => (
+            <Card key={t.id} padding="sm">
+              <div className="px-4 py-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={cn('w-2 h-2 rounded-full shrink-0', t.isActive ? 'bg-green-500' : 'bg-gray-300')} />
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-800 text-sm truncate">{t.name}</p>
+                    {t.description && <p className="text-xs text-gray-400 truncate">{t.description}</p>}
+                  </div>
+                  {t.isActive && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium shrink-0">Activa</span>}
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button title="Vista previa PDF"
+                    className="p-1.5 text-gray-400 hover:text-[#293c4f] rounded"
+                    onClick={() => openPdf(`/pdf-templates/${t.id}/preview`, `preview-${t.name}.pdf`)}>
+                    <Play className="w-3.5 h-3.5" />
+                  </button>
+                  {isAdmin && (
+                    <>
+                      <button title="Editar" className="p-1.5 text-gray-400 hover:text-[#293c4f] rounded"
+                        onClick={() => startEdit(t)}>
+                        <FileText className="w-3.5 h-3.5" />
+                      </button>
+                      {!t.isActive && (
+                        <button title="Activar" className="p-1.5 text-gray-400 hover:text-green-600 rounded"
+                          onClick={() => activate.mutate(t.id)}>
+                          <ToggleLeft className="w-4 h-4" />
+                        </button>
+                      )}
+                      {t.isActive && (
+                        <span title="Activa" className="p-1.5 text-green-600">
+                          <ToggleRight className="w-4 h-4" />
+                        </span>
+                      )}
+                      {!t.isActive && (
+                        <button title="Eliminar" className="p-1.5 text-gray-400 hover:text-red-500 rounded"
+                          onClick={() => confirm(`¿Eliminar "${t.name}"?`) && remove.mutate(t.id)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Editor panel */}
+      {showEditor && isAdmin && (
+        <Card padding="sm">
+          <div className="px-4 py-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-gray-800 text-sm">
+                {editingId ? 'Editar plantilla' : `Nueva plantilla — ${typeInfo.label}`}
+              </p>
+              <button onClick={() => setShowEditor(false)} className="text-gray-400 hover:text-gray-600 text-xs">Cerrar</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Nombre de la plantilla">
+                <input className={ic} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ej: Plantilla corporativa 2026" />
+              </F>
+              <F label="Descripción (opcional)">
+                <input className={ic} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Breve descripción" />
+              </F>
+            </div>
+
+            {/* File upload */}
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 px-3 py-2 text-sm border border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#293c4f] hover:text-[#293c4f] text-gray-500 transition-colors">
+                <Upload className="w-4 h-4" />
+                Cargar archivo .html
+                <input type="file" accept=".html,.htm" className="hidden" onChange={handleFileUpload} />
+              </label>
+              <span className="text-xs text-gray-400">o escribe/pega el HTML directamente abajo</span>
+            </div>
+
+            {/* Variables reference */}
+            <div className="border border-gray-200 rounded-lg">
+              <button className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg"
+                onClick={() => setShowVars(v => !v)}>
+                <span>Variables disponibles para <strong>{typeInfo.label}</strong></span>
+                {showVars ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              {showVars && (
+                <div className="px-3 pb-3 grid grid-cols-2 gap-1.5 max-h-56 overflow-y-auto">
+                  {vars.map(v => (
+                    <div key={v.name} className="flex items-start gap-2 group">
+                      <button title="Copiar" onClick={() => navigator.clipboard.writeText(v.name)}
+                        className="shrink-0 mt-0.5 text-gray-300 hover:text-[#293c4f]">
+                        <Copy className="w-3 h-3" />
+                      </button>
+                      <div className="min-w-0">
+                        <code className="text-xs font-mono text-[#293c4f] break-all">{v.name}</code>
+                        <p className="text-xs text-gray-400 truncate">{v.example}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* HTML editor */}
+            <F label="HTML de la plantilla">
+              <textarea
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-[#293c4f] resize-y"
+                rows={22}
+                value={form.html}
+                onChange={e => setForm(f => ({ ...f, html: e.target.value }))}
+                placeholder={`<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <style>\n    /* Tus estilos aquí */\n  </style>\n</head>\n<body>\n  <h1>{{company.name}}</h1>\n  <p>Factura: {{invoice.number}}</p>\n  <!-- ... -->\n</body>\n</html>`}
+                spellCheck={false}
+              />
+            </F>
+
+            <div className="flex items-center gap-2 pt-1">
+              <Button variant="primary" size="sm" onClick={handleSave} loading={saving}>
+                {editingId ? 'Guardar cambios' : 'Crear plantilla'}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setShowEditor(false)}>Cancelar</Button>
+              <span className="text-xs text-gray-400 ml-2">El sistema valida la sintaxis Handlebars al guardar.</span>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Variables legend always visible */}
+      {!showEditor && (
+        <Card padding="sm">
+          <div className="px-4 py-3">
+            <p className="text-xs font-semibold text-gray-700 mb-2">Variables disponibles — {typeInfo.label}</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto">
+              {vars.slice(0, 18).map(v => (
+                <div key={v.name} className="flex items-start gap-1.5">
+                  <button title="Copiar" onClick={() => navigator.clipboard.writeText(v.name)}
+                    className="shrink-0 mt-0.5 text-gray-300 hover:text-[#293c4f]">
+                    <Copy className="w-3 h-3" />
+                  </button>
+                  <div className="min-w-0">
+                    <code className="text-xs font-mono text-[#293c4f] break-all">{v.name}</code>
+                    <p className="text-xs text-gray-400 truncate">{v.example}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ── Default HTML starters per type ────────────────────────────
+
+const DEFAULT_HTML: Record<string, string> = {
+  INVOICE: `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Arial, sans-serif; font-size:12px; color:#222; padding:40px; }
+  .header { background:#293c4f; color:#fff; padding:24px 30px; display:flex; justify-content:space-between; align-items:flex-start; margin:-40px -40px 30px; }
+  .header h1 { font-size:18px; font-weight:bold; }
+  .header .meta { text-align:right; }
+  .header .meta .num { font-size:16px; font-weight:bold; }
+  .ncf-bar { background:#f0f2f4; padding:8px 0; display:flex; gap:20px; margin-bottom:20px; }
+  .ncf-bar span { font-size:11px; color:#555; }
+  .ncf-bar strong { color:#293c4f; }
+  .bill-to { margin-bottom:20px; }
+  .bill-to .label { font-size:10px; color:#888; font-weight:bold; margin-bottom:4px; }
+  .bill-to .name { font-size:14px; font-weight:bold; }
+  table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+  thead tr { background:#293c4f; color:#fff; }
+  thead th { padding:8px 10px; text-align:left; font-size:11px; }
+  tbody tr:nth-child(even) { background:#f8f9fa; }
+  tbody td { padding:8px 10px; font-size:11px; }
+  .totals { float:right; width:260px; }
+  .totals tr td { padding:5px 8px; }
+  .totals .total-row td { background:#293c4f; color:#fff; font-weight:bold; font-size:14px; }
+  .footer { position:fixed; bottom:0; left:0; right:0; background:#293c4f; color:rgba(255,255,255,0.7); font-size:10px; padding:10px 40px; display:flex; justify-content:space-between; }
+  .legend { font-size:10px; color:#888; margin-top:30px; }
+  .watermark { position:fixed; top:40%; left:10%; transform:rotate(35deg); font-size:80px; font-weight:bold; opacity:0.07; color:#c00; pointer-events:none; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>{{company.name}}</h1>
+    <div style="font-size:11px;opacity:0.8;">RNC: {{company.rnc}}</div>
+    <div style="font-size:11px;opacity:0.8;">Santo Domingo, República Dominicana</div>
+  </div>
+  <div class="meta">
+    <div>{{invoice.type}}</div>
+    <div class="num">N° {{invoice.number}}</div>
+    <div style="font-size:11px;opacity:0.8;">{{invoice.businessUnit}}</div>
+  </div>
+</div>
+
+<div class="ncf-bar">
+  <span><strong>e-CF:</strong> {{invoice.ncf}}</span>
+  <span><strong>Emisión:</strong> {{date invoice.issueDate}}</span>
+  {{#if invoice.dueDate}}<span><strong>Vence:</strong> {{date invoice.dueDate}}</span>{{/if}}
+</div>
+
+<div class="bill-to">
+  <div class="label">FACTURAR A</div>
+  <div class="name">{{client.name}}</div>
+  {{#if client.rnc}}<div style="color:#555;">RNC / Cédula: {{client.rnc}}</div>{{/if}}
+  {{#if client.email}}<div style="color:#555;">{{client.email}}</div>{{/if}}
+  {{#if client.address}}<div style="color:#555;">{{client.address}}</div>{{/if}}
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Descripción</th>
+      <th style="width:60px;text-align:center;">Cant.</th>
+      <th style="width:100px;text-align:right;">Precio Unit.</th>
+      <th style="width:90px;text-align:right;">ITBIS</th>
+      <th style="width:100px;text-align:right;">Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td>{{description}}</td>
+      <td style="text-align:center;">{{quantity}}</td>
+      <td style="text-align:right;">{{fmt unitPrice}}</td>
+      <td style="text-align:right;">{{#if isExempt}}Exento{{else}}{{fmt taxAmount}}{{/if}}</td>
+      <td style="text-align:right;font-weight:bold;">{{fmt total}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+
+<table class="totals">
+  <tr><td>Subtotal:</td><td style="text-align:right;">{{fmt invoice.subtotal}}</td></tr>
+  <tr><td>ITBIS (18%):</td><td style="text-align:right;">{{fmt invoice.taxAmount}}</td></tr>
+  <tr class="total-row"><td>TOTAL:</td><td style="text-align:right;">{{fmt invoice.total}}</td></tr>
+</table>
+
+{{#if invoice.notes}}
+<div style="clear:both;margin-top:20px;">
+  <div style="font-size:10px;font-weight:bold;color:#888;">NOTAS</div>
+  <div style="font-size:11px;color:#555;">{{invoice.notes}}</div>
+</div>
+{{/if}}
+
+{{#if isCancelled}}<div class="watermark">ANULADA</div>{{/if}}
+{{#if isPaid}}<div class="watermark" style="color:#1a7a1a;">PAGADA</div>{{/if}}
+
+<div class="legend">Este documento es una representación impresa del e-CF emitido ante la DGII. Conservar por 10 años.</div>
+
+<div class="footer">
+  <span>{{company.name}} · RNC: {{company.rnc}}</span>
+  <span>Generado: {{generatedAt}}</span>
+</div>
+</body>
+</html>`,
+
+  PAYROLL_SLIP: `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Arial, sans-serif; font-size:12px; color:#222; padding:40px; max-width:700px; margin:0 auto; }
+  .header { background:#293c4f; color:#fff; padding:20px 30px; margin:-40px -40px 30px; display:flex; justify-content:space-between; }
+  .header h1 { font-size:16px; font-weight:bold; }
+  .employee-name { font-size:20px; font-weight:bold; margin-bottom:4px; }
+  .row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f0f0f0; }
+  .row .label { color:#666; }
+  .row .value { font-weight:bold; }
+  .net { background:#293c4f; color:#fff; padding:12px 16px; display:flex; justify-content:space-between; font-size:16px; font-weight:bold; margin:20px 0; border-radius:8px; }
+  .section-title { font-size:11px; font-weight:bold; color:#293c4f; text-transform:uppercase; margin:16px 0 8px; }
+  .footer { margin-top:40px; font-size:10px; color:#888; text-align:center; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div><h1>{{company.name}}</h1><div style="opacity:0.8;font-size:11px;">RNC: {{company.rnc}}</div></div>
+  <div style="text-align:right;"><div>COMPROBANTE DE NÓMINA</div><div style="font-size:14px;font-weight:bold;">{{periodLabel}}</div></div>
+</div>
+
+<div class="employee-name">{{employee.name}}</div>
+{{#if employee.position}}<div style="color:#666;margin-bottom:16px;">{{employee.position}}</div>{{/if}}
+{{#if employee.cedula}}<div style="color:#888;font-size:11px;margin-bottom:20px;">Cédula: {{employee.cedula}}</div>{{/if}}
+
+<div class="section-title">Ingresos</div>
+<div class="row"><span class="label">Salario bruto</span><span class="value">{{fmt grossSalary}}</span></div>
+
+<div class="section-title">Deducciones</div>
+<div class="row"><span class="label">AFP (empleado 2.87%)</span><span class="value">({{fmt afpEmployee}})</span></div>
+<div class="row"><span class="label">SFS (empleado 3.04%)</span><span class="value">({{fmt sfsEmployee}})</span></div>
+{{#if isr}}<div class="row"><span class="label">ISR retenido</span><span class="value">({{fmt isr}})</span></div>{{/if}}
+<div class="row" style="font-weight:bold;"><span>Total deducciones</span><span>({{fmt totalDeductions}})</span></div>
+
+<div class="net">
+  <span>SALARIO NETO A PAGAR</span>
+  <span>{{fmt netSalary}}</span>
+</div>
+
+{{#if payroll.paidAt}}<div style="font-size:11px;color:#555;">Fecha de pago: {{date payroll.paidAt}}</div>{{/if}}
+
+<div class="footer">
+  Comprobante generado el {{generatedAt}} · Este documento no tiene valor fiscal.
+</div>
+</body>
+</html>`,
 }

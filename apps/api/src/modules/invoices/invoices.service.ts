@@ -9,6 +9,19 @@ function generateInvoiceNumber(bu: string, count: number) {
   return `${prefix}-${String(count + 1).padStart(6, '0')}`
 }
 
+/** Map NCF code from frontend (B01/B02/B14) → InvoiceType enum */
+const NCF_TO_INVOICE_TYPE: Record<string, string> = {
+  B01: 'CREDITO_FISCAL',
+  B02: 'CONSUMO',
+  B03: 'NOTA_DEBITO',
+  B04: 'NOTA_CREDITO',
+  B14: 'REGIMEN_ESPECIAL',
+  B15: 'CONSUMO', // Gubernamental → usa misma lógica que consumo
+}
+
+/** B14 (Régimen Especial) — ITBIS siempre exento */
+const ITBIS_EXEMPT_TYPES = new Set(['REGIMEN_ESPECIAL', 'B14'])
+
 async function autoJournalEntry(opts: {
   type: 'INVOICE' | 'PAYMENT' | 'CREDIT_NOTE'
   businessUnit: 'HAX' | 'KODER'
@@ -94,14 +107,25 @@ export async function createInvoice(data: any) {
   const count = await prisma.invoice.count({ where: { businessUnit: data.businessUnit } })
   const number = generateInvoiceNumber(data.businessUnit, count)
 
-  const { items, ...invoiceData } = data
-  const subtotal: number = items.reduce((s: number, i: any) => s + (i.quantity * i.unitPrice), 0)
+  // Map ncfType (B01/B02/B14) → InvoiceType enum and set on data
+  const { items: rawItems, ncfType, type: rawType, ...invoiceData } = data
+  const resolvedType = NCF_TO_INVOICE_TYPE[ncfType] ?? rawType ?? 'CONSUMO'
+  const isExemptType = ITBIS_EXEMPT_TYPES.has(resolvedType)
+
+  // For B14 (Régimen Especial): force all items to ITBIS exento
+  const items = rawItems.map((i: any) => {
+    if (isExemptType) return { ...i, isExempt: true, taxRate: 0, taxAmount: 0 }
+    return i
+  })
+
+  const subtotal: number  = items.reduce((s: number, i: any) => s + (i.quantity * i.unitPrice), 0)
   const taxAmount: number = items.reduce((s: number, i: any) => s + (i.taxAmount ?? 0), 0)
   const total = subtotal + taxAmount
 
   return prisma.invoice.create({
     data: {
       ...invoiceData,
+      type: resolvedType as any,
       number,
       subtotal,
       taxAmount,

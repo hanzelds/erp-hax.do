@@ -47,10 +47,11 @@ interface InvoiceDetail {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  CREDITO_FISCAL: 'Crédito Fiscal',
-  CONSUMO:        'Consumidor Final',
-  NOTA_DEBITO:    'Nota de Débito',
-  NOTA_CREDITO:   'Nota de Crédito',
+  CREDITO_FISCAL:   'Crédito Fiscal',
+  CONSUMO:          'Consumidor Final',
+  NOTA_DEBITO:      'Nota de Débito',
+  NOTA_CREDITO:     'Nota de Crédito',
+  REGIMEN_ESPECIAL: 'Régimen Especial (B14)',
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -250,7 +251,13 @@ export default function InvoiceDetailPage() {
                     <td className="px-3 py-2.5 text-xs text-gray-700">{item.description}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-600">{item.quantity}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-600">{formatCurrency(item.unitPrice)}</td>
-                    <td className="px-3 py-2.5 text-xs text-gray-600">{formatCurrency(item.taxAmount)}</td>
+                    <td className="px-3 py-2.5 text-xs text-gray-600">
+                      {invoice.type === 'REGIMEN_ESPECIAL'
+                        ? <span className="text-amber-600 font-medium">Exento</span>
+                        : item.taxAmount === 0
+                          ? <span className="text-gray-400">Exento</span>
+                          : formatCurrency(item.taxAmount)}
+                    </td>
                     <td className="px-3 py-2.5 text-xs font-semibold text-gray-800">{formatCurrency(item.total)}</td>
                   </tr>
                 ))}
@@ -258,7 +265,12 @@ export default function InvoiceDetailPage() {
             </table>
             <div className="border-t border-gray-100 mt-2 pt-3 px-3 space-y-1.5">
               <div className="flex justify-between text-xs text-gray-500"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span></div>
-              <div className="flex justify-between text-xs text-gray-500"><span>ITBIS 18%</span><span>{formatCurrency(invoice.taxAmount)}</span></div>
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>ITBIS</span>
+                {invoice.type === 'REGIMEN_ESPECIAL'
+                  ? <span className="text-amber-600 font-medium">Exento (B14)</span>
+                  : <span>{formatCurrency(invoice.taxAmount)}</span>}
+              </div>
               <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-100"><span>Total</span><span>{formatCurrency(invoice.total)}</span></div>
             </div>
           </Card>

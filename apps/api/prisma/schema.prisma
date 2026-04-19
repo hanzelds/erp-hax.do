@@ -899,6 +899,7 @@ enum InvoiceType {
   CONSUMO
   NOTA_DEBITO
   NOTA_CREDITO
+  REGIMEN_ESPECIAL
 }
 
 enum PaymentMethod {

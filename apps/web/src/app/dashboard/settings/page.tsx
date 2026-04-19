@@ -142,7 +142,7 @@ function UsersTab() {
     queryKey: ['users'],
     queryFn: async () => {
       const { data } = await api.get('/auth/users')
-      return data
+      return data.data ?? data
     },
     enabled: me?.role === 'ADMIN',
   })

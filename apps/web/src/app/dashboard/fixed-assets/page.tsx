@@ -92,11 +92,12 @@ export default function FixedAssetsPage() {
   const isAdmin  = user?.role === 'ADMIN'
   const qc       = useQueryClient()
 
-  const [bu, setBu]                   = useState('')
-  const [status, setStatus]           = useState('')
-  const [category, setCategory]       = useState('')
-  const [expanded, setExpanded]       = useState<string | null>(null)
-  const [showModal, setShowModal]     = useState(false)
+  const [bu, setBu]                       = useState('')
+  const [status, setStatus]               = useState('')
+  const [category, setCategory]           = useState('')
+  const [expanded, setExpanded]           = useState<string | null>(null)
+  const [showModal, setShowModal]         = useState(false)
+  const [showDepPreview, setShowDepPreview] = useState(false)
 
   const { data, isLoading, refetch, isFetching } = useQuery<AssetsResponse>({
     queryKey: ['fixed-assets', { bu, status, category }],
@@ -117,7 +118,10 @@ export default function FixedAssetsPage() {
 
   const runDepreciation = useMutation({
     mutationFn: async () => api.post('/fixed-assets/depreciation/run'),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['fixed-assets'] }) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fixed-assets'] })
+      setShowDepPreview(false)
+    },
   })
 
   const { data: expandedAsset, isLoading: loadingExpanded } = useQuery<FixedAsset>({
@@ -144,12 +148,7 @@ export default function FixedAssetsPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  loading={runDepreciation.isPending}
-                  onClick={() => {
-                    if (confirm('¿Calcular depreciación del período actual? Esta acción generará asientos contables.')) {
-                      runDepreciation.mutate()
-                    }
-                  }}
+                  onClick={() => setShowDepPreview(true)}
                 >
                   Calcular Depreciación
                 </Button>
@@ -306,6 +305,138 @@ export default function FixedAssetsPage() {
       </Card>
 
       {showModal && <NewAssetModal onClose={() => setShowModal(false)} />}
+      {showDepPreview && (
+        <DepreciationPreviewModal
+          onClose={() => setShowDepPreview(false)}
+          onApprove={() => runDepreciation.mutate()}
+          approving={runDepreciation.isPending}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Depreciation Preview Modal ────────────────────────────────
+
+interface DepreciationPreview {
+  assetId: string
+  name: string
+  category: AssetCategory
+  currentBookValue: number
+  depreciationAmount: number
+  newBookValue: number
+  period: string
+}
+
+interface DepreciationPreviewResponse {
+  period: string
+  totalAmount: number
+  count: number
+  previews: DepreciationPreview[]
+}
+
+function DepreciationPreviewModal({
+  onClose,
+  onApprove,
+  approving,
+}: {
+  onClose: () => void
+  onApprove: () => void
+  approving: boolean
+}) {
+  const { data, isLoading, isError } = useQuery<DepreciationPreviewResponse>({
+    queryKey: ['depreciation-preview'],
+    queryFn: async () => {
+      const { data } = await api.get('/fixed-assets/depreciation/preview')
+      return data.data ?? data
+    },
+    retry: false,
+  })
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Vista previa de depreciación</h2>
+            {data && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                Período {data.period} · {data.count} activo{data.count !== 1 ? 's' : ''} · Total:{' '}
+                <span className="font-semibold text-[#293c4f]">{formatCurrency(data.totalAmount)}</span>
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-4">
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : isError ? (
+            <div className="text-center py-10 text-sm text-red-500">
+              Error al cargar la vista previa. No hay activos activos para depreciar en este período.
+            </div>
+          ) : !data || data.count === 0 ? (
+            <div className="text-center py-10 text-sm text-gray-400">
+              No hay activos activos pendientes de depreciación en el período actual.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  {['Activo', 'Categoría', 'Valor actual', 'Depreciación', 'Valor nuevo'].map((h) => (
+                    <th key={h} className="text-left text-xs font-medium text-gray-400 px-2 py-2.5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.previews.filter((p: any) => !p.skipped).map((p: any) => (
+                  <tr key={p.assetId} className="border-b border-gray-50 hover:bg-gray-50/60">
+                    <td className="px-2 py-3 text-xs font-medium text-gray-800">{p.name}</td>
+                    <td className="px-2 py-3 text-xs text-gray-500">{CATEGORY_LABELS[p.category as AssetCategory] ?? p.category}</td>
+                    <td className="px-2 py-3 text-xs text-gray-700">{formatCurrency(p.currentBookValue)}</td>
+                    <td className="px-2 py-3 text-xs font-semibold text-red-600">− {formatCurrency(p.depreciationAmount)}</td>
+                    <td className="px-2 py-3 text-xs font-semibold text-[#293c4f]">{formatCurrency(p.newBookValue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-50">
+                  <td colSpan={3} className="px-2 py-2.5 text-xs font-semibold text-gray-600">Total depreciación del período</td>
+                  <td className="px-2 py-2.5 text-xs font-bold text-red-600">− {formatCurrency(data.totalAmount)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+
+        {/* Warning */}
+        {data && data.count > 0 && (
+          <div className="mx-6 mb-2 px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-700 shrink-0">
+            Al aprobar se generarán <strong>{data.count} asiento{data.count !== 1 ? 's' : ''} contable{data.count !== 1 ? 's' : ''}</strong> de depreciación por un total de{' '}
+            <strong>{formatCurrency(data.totalAmount)}</strong>. Esta acción no se puede deshacer.
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100 shrink-0">
+          <Button variant="secondary" onClick={onClose} disabled={approving}>Cancelar</Button>
+          {data && data.count > 0 && (
+            <Button
+              variant="primary"
+              loading={approving}
+              onClick={onApprove}
+            >
+              Aprobar y generar asientos
+            </Button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

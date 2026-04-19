@@ -8,7 +8,7 @@ import { formatDate, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
-const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF'] as const
+const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Presupuestos', 'Activos Fijos'] as const
 type Tab = typeof TABS[number]
 
 export default function SettingsPage() {
@@ -34,9 +34,12 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {tab === 'Empresa'           && <CompanyTab isAdmin={user?.role === 'ADMIN'} />}
-      {tab === 'Usuarios'          && <UsersTab />}
-      {tab === 'Facturación e-CF'  && <EcfTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Empresa'              && <CompanyTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Usuarios'             && <UsersTab />}
+      {tab === 'Facturación e-CF'     && <EcfTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Facturación General'  && <GeneralTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Presupuestos'         && <BudgetsTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Activos Fijos'        && <FixedAssetsTab isAdmin={user?.role === 'ADMIN'} />}
     </div>
   )
 }
@@ -477,6 +480,270 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
           </Button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── General Invoicing Tab ────────────────────────────────────
+
+interface GeneralConfig {
+  invoiceDueDays: number
+  defaultPaymentMethod: string
+  budgetAlertThreshold: number
+  budgetExceededThreshold: number
+  fixedAssetThreshold: number
+}
+
+function GeneralTab({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient()
+  const [saved, setSaved] = useState(false)
+
+  const { data: config, isLoading } = useQuery<GeneralConfig>({
+    queryKey: ['general-config'],
+    queryFn: async () => {
+      const { data } = await api.get('/settings/general')
+      return data.data ?? data
+    },
+  })
+
+  const [form, setForm] = useState<GeneralConfig | null>(null)
+  if (config && form === null) setForm({ ...config })
+
+  const save = useMutation({
+    mutationFn: async (body: GeneralConfig) => api.put('/settings/general', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['general-config'] })
+      setForm(null)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    },
+  })
+
+  const set = (key: keyof GeneralConfig, value: any) =>
+    setForm((f) => f ? { ...f, [key]: value } : f)
+
+  if (isLoading || !form) return <div className="animate-pulse bg-gray-100 rounded-xl h-48" />
+
+  const readOnly = !isAdmin
+
+  return (
+    <Card>
+      <CardHeader title="Parámetros de facturación" subtitle="Comportamiento general de facturas y cobros" />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <F label="Días de vencimiento de facturas">
+          <input
+            type="number" min="0" max="365"
+            value={form.invoiceDueDays}
+            onChange={(e) => set('invoiceDueDays', parseInt(e.target.value) || 0)}
+            className={ic} disabled={readOnly}
+          />
+          <p className="text-xs text-gray-400 mt-1">Días desde la emisión hasta el vencimiento por defecto</p>
+        </F>
+        <F label="Método de pago por defecto">
+          <select
+            value={form.defaultPaymentMethod}
+            onChange={(e) => set('defaultPaymentMethod', e.target.value)}
+            className={ic} disabled={readOnly}
+          >
+            <option value="TRANSFER">Transferencia bancaria</option>
+            <option value="CASH">Efectivo</option>
+            <option value="CHECK">Cheque</option>
+            <option value="CARD">Tarjeta</option>
+          </select>
+          <p className="text-xs text-gray-400 mt-1">Método de pago pre-seleccionado al crear cobros</p>
+        </F>
+      </div>
+      {isAdmin && (
+        <div className="flex items-center justify-end gap-3 mt-4 pt-4 border-t border-gray-50">
+          {saved && <span className="flex items-center gap-1.5 text-green-600 text-sm"><CheckCircle2 className="w-4 h-4" /> Guardado</span>}
+          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(form)}>Guardar</Button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ── Budgets Tab ───────────────────────────────────────────────
+
+function BudgetsTab({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient()
+  const [saved, setSaved] = useState(false)
+
+  const { data: config, isLoading } = useQuery<GeneralConfig>({
+    queryKey: ['general-config'],
+    queryFn: async () => {
+      const { data } = await api.get('/settings/general')
+      return data.data ?? data
+    },
+  })
+
+  const [form, setForm] = useState<GeneralConfig | null>(null)
+  if (config && form === null) setForm({ ...config })
+
+  const save = useMutation({
+    mutationFn: async (body: GeneralConfig) => api.put('/settings/general', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['general-config'] })
+      setForm(null)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    },
+  })
+
+  const set = (key: keyof GeneralConfig, value: any) =>
+    setForm((f) => f ? { ...f, [key]: value } : f)
+
+  if (isLoading || !form) return <div className="animate-pulse bg-gray-100 rounded-xl h-48" />
+
+  const readOnly = !isAdmin
+
+  return (
+    <Card>
+      <CardHeader title="Umbrales de presupuesto" subtitle="Alertas automáticas al acercarse o superar el presupuesto asignado" />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <F label={`Umbral de alerta: ${(form.budgetAlertThreshold * 100).toFixed(0)}%`}>
+          <input
+            type="range" min="50" max="100" step="5"
+            value={form.budgetAlertThreshold * 100}
+            onChange={(e) => set('budgetAlertThreshold', parseInt(e.target.value) / 100)}
+            className="w-full accent-[#293c4f]" disabled={readOnly}
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Alerta (naranja) cuando la ejecución alcanza el <strong>{(form.budgetAlertThreshold * 100).toFixed(0)}%</strong> del presupuesto
+          </p>
+        </F>
+        <F label={`Umbral de exceso: ${(form.budgetExceededThreshold * 100).toFixed(0)}%`}>
+          <input
+            type="range" min="100" max="150" step="5"
+            value={form.budgetExceededThreshold * 100}
+            onChange={(e) => set('budgetExceededThreshold', parseInt(e.target.value) / 100)}
+            className="w-full accent-[#293c4f]" disabled={readOnly}
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Alerta (rojo) cuando la ejecución supera el <strong>{(form.budgetExceededThreshold * 100).toFixed(0)}%</strong> del presupuesto
+          </p>
+        </F>
+      </div>
+
+      {/* Visual preview */}
+      <div className="mt-4 p-4 bg-gray-50 rounded-xl">
+        <p className="text-xs font-medium text-gray-600 mb-3">Vista previa de indicadores</p>
+        <div className="flex gap-4 flex-wrap text-xs">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-3 h-3 rounded-full bg-green-400" />
+            <span className="text-gray-600">Normal (&lt; {(form.budgetAlertThreshold * 100).toFixed(0)}%)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-3 h-3 rounded-full bg-amber-400" />
+            <span className="text-gray-600">Alerta ({(form.budgetAlertThreshold * 100).toFixed(0)}% – {(form.budgetExceededThreshold * 100).toFixed(0)}%)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-3 h-3 rounded-full bg-red-500" />
+            <span className="text-gray-600">Excedido (&gt; {(form.budgetExceededThreshold * 100).toFixed(0)}%)</span>
+          </div>
+        </div>
+      </div>
+
+      {isAdmin && (
+        <div className="flex items-center justify-end gap-3 mt-4 pt-4 border-t border-gray-50">
+          {saved && <span className="flex items-center gap-1.5 text-green-600 text-sm"><CheckCircle2 className="w-4 h-4" /> Guardado</span>}
+          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(form)}>Guardar</Button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ── Fixed Assets Tab ─────────────────────────────────────────
+
+function FixedAssetsTab({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient()
+  const [saved, setSaved] = useState(false)
+
+  const { data: config, isLoading } = useQuery<GeneralConfig>({
+    queryKey: ['general-config'],
+    queryFn: async () => {
+      const { data } = await api.get('/settings/general')
+      return data.data ?? data
+    },
+  })
+
+  const [form, setForm] = useState<GeneralConfig | null>(null)
+  if (config && form === null) setForm({ ...config })
+
+  const save = useMutation({
+    mutationFn: async (body: GeneralConfig) => api.put('/settings/general', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['general-config'] })
+      setForm(null)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    },
+  })
+
+  const set = (key: keyof GeneralConfig, value: any) =>
+    setForm((f) => f ? { ...f, [key]: value } : f)
+
+  if (isLoading || !form) return <div className="animate-pulse bg-gray-100 rounded-xl h-48" />
+
+  const readOnly = !isAdmin
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader title="Umbral de capitalización" subtitle="Monto mínimo para capitalizar un bien como activo fijo" />
+        <F label="Umbral de activo fijo (DOP)">
+          <input
+            type="number" min="0" step="500"
+            value={form.fixedAssetThreshold}
+            onChange={(e) => set('fixedAssetThreshold', parseFloat(e.target.value) || 0)}
+            className={ic} disabled={readOnly}
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Compras por debajo de <strong>DOP {form.fixedAssetThreshold.toLocaleString()}</strong> se registran como gasto directo, no como activo fijo
+          </p>
+        </F>
+        {isAdmin && (
+          <div className="flex items-center justify-end gap-3 mt-4 pt-4 border-t border-gray-50">
+            {saved && <span className="flex items-center gap-1.5 text-green-600 text-sm"><CheckCircle2 className="w-4 h-4" /> Guardado</span>}
+            <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(form)}>Guardar</Button>
+          </div>
+        )}
+      </Card>
+
+      {/* Depreciation rates info */}
+      <Card>
+        <CardHeader title="Tasas de depreciación DGII" subtitle="Según el Código Tributario de la República Dominicana" />
+        <div className="overflow-hidden rounded-xl border border-gray-100">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Categoría</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Método</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Tasa anual</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Vida útil</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {[
+                { cat: 'Equipos (Categoría A)', method: 'Línea recta', rate: '33.33%', life: '36 meses' },
+                { cat: 'Software (Categoría A)', method: 'Línea recta', rate: '33.33%', life: '36 meses' },
+                { cat: 'Vehículos (Categoría B)', method: 'Saldo decreciente', rate: '20%', life: '60 meses' },
+                { cat: 'Mobiliario y enseres', method: 'Línea recta', rate: '10%', life: '120 meses' },
+                { cat: 'Mejoras a propiedades', method: 'Personalizado', rate: 'Variable', life: 'Según contrato' },
+              ].map((r) => (
+                <tr key={r.cat} className="hover:bg-gray-50/60">
+                  <td className="px-4 py-3 text-xs font-medium text-gray-800">{r.cat}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{r.method}</td>
+                  <td className="px-4 py-3 text-xs font-semibold text-[#293c4f]">{r.rate}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{r.life}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-gray-400 mt-3">Fuente: Art. 287 Ley 11-92 Código Tributario RD y sus modificaciones</p>
+      </Card>
     </div>
   )
 }

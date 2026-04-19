@@ -24,6 +24,7 @@ import purchaseOrderRoutes   from './modules/purchase-orders/purchase-orders.rou
 import recurringRoutes       from './modules/recurring-payments/recurring-payments.routes'
 import bankAccountRoutes     from './modules/bank-accounts/bank-accounts.routes'
 import crmRoutes             from './modules/crm/crm.routes'
+import quotesRoutes          from './modules/quotes/quotes.routes'
 import accountingRoutes      from './modules/accounting/accounting.routes'
 import fixedAssetRoutes      from './modules/fixed-assets/fixed-assets.routes'
 import budgetRoutes          from './modules/budgets/budgets.routes'
@@ -99,6 +100,7 @@ app.use('/api/purchase-orders',    apiLimiter,   purchaseOrderRoutes)
 app.use('/api/recurring-payments', apiLimiter,   recurringRoutes)
 app.use('/api/bank-accounts',      apiLimiter,   bankAccountRoutes)
 app.use('/api/crm',                apiLimiter,   crmRoutes)
+app.use('/api/quotes',             apiLimiter,   quotesRoutes)
 app.use('/api/accounting',         apiLimiter,   accountingRoutes)
 app.use('/api/fixed-assets',       apiLimiter,   fixedAssetRoutes)
 app.use('/api/budgets',            apiLimiter,   budgetRoutes)

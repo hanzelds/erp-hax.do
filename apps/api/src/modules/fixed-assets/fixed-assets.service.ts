@@ -161,6 +161,40 @@ export async function retireFixedAsset(id: string) {
   })
 }
 
+/** Dry-run: returns what depreciation would be without writing to DB */
+export async function previewDepreciation(assetId?: string) {
+  const period = currentPeriod()
+  const where: any = { status: 'ACTIVE' }
+  if (assetId) where.id = assetId
+
+  const assets = await prisma.fixedAsset.findMany({ where })
+  const previews: any[] = []
+
+  for (const asset of assets) {
+    const existing = await prisma.depreciationEntry.findFirst({ where: { assetId: asset.id, period } })
+    if (existing) {
+      previews.push({ assetId: asset.id, name: asset.name, skipped: true, reason: 'Ya depreciado en este período' })
+      continue
+    }
+    const depreciableValue    = asset.purchaseValue - asset.salvageValue
+    const monthlyDepreciation = depreciableValue / asset.usefulLifeMonths
+    const remaining           = depreciableValue - asset.accumulatedDepreciation
+    if (remaining <= 0) {
+      previews.push({ assetId: asset.id, name: asset.name, skipped: true, reason: 'Totalmente depreciado' })
+      continue
+    }
+    const amount = Math.min(monthlyDepreciation, remaining)
+    previews.push({
+      assetId: asset.id, name: asset.name, category: asset.category,
+      businessUnit: asset.businessUnit, currentBookValue: asset.bookValue,
+      depreciationAmount: amount, newBookValue: asset.bookValue - amount, period, skipped: false,
+    })
+  }
+
+  const totalAmount = previews.filter((p) => !p.skipped).reduce((s, p) => s + p.depreciationAmount, 0)
+  return { period, totalAmount, count: previews.filter((p) => !p.skipped).length, previews }
+}
+
 export async function calculateDepreciation(assetId?: string) {
   const period = currentPeriod()
 

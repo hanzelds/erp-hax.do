@@ -23,6 +23,9 @@ export async function retire(req: Request, res: Response) {
   sendSuccess(res, await svc.retireFixedAsset(req.params.id))
 }
 
+export async function previewDepreciation(req: Request, res: Response) {
+  sendSuccess(res, await svc.previewDepreciation())
+}
 export async function runDepreciation(req: Request, res: Response) {
   sendSuccess(res, await svc.calculateDepreciation())
 }

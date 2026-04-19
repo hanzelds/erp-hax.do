@@ -170,6 +170,31 @@ enum FiscalReportType {
   REPORT_607
 }
 
+enum FixedAssetCategory {
+  EQUIPMENT    // Equipo tecnológico — 36 meses
+  FURNITURE    // Mobiliario y eq. oficina — 120 meses
+  VEHICLE      // Vehículos — 60 meses
+  SOFTWARE     // Software — 36 meses
+  IMPROVEMENTS // Mejoras a propiedades
+}
+
+enum FixedAssetStatus {
+  ACTIVE
+  FULLY_DEPRECIATED
+  RETIRED
+}
+
+enum BudgetStatus {
+  ON_TRACK
+  ALERT
+  EXCEEDED
+}
+
+enum ReconciliationStatus {
+  OPEN
+  CLOSED
+}
+
 // ============================================================
 // USUARIOS
 // ============================================================
@@ -185,9 +210,11 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  auditLogs        AuditLog[]
-  approvalRequests ApprovalRequest[] @relation("RequestedBy")
-  approvals        ApprovalRequest[] @relation("ApprovedBy")
+  auditLogs            AuditLog[]
+  approvalRequests     ApprovalRequest[]    @relation("RequestedBy")
+  approvals            ApprovalRequest[]    @relation("ApprovedBy")
+  createdInvoices      Invoice[]            @relation("InvoiceCreatedBy")
+  closedReconciliations BankReconciliation[] @relation("ReconciliationClosedBy")
 
   @@index([email])
   @@index([role, isActive])
@@ -339,10 +366,12 @@ model Invoice {
   retryCount      Int           @default(0)
   sentAt          DateTime?
   fromQuoteId     String?       @unique
+  createdById     String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   client           Client           @relation(fields: [clientId], references: [id])
+  createdBy        User?            @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
   originalInvoice  Invoice?         @relation("CreditNoteRef", fields: [originalInvoiceId], references: [id])
   creditNotes      Invoice[]        @relation("CreditNoteRef")
   fromQuote        Quote?           @relation("QuoteInvoice", fields: [fromQuoteId], references: [convertedInvoiceId])
@@ -451,6 +480,7 @@ model Supplier {
 
   expenses       Expense[]
   purchaseOrders PurchaseOrder[]
+  fixedAssets    FixedAsset[]
 
   @@index([name])
   @@index([isActive])
@@ -627,6 +657,9 @@ model Account {
   debitEntries  JournalEntry[] @relation("DebitAccount")
   creditEntries JournalEntry[] @relation("CreditAccount")
 
+  @@index([code])
+  @@index([isActive])
+
   @@index([type])
   @@index([parentId])
   @@map("accounts")
@@ -654,12 +687,13 @@ model JournalEntry {
   expenseId       String?
   payrollId       String?
 
-  debitAccount  Account  @relation("DebitAccount",  fields: [debitAccountId],  references: [id])
-  creditAccount Account  @relation("CreditAccount", fields: [creditAccountId], references: [id])
-  invoice       Invoice? @relation(fields: [invoiceId], references: [id])
-  payment       Payment? @relation(fields: [paymentId], references: [id])
-  expense       Expense? @relation(fields: [expenseId], references: [id])
-  payroll       Payroll? @relation(fields: [payrollId], references: [id])
+  debitAccount      Account            @relation("DebitAccount",  fields: [debitAccountId],  references: [id])
+  creditAccount     Account            @relation("CreditAccount", fields: [creditAccountId], references: [id])
+  invoice           Invoice?           @relation(fields: [invoiceId], references: [id])
+  payment           Payment?           @relation(fields: [paymentId], references: [id])
+  expense           Expense?           @relation(fields: [expenseId], references: [id])
+  payroll           Payroll?           @relation(fields: [payrollId], references: [id])
+  depreciationEntry DepreciationEntry?
 
   @@index([businessUnit])
   @@index([period])
@@ -688,7 +722,8 @@ model BankAccount {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  transactions BankTransaction[]
+  transactions     BankTransaction[]
+  reconciliations  BankReconciliation[]
 
   @@index([businessUnit])
   @@index([isActive])
@@ -912,6 +947,118 @@ model CompanyConfig {
   updatedAt   DateTime @updatedAt
 
   @@map("company_config")
+}
+
+// ============================================================
+// ACTIVOS FIJOS Y DEPRECIACIÓN
+// ============================================================
+
+model FixedAsset {
+  id                      String             @id @default(cuid())
+  name                    String
+  category                FixedAssetCategory
+  businessUnit            BusinessUnit
+  purchaseDate            DateTime
+  purchaseValue           Float
+  usefulLifeMonths        Int
+  salvageValue            Float              @default(0)
+  accumulatedDepreciation Float              @default(0)
+  bookValue               Float
+  status                  FixedAssetStatus   @default(ACTIVE)
+  supplierId              String?
+  ncfCompra               String?
+  notes                   String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  supplier            Supplier?           @relation(fields: [supplierId], references: [id])
+  depreciationEntries DepreciationEntry[]
+
+  @@index([businessUnit])
+  @@index([status])
+  @@map("fixed_assets")
+}
+
+model DepreciationEntry {
+  id             String    @id @default(cuid())
+  assetId        String
+  period         String
+  amount         Float
+  journalEntryId String?   @unique
+  createdAt      DateTime  @default(now())
+
+  asset        FixedAsset   @relation(fields: [assetId], references: [id])
+  journalEntry JournalEntry? @relation(fields: [journalEntryId], references: [id])
+
+  @@unique([assetId, period])
+  @@index([assetId])
+  @@index([period])
+  @@map("depreciation_entries")
+}
+
+// ============================================================
+// PRESUPUESTOS
+// ============================================================
+
+model Budget {
+  id              String       @id @default(cuid())
+  businessUnit    BusinessUnit
+  period          String
+  category        String       @default("TOTAL")
+  amountBudgeted  Float
+  amountExecuted  Float        @default(0)
+  status          BudgetStatus @default(ON_TRACK)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([businessUnit, period, category])
+  @@index([businessUnit])
+  @@index([period])
+  @@map("budgets")
+}
+
+// ============================================================
+// CONCILIACIÓN BANCARIA
+// ============================================================
+
+model BankReconciliation {
+  id            String               @id @default(cuid())
+  period        String
+  bankAccountId String
+  status        ReconciliationStatus @default(OPEN)
+  closedById    String?
+  closedAt      DateTime?
+  notes         String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  bankAccount  BankAccount              @relation(fields: [bankAccountId], references: [id])
+  closedBy     User?                    @relation("ReconciliationClosedBy", fields: [closedById], references: [id])
+  transactions ReconciliationTx[]
+
+  @@unique([period, bankAccountId])
+  @@index([status])
+  @@map("bank_reconciliations")
+}
+
+model ReconciliationTx {
+  id               String   @id @default(cuid())
+  reconciliationId String
+  txDate           DateTime
+  description      String
+  amount           Float
+  reference        String?
+  status           String   @default("UNMATCHED")
+  matchedPaymentId String?
+  matchedExpenseId String?
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  reconciliation BankReconciliation @relation(fields: [reconciliationId], references: [id])
+
+  @@index([reconciliationId])
+  @@index([status])
+  @@map("reconciliation_txs")
 }
 
 // Configuración de facturación electrónica (singleton id="main")

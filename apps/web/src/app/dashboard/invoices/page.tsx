@@ -53,17 +53,37 @@ const BU_OPTIONS = [
   { value: 'KODER', label: 'KODER' },
 ]
 
+const TYPE_OPTIONS = [
+  { value: '', label: 'Todos los tipos' },
+  { value: 'CREDITO_FISCAL', label: 'Crédito Fiscal (B01)' },
+  { value: 'CONSUMO', label: 'Consumidor Final (B02)' },
+  { value: 'NOTA_CREDITO', label: 'Nota de Crédito (B04)' },
+]
+
 export default function InvoicesPage() {
   const [search, setSearch]   = useState('')
   const [status, setStatus]   = useState('')
   const [bu, setBu]           = useState('')
+  const [type, setType]       = useState('')
+  const [from, setFrom]       = useState('')
+  const [to, setTo]           = useState('')
   const [page, setPage]       = useState(1)
+  const [exporting, setExporting] = useState(false)
 
   const { data, isLoading, isFetching, refetch } = useQuery<InvoicesResponse>({
-    queryKey: ['invoices', { search, status, bu, page }],
+    queryKey: ['invoices', { search, status, bu, type, from, to, page }],
     queryFn: async () => {
       const { data } = await api.get('/invoices', {
-        params: { search: search || undefined, status: status || undefined, businessUnit: bu || undefined, page, limit: 20 },
+        params: {
+          search: search || undefined,
+          status: status || undefined,
+          businessUnit: bu || undefined,
+          type: type || undefined,
+          from: from ? new Date(from).toISOString() : undefined,
+          to: to ? new Date(to).toISOString() : undefined,
+          page,
+          limit: 20,
+        },
       })
       return data
     },
@@ -71,6 +91,29 @@ export default function InvoicesPage() {
 
   const invoices   = data?.data ?? []
   const pagination = data?.pagination
+
+  async function handleExport607() {
+    setExporting(true)
+    try {
+      const period = new Date().toISOString().slice(0, 7) // YYYY-MM
+      const response = await api.get('/reports/607/export', {
+        params: { period },
+        responseType: 'blob',
+      })
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `607-${period}.txt`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Export 607 failed', err)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -82,8 +125,8 @@ export default function InvoicesPage() {
             <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={() => refetch()} disabled={isFetching}>
               Actualizar
             </Button>
-            <Button variant="secondary" size="sm" icon={<Download className="w-3.5 h-3.5" />}>
-              Exportar
+            <Button variant="secondary" size="sm" icon={<Download className="w-3.5 h-3.5" />} onClick={handleExport607} disabled={exporting}>
+              {exporting ? 'Exportando…' : 'Exportar 607'}
             </Button>
             <Button asChild variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />}>
               <Link href="/dashboard/invoices/new">Nueva factura</Link>
@@ -131,6 +174,37 @@ export default function InvoicesPage() {
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+
+          {/* Type filter */}
+          <select
+            value={type}
+            onChange={(e) => { setType(e.target.value); setPage(1) }}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
+          >
+            {TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+
+          {/* Date range */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-400 whitespace-nowrap">Desde</span>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => { setFrom(e.target.value); setPage(1) }}
+              className="text-sm border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-400 whitespace-nowrap">Hasta</span>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => { setTo(e.target.value); setPage(1) }}
+              className="text-sm border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
+            />
+          </div>
         </div>
       </Card>
 

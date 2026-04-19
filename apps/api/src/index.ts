@@ -25,6 +25,9 @@ import recurringRoutes       from './modules/recurring-payments/recurring-paymen
 import bankAccountRoutes     from './modules/bank-accounts/bank-accounts.routes'
 import crmRoutes             from './modules/crm/crm.routes'
 import accountingRoutes      from './modules/accounting/accounting.routes'
+import fixedAssetRoutes      from './modules/fixed-assets/fixed-assets.routes'
+import budgetRoutes          from './modules/budgets/budgets.routes'
+import bankReconciliationRoutes from './modules/bank-reconciliation/bank-reconciliation.routes'
 import reportRoutes          from './modules/reports/reports.routes'
 import payrollRoutes         from './modules/payroll/payroll.routes'
 import settingsRoutes        from './modules/settings/settings.routes'
@@ -97,6 +100,9 @@ app.use('/api/recurring-payments', apiLimiter,   recurringRoutes)
 app.use('/api/bank-accounts',      apiLimiter,   bankAccountRoutes)
 app.use('/api/crm',                apiLimiter,   crmRoutes)
 app.use('/api/accounting',         apiLimiter,   accountingRoutes)
+app.use('/api/fixed-assets',       apiLimiter,   fixedAssetRoutes)
+app.use('/api/budgets',            apiLimiter,   budgetRoutes)
+app.use('/api/bank-reconciliation',apiLimiter,   bankReconciliationRoutes)
 app.use('/api/reports',            apiLimiter,   reportRoutes)
 app.use('/api/payroll',            apiLimiter,   payrollRoutes)
 app.use('/api/settings',           apiLimiter,   settingsRoutes)

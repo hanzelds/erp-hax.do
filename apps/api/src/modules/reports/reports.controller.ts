@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { sendSuccess } from '../../utils/response'
 import * as svc from './reports.service'
+import { generatePnlPdf, generateBalancePdf, generateCashFlowPdf } from '../../services/report-pdf.service'
 import { BusinessUnit } from '@prisma/client'
 
 const bu = (req: Request) => req.query.businessUnit as BusinessUnit | undefined
@@ -46,6 +47,32 @@ export async function export607Csv(req: Request, res: Response) {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8')
   res.setHeader('Content-Disposition', `attachment; filename="607-${period}.csv"`)
   res.send(csv)
+}
+
+export async function pnlPdf(req: Request, res: Response) {
+  const { period } = req.params
+  const data  = await svc.getPnL(period, bu(req))
+  const bytes = await generatePnlPdf(data, period, bu(req))
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `inline; filename="pnl-${period}.pdf"`)
+  res.send(Buffer.from(bytes))
+}
+
+export async function balancePdf(req: Request, res: Response) {
+  const data  = await svc.getBalanceSheet(bu(req))
+  const bytes = await generateBalancePdf(data, bu(req))
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `inline; filename="balance-${new Date().toISOString().split('T')[0]}.pdf"`)
+  res.send(Buffer.from(bytes))
+}
+
+export async function cashFlowPdf(req: Request, res: Response) {
+  const { period } = req.params
+  const data  = await svc.getCashFlow(period, bu(req))
+  const bytes = await generateCashFlowPdf(data, period, bu(req))
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `inline; filename="cashflow-${period}.pdf"`)
+  res.send(Buffer.from(bytes))
 }
 
 export async function export606Csv(req: Request, res: Response) {

@@ -6,7 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line,
 } from 'recharts'
-import { Download } from 'lucide-react'
+import { Download, FileDown } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader, Skeleton, StatCard } from '@/components/ui'
@@ -61,9 +61,9 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Period selector for applicable tabs */}
+      {/* Period selector + PDF export for applicable tabs */}
       {(tab === 'P&L' || tab === '606 Compras' || tab === '607 Ventas' || tab === 'Flujo de Caja') && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <label className="text-sm text-gray-600 font-medium">Período:</label>
           <select
             value={period}
@@ -74,6 +74,26 @@ export default function ReportsPage() {
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+          {tab === 'P&L' && (
+            <Button variant="secondary" size="sm" icon={<FileDown className="w-3.5 h-3.5" />}
+              onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/reports/pnl/${period}/pdf`, '_blank')}>
+              PDF P&amp;L
+            </Button>
+          )}
+          {tab === 'Flujo de Caja' && (
+            <Button variant="secondary" size="sm" icon={<FileDown className="w-3.5 h-3.5" />}
+              onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/reports/cash-flow/${period}/pdf`, '_blank')}>
+              PDF Flujo
+            </Button>
+          )}
+        </div>
+      )}
+      {tab === 'Balance General' && (
+        <div className="flex justify-end">
+          <Button variant="secondary" size="sm" icon={<FileDown className="w-3.5 h-3.5" />}
+            onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/reports/balance-sheet/pdf`, '_blank')}>
+            PDF Balance
+          </Button>
         </div>
       )}
 

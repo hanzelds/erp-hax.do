@@ -2,6 +2,8 @@ import { prisma } from '../../config/database'
 import { NotFoundError, AppError } from '../../middleware/errorHandler'
 import { parsePagination } from '../../utils/response'
 import { BusinessUnit, EmployeeType } from '@prisma/client'
+import { logger } from '../../config/logger'
+import { generateAllPayrollSlips } from '../../services/payroll-pdf.service'
 
 // ── TSS / ISR defaults (overridden by DB config at runtime) ──
 const AFP_EMPLOYEE_DEFAULT   = 0.0287
@@ -320,6 +322,11 @@ export async function processPayment(id: string) {
       amount: payroll.totalNet, payrollId: id, period,
     })
   }
+
+  // Auto-generate pay slips (fire-and-forget)
+  generateAllPayrollSlips(id).catch((e: any) =>
+    logger.error(`[Payroll] PDF slip generation error for payroll ${id}:`, e.message)
+  )
 
   return updated
 }

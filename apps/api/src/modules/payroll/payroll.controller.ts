@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { sendSuccess, sendCreated, sendPaginated } from '../../utils/response'
 import * as svc from './payroll.service'
+import { generatePayrollSlipPdf } from '../../services/payroll-pdf.service'
 import { BusinessUnit } from '@prisma/client'
 
 const bu = (req: Request) => req.query.businessUnit as BusinessUnit | undefined
@@ -62,4 +63,12 @@ export async function payIsr(req: Request, res: Response) {
 
 export async function stats(req: Request, res: Response) {
   sendSuccess(res, await svc.getPayrollStats(bu(req)))
+}
+
+export async function payrollSlipPdf(req: Request, res: Response) {
+  const { id, employeeId } = req.params
+  const bytes = await generatePayrollSlipPdf(id, employeeId)
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `inline; filename="nomina-${id}-${employeeId}.pdf"`)
+  res.send(Buffer.from(bytes))
 }

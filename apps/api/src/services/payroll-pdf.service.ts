@@ -3,6 +3,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { prisma } from '../config/database'
 import { logger } from '../config/logger'
+import { getActiveTemplate } from '../modules/pdf-templates/pdf-templates.service'
+import { renderTemplateToPdf } from './template-renderer.service'
 
 const BRAND = rgb(0.161, 0.235, 0.310) // #293C4F
 const GRAY  = rgb(0.45,  0.45,  0.45)
@@ -34,6 +36,35 @@ function drawRow(page: any, x: number, y: number, label: string, value: string,
 }
 
 export async function generatePayrollSlipPdf(payrollId: string, employeeId: string): Promise<Uint8Array> {
+  // Check for custom template first
+  const customTpl = await getActiveTemplate('PAYROLL_SLIP' as any)
+  if (customTpl) {
+    const item = await prisma.payrollItem.findFirst({
+      where: { payrollId, employeeId },
+      include: { employee: true, payroll: true },
+    })
+    if (!item) throw new Error('Ítem de nómina no encontrado')
+    const data = {
+      company: { name: 'HAX ESTUDIO CREATIVO EIRL', rnc: '133-290251' },
+      employee: item.employee,
+      payroll: item.payroll,
+      grossSalary: item.grossSalary,
+      afpEmployee: item.afpEmployee,
+      sfsEmployee: item.sfsEmployee,
+      isr: item.isr,
+      otherDeductions: item.otherDeductions,
+      netSalary: item.netSalary,
+      afpEmployer: item.afpEmployer,
+      sfsEmployer: item.sfsEmployer,
+      sfsRiesgoLaboral: item.sfsRiesgoLaboral,
+      totalDeductions: item.afpEmployee + item.sfsEmployee + item.isr + item.otherDeductions,
+      periodLabel: periodLabel(item.payroll.period),
+      generatedAt: new Date().toLocaleDateString('es-DO'),
+    }
+    return renderTemplateToPdf(customTpl.html, data)
+  }
+
+  // Built-in pdf-lib template
   const item = await prisma.payrollItem.findFirst({
     where: { payrollId, employeeId },
     include: {

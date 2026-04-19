@@ -810,6 +810,20 @@ model EcfConfig {
   @@map("ecf_config")
 }
 
+model PdfTemplate {
+  id          String          @id @default(cuid())
+  type        PdfTemplateType
+  name        String
+  description String?
+  html        String          // Full HTML with Handlebars {{variables}}
+  isActive    Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([type, isActive])
+  @@map("pdf_templates")
+}
+
 model ITBISPeriod {
   id                    String      @id @default(cuid())
   period                String      @unique   // "202501"
@@ -849,6 +863,15 @@ enum PdfStatus {
   GENERATING
   READY
   ERROR
+}
+
+enum PdfTemplateType {
+  INVOICE
+  CREDIT_NOTE
+  PAYROLL_SLIP
+  REPORT_PNL
+  REPORT_BALANCE
+  REPORT_CASHFLOW
 }
 
 enum UserRole {

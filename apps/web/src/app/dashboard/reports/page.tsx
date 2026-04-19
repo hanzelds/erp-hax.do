@@ -8,7 +8,7 @@ import {
 } from 'recharts'
 import { Download, FileDown } from 'lucide-react'
 import api from '@/lib/api'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency, cn, openPdf } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader, Skeleton, StatCard } from '@/components/ui'
 
 const TABS = ['P&L', 'Balance General', 'Flujo de Caja', '606 Compras', '607 Ventas'] as const
@@ -76,13 +76,13 @@ export default function ReportsPage() {
           </select>
           {tab === 'P&L' && (
             <Button variant="secondary" size="sm" icon={<FileDown className="w-3.5 h-3.5" />}
-              onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/reports/pnl/${period}/pdf`, '_blank')}>
+              onClick={() => openPdf(`/reports/pnl/${period}/pdf`, `pnl-${period}.pdf`)}>
               PDF P&amp;L
             </Button>
           )}
           {tab === 'Flujo de Caja' && (
             <Button variant="secondary" size="sm" icon={<FileDown className="w-3.5 h-3.5" />}
-              onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/reports/cash-flow/${period}/pdf`, '_blank')}>
+              onClick={() => openPdf(`/reports/cash-flow/${period}/pdf`, `cashflow-${period}.pdf`)}>
               PDF Flujo
             </Button>
           )}
@@ -91,7 +91,7 @@ export default function ReportsPage() {
       {tab === 'Balance General' && (
         <div className="flex justify-end">
           <Button variant="secondary" size="sm" icon={<FileDown className="w-3.5 h-3.5" />}
-            onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/reports/balance-sheet/pdf`, '_blank')}>
+            onClick={() => openPdf(`/reports/balance-sheet/pdf`, `balance-${period}.pdf`)}>
             PDF Balance
           </Button>
         </div>

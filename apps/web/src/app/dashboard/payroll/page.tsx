@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, ChevronDown, ChevronRight, Check, DollarSign, X, UserMinus, Users, FileDown } from 'lucide-react'
 import api from '@/lib/api'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency, cn, openPdf } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader, Skeleton, EmptyState, Badge } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
@@ -208,7 +208,7 @@ function PayrollsTab() {
                                 <td className="px-2 py-2">
                                   <button
                                     className="flex items-center gap-1 text-[#293c4f] hover:text-blue-700 text-xs underline underline-offset-2"
-                                    onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/payroll/${p.id}/slip/${item.employee.id}`, '_blank')}
+                                    onClick={() => openPdf(`/payroll/${p.id}/slip/${item.employee.id}`, `nomina-${item.employee.name.replace(/\s+/g,'-')}.pdf`)}
                                   >
                                     <FileDown className="w-3 h-3" /> PDF
                                   </button>

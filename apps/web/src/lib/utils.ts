@@ -60,3 +60,34 @@ export const businessUnitLabel: Record<string, string> = {
   HAX:   'Hax Estudio',
   KODER: 'Koder',
 }
+
+/**
+ * Descarga/abre un PDF desde un endpoint autenticado.
+ * Usa el token del localStorage para incluirlo en el header Authorization.
+ */
+export async function openPdf(apiPath: string, filename?: string): Promise<void> {
+  const base  = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api'
+  const token = typeof window !== 'undefined'
+    ? (localStorage.getItem('hax_token') ?? '')
+    : ''
+
+  const res = await fetch(`${base}${apiPath}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new Error(json?.error ?? `Error ${res.status}`)
+  }
+
+  const blob = await res.blob()
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.target = '_blank'
+  if (filename) a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 10000)
+}

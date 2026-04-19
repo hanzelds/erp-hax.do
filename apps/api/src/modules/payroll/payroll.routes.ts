@@ -18,6 +18,7 @@ router.post('/employees/:id/terminate',  requireAdmin, auditLog('employee'), ctr
 
 // Payroll runs
 router.get('/', ctrl.listPayrolls)
+router.get('/:id/slip/:employeeId', ctrl.payrollSlipPdf)
 router.get('/:id', ctrl.getPayroll)
 router.post('/calculate',    auditLog('payroll'), ctrl.calculatePayroll)
 router.post('/:id/approve',  requireAdmin, auditLog('payroll'), ctrl.approvePayroll)

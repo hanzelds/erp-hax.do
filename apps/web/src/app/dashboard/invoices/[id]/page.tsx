@@ -98,6 +98,11 @@ export default function InvoiceDetailPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setEmitModal(true) },
   })
 
+  const regeneratePdf = useMutation({
+    mutationFn: async () => api.post(`/invoices/${id}/pdf/regenerate`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoice', id] }),
+  })
+
   const retry = useMutation({
     mutationFn: async () => api.post(`/invoices/${id}/retry`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setEmitModal(true) },
@@ -398,6 +403,20 @@ export default function InvoiceDetailPage() {
                 <p className="text-xs text-gray-400">PDF para el cliente · XML fiscal</p>
               </div>
               <div className="flex items-center gap-2">
+                {(invoice as any).pdfStatus === 'GENERATING' && (
+                  <span className="text-xs text-amber-600 flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" /> Generando…
+                  </span>
+                )}
+                {(invoice as any).pdfStatus === 'ERROR' && isAdmin && (
+                  <Button
+                    variant="secondary" size="sm"
+                    onClick={() => regeneratePdf.mutate()}
+                    loading={regeneratePdf.isPending}
+                  >
+                    Regenerar PDF
+                  </Button>
+                )}
                 <Button
                   variant="secondary" size="sm"
                   onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/invoices/${invoice.id}/pdf`, '_blank')}

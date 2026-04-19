@@ -12,6 +12,7 @@ import { env } from '../config/env'
 import { logger } from '../config/logger'
 import { emitEcf, pollStatus, buildNcf, getBuConfig, getSeqField } from '../services/alanube.service'
 import { invoicePollQueue, invoiceEmitQueue } from '../queues/invoice.queue'
+import { generateAndSaveInvoicePdf } from '../services/invoice-pdf.service'
 
 const connection = { url: env.REDIS_URL }
 
@@ -263,6 +264,10 @@ export const emitWorker = new Worker(
       } catch (je: any) {
         logger.error(`[EmitWorker] Journal entry error for ${invoiceId}:`, je.message)
       }
+      // Auto-generate PDF
+      generateAndSaveInvoicePdf(invoiceId).catch((e: any) =>
+        logger.error(`[EmitWorker] PDF generation error for ${invoiceId}:`, e.message)
+      )
     } else if (result.status === 'REJECTED') {
       await prisma.invoice.update({
         where: { id: invoiceId },
@@ -365,6 +370,10 @@ export const pollWorker = new Worker(
       } catch (je: any) {
         logger.error(`[PollWorker] Journal entry error for ${invoiceId}:`, je.message)
       }
+      // Auto-generate PDF
+      generateAndSaveInvoicePdf(invoiceId).catch((e: any) =>
+        logger.error(`[PollWorker] PDF generation error for ${invoiceId}:`, e.message)
+      )
     } else {
       await prisma.invoice.update({
         where: { id: invoiceId },

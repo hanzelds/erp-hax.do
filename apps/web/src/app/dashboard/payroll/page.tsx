@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ChevronDown, ChevronRight, Check, DollarSign, X, UserMinus, Users } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, Check, DollarSign, X, UserMinus, Users, FileDown } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader, Skeleton, EmptyState, Badge } from '@/components/ui'
@@ -191,7 +191,7 @@ function PayrollsTab() {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-gray-200">
-                              {['Empleado', 'Salario Bruto', 'AFP', 'SFS', 'ISR', 'Neto'].map((h) => (
+                              {['Empleado', 'Salario Bruto', 'AFP', 'SFS', 'ISR', 'Neto', 'Comprobante'].map((h) => (
                                 <th key={h} className="text-left font-medium text-gray-500 px-2 py-1.5">{h}</th>
                               ))}
                             </tr>
@@ -205,6 +205,14 @@ function PayrollsTab() {
                                 <td className="px-2 py-2 text-gray-500">{formatCurrency(item.sfsEmployee)}</td>
                                 <td className="px-2 py-2 text-red-500">{formatCurrency(item.isr)}</td>
                                 <td className="px-2 py-2 font-semibold text-[#293c4f]">{formatCurrency(item.netSalary)}</td>
+                                <td className="px-2 py-2">
+                                  <button
+                                    className="flex items-center gap-1 text-[#293c4f] hover:text-blue-700 text-xs underline underline-offset-2"
+                                    onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/payroll/${p.id}/slip/${item.employee.id}`, '_blank')}
+                                  >
+                                    <FileDown className="w-3 h-3" /> PDF
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                           </tbody>

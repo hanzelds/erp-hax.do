@@ -155,6 +155,9 @@ model Invoice {
   updatedAt         DateTime         @updatedAt
   retryCount        Int              @default(0)
   sentAt            DateTime?
+  pdfPath           String?
+  pdfGeneratedAt    DateTime?
+  pdfStatus         PdfStatus        @default(NONE)
   createdById       String?
   alanubeRequests   AlanubeRequest[]
   items             InvoiceItem[]
@@ -547,6 +550,9 @@ model PayrollItem {
   sfsRiesgoLaboral Float     @default(0)
   emailSent        Boolean   @default(false)
   emailSentAt      DateTime?
+  pdfPath          String?
+  pdfGeneratedAt   DateTime?
+  pdfStatus        PdfStatus @default(NONE)
   employee         Employee  @relation(fields: [employeeId], references: [id])
   payroll          Payroll   @relation(fields: [payrollId], references: [id], onDelete: Cascade)
 
@@ -836,6 +842,13 @@ enum ITBISStatus {
   FILED
   PAID
   OVERDUE
+}
+
+enum PdfStatus {
+  NONE
+  GENERATING
+  READY
+  ERROR
 }
 
 enum UserRole {

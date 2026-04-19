@@ -14,3 +14,9 @@ export async function getEcf(req: Request, res: Response) {
 export async function updateEcf(req: Request, res: Response) {
   sendSuccess(res, await svc.updateEcfConfig(req.body))
 }
+export async function getGeneral(req: Request, res: Response) {
+  sendSuccess(res, await svc.getGeneralConfig())
+}
+export async function updateGeneral(req: Request, res: Response) {
+  sendSuccess(res, await svc.updateGeneralConfig(req.body))
+}

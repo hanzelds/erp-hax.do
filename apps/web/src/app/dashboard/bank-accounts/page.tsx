@@ -14,7 +14,7 @@ interface BankAccount {
   bank: string | null
   currency: string
   balance: number
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit?: 'HAX' | 'KODER' | null
   isActive: boolean
 }
 
@@ -36,7 +36,7 @@ interface AddTxBody {
   date: string
 }
 
-const EMPTY_ACCT = { name: '', accountNumber: '', bank: '', currency: 'DOP', businessUnit: 'HAX' as const }
+const EMPTY_ACCT = { name: '', accountNumber: '', bank: '', currency: 'DOP' }
 const EMPTY_TX: AddTxBody = { type: 'CREDIT', amount: 0, description: '', reference: '', date: new Date().toISOString().slice(0, 10) }
 
 export default function BankAccountsPage() {
@@ -77,8 +77,6 @@ export default function BankAccountsPage() {
   })
 
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0)
-  const totalHax     = accounts.filter((a) => a.businessUnit === 'HAX').reduce((s, a) => s + a.balance, 0)
-  const totalKoder   = accounts.filter((a) => a.businessUnit === 'KODER').reduce((s, a) => s + a.balance, 0)
 
   return (
     <div className="space-y-5">
@@ -94,10 +92,9 @@ export default function BankAccountsPage() {
 
       {/* Summary */}
       {!isLoading && accounts.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <StatCard label="Balance total" value={formatCurrency(totalBalance)} icon={<Landmark className="w-4 h-4" />} accent="#293c4f" />
-          <StatCard label="HAX" value={formatCurrency(totalHax)} accent="#293c4f" />
-          <StatCard label="KODER" value={formatCurrency(totalKoder)} accent="#475569" />
+          <StatCard label="Cuentas activas" value={accounts.filter((a) => a.isActive).length.toString()} accent="#293c4f" />
         </div>
       )}
 
@@ -124,9 +121,11 @@ export default function BankAccountsPage() {
                   {a.bank && <p className="text-xs text-gray-500 mt-0.5">{a.bank}</p>}
                   {a.accountNumber && <p className="font-mono text-xs text-gray-400">{a.accountNumber}</p>}
                 </div>
-                <span className="px-1.5 py-0.5 rounded text-xs font-medium" style={a.businessUnit === 'HAX' ? { backgroundColor: '#eef1f4', color: '#293c4f' } : { backgroundColor: '#f1f5f9', color: '#475569' }}>
-                  {a.businessUnit}
-                </span>
+                {a.businessUnit && (
+                  <span className="px-1.5 py-0.5 rounded text-xs font-medium" style={a.businessUnit === 'HAX' ? { backgroundColor: '#eef1f4', color: '#293c4f' } : { backgroundColor: '#f1f5f9', color: '#475569' }}>
+                    {a.businessUnit}
+                  </span>
+                )}
               </div>
               <div className="mt-4">
                 <p className="text-xs text-gray-400">Balance</p>
@@ -233,10 +232,7 @@ export default function BankAccountsPage() {
                 <F label="Banco"><input type="text" value={newAcct.bank} onChange={(e) => setNewAcct({ ...newAcct, bank: e.target.value })} className={ic} /></F>
                 <F label="Número de cuenta"><input type="text" value={newAcct.accountNumber} onChange={(e) => setNewAcct({ ...newAcct, accountNumber: e.target.value })} className={ic} /></F>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <F label="Moneda"><select value={newAcct.currency} onChange={(e) => setNewAcct({ ...newAcct, currency: e.target.value })} className={ic}><option value="DOP">DOP</option><option value="USD">USD</option></select></F>
-                <F label="Unidad"><select value={newAcct.businessUnit} onChange={(e) => setNewAcct({ ...newAcct, businessUnit: e.target.value })} className={ic}><option value="HAX">HAX</option><option value="KODER">KODER</option></select></F>
-              </div>
+              <F label="Moneda"><select value={newAcct.currency} onChange={(e) => setNewAcct({ ...newAcct, currency: e.target.value })} className={ic}><option value="DOP">DOP</option><option value="USD">USD</option></select></F>
               <F label="Balance inicial (DOP)"><input type="number" min="0" step="0.01" defaultValue={0} onChange={(e) => setNewAcct({ ...newAcct, initialBalance: parseFloat(e.target.value) || 0 })} className={ic} /></F>
             </div>
             <div className="flex justify-end gap-2 mt-6">

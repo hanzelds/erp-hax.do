@@ -444,7 +444,7 @@ model JournalEntry {
 
 model BankAccount {
   id              String               @id @default(cuid())
-  businessUnit    BusinessUnit
+  businessUnit    BusinessUnit?
   name            String
   bank            String
   accountNumber   String?
@@ -761,9 +761,51 @@ model EcfConfig {
   requireRncB01       Boolean  @default(true)
   pollIntervalSeconds Int      @default(3)
   pollTimeoutMinutes  Int      @default(5)
+  // Invoice settings
+  invoiceDueDays      Int      @default(30)
+  defaultPaymentMethod String  @default("TRANSFER")
+  // Budget settings
+  budgetAlertThreshold    Float @default(0.8)
+  budgetExceededThreshold Float @default(1.0)
+  // Fixed asset settings
+  fixedAssetThreshold Float    @default(10000)
   updatedAt           DateTime @updatedAt
 
   @@map("ecf_config")
+}
+
+model ITBISPeriod {
+  id                    String      @id @default(cuid())
+  period                String      @unique   // "202501"
+  year                  Int
+  month                 Int
+  startDate             DateTime
+  endDate               DateTime
+  dueDate               DateTime
+  status                ITBISStatus @default(OPEN)
+  totalSalesItbis       Float       @default(0)
+  totalPurchasesItbis   Float       @default(0)
+  deductibleItbis       Float       @default(0)
+  payableItbis          Float       @default(0)
+  carryForwardBalance   Float       @default(0)
+  prevCarryForward      Float       @default(0)
+  declaredAt            DateTime?
+  paidAt                DateTime?
+  notes                 String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([status])
+  @@index([year])
+  @@map("itbis_periods")
+}
+
+enum ITBISStatus {
+  OPEN
+  PRE_CLOSED
+  FILED
+  PAID
+  OVERDUE
 }
 
 enum UserRole {

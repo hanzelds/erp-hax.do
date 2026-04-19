@@ -76,3 +76,43 @@ export async function updateEcfConfig(data: any) {
 
   return getEcfConfig()
 }
+
+// ── General operational config ─────────────────────────────
+const GENERAL_FIELDS = [
+  'invoiceDueDays', 'defaultPaymentMethod',
+  'budgetAlertThreshold', 'budgetExceededThreshold',
+  'fixedAssetThreshold',
+] as const
+
+export async function getGeneralConfig() {
+  const c = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  if (!c) {
+    return {
+      invoiceDueDays:             30,
+      defaultPaymentMethod:       'TRANSFER',
+      budgetAlertThreshold:       0.8,
+      budgetExceededThreshold:    1.0,
+      fixedAssetThreshold:        10000,
+    }
+  }
+  return {
+    invoiceDueDays:             c.invoiceDueDays,
+    defaultPaymentMethod:       c.defaultPaymentMethod,
+    budgetAlertThreshold:       c.budgetAlertThreshold,
+    budgetExceededThreshold:    c.budgetExceededThreshold,
+    fixedAssetThreshold:        c.fixedAssetThreshold,
+  }
+}
+
+export async function updateGeneralConfig(data: any) {
+  const allowed: any = {}
+  for (const key of GENERAL_FIELDS) {
+    if (data[key] !== undefined) allowed[key] = data[key]
+  }
+  await prisma.ecfConfig.upsert({
+    where:  { id: 'main' },
+    update: allowed,
+    create: { id: 'main', ...ECF_DEFAULTS, ...allowed },
+  })
+  return getGeneralConfig()
+}

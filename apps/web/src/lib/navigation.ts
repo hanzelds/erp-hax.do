@@ -4,7 +4,6 @@ import {
   Users,
   Receipt,
   CreditCard,
-  TrendingUp,
   BarChart3,
   BookOpen,
   UserCheck,
@@ -17,6 +16,7 @@ import {
   Monitor,
   PiggyBank,
   Layers,
+  ClipboardList,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -61,10 +61,10 @@ export const navigation: NavSection[] = [
         description: 'Gestión de clientes',
       },
       {
-        label: 'CRM',
-        href: '/dashboard/crm',
-        icon: TrendingUp,
-        description: 'Pipeline de ventas',
+        label: 'Cotizaciones',
+        href: '/dashboard/quotes',
+        icon: ClipboardList,
+        description: 'Propuestas y cotizaciones',
       },
     ],
   },

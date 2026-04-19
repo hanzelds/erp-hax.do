@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, DollarSign, X, XCircle, Send, RefreshCw, FileText, Copy } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
-import { formatCurrency, formatDate, cn } from '@/lib/utils'
+import { formatCurrency, formatDate, cn, openPdf } from '@/lib/utils'
 import { Button, Card, CardHeader, InvoiceStatusBadge, Skeleton } from '@/components/ui'
 import { EmissionModal } from '@/components/invoices/EmissionModal'
 import { useAuthStore } from '@/lib/auth-store'
@@ -419,7 +419,7 @@ export default function InvoiceDetailPage() {
                 )}
                 <Button
                   variant="secondary" size="sm"
-                  onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/invoices/${invoice.id}/pdf`, '_blank')}
+                  onClick={() => openPdf(`/invoices/${invoice.id}/pdf`, `factura-${invoice.number}.pdf`)}
                 >
                   Descargar PDF
                 </Button>

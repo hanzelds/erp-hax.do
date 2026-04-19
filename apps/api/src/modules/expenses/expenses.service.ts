@@ -3,6 +3,48 @@ import { NotFoundError, AppError } from '../../middleware/errorHandler'
 import { parsePagination } from '../../utils/response'
 import { ExpenseStatus, BusinessUnit } from '@prisma/client'
 
+// Map expense category → debit account code
+const CATEGORY_ACCOUNT: Record<string, string> = {
+  OPERATIONS:  '5101',
+  TECHNOLOGY:  '5101',
+  RENT:        '5101',
+  UTILITIES:   '5101',
+  TAXES:       '5101',
+  OTHER:       '5101',
+  MARKETING:   '5103',
+  SALARIES:    '5102',
+}
+
+async function autoJournalEntry(opts: {
+  type: 'INVOICE' | 'PAYMENT' | 'CREDIT_NOTE'
+  businessUnit: 'HAX' | 'KODER'
+  description: string
+  debitCode: string
+  creditCode: string
+  amount: number
+  expenseId?: string
+  period: string
+}) {
+  if (opts.amount <= 0) return null
+  const [debit, credit] = await Promise.all([
+    prisma.account.findUnique({ where: { code: opts.debitCode } }),
+    prisma.account.findUnique({ where: { code: opts.creditCode } }),
+  ])
+  if (!debit || !credit) return null
+  return prisma.journalEntry.create({
+    data: {
+      type: opts.type,
+      businessUnit: opts.businessUnit as any,
+      description: opts.description,
+      debitAccountId: debit.id,
+      creditAccountId: credit.id,
+      amount: opts.amount,
+      period: opts.period,
+      expenseId: opts.expenseId,
+    },
+  })
+}
+
 export async function listExpenses(query: any) {
   const { page, limit, skip } = parsePagination(query)
   const where: any = {}
@@ -59,14 +101,55 @@ export async function approveExpense(id: string) {
   const expense = await prisma.expense.findUnique({ where: { id } })
   if (!expense) throw new NotFoundError('Gasto')
   if (expense.status !== ExpenseStatus.DRAFT) throw new AppError('Solo se pueden aprobar gastos en DRAFT', 400)
-  return prisma.expense.update({ where: { id }, data: { status: ExpenseStatus.APPROVED, approvedAt: new Date() } })
+
+  const updated = await prisma.expense.update({ where: { id }, data: { status: ExpenseStatus.APPROVED, approvedAt: new Date() } })
+
+  // Auto journal entry: Dr 5101/5103 Gastos / Cr 2101 CxP proveedores
+  const config = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  if (config?.autoJournalEntries) {
+    const date = expense.expenseDate ?? new Date()
+    const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    const debitCode = CATEGORY_ACCOUNT[expense.category] ?? '5101'
+    await autoJournalEntry({
+      type: 'INVOICE',
+      businessUnit: expense.businessUnit as 'HAX' | 'KODER',
+      description: `Gasto registrado: ${expense.description}`,
+      debitCode,
+      creditCode: '2101',
+      amount: expense.total,
+      expenseId: id,
+      period,
+    })
+  }
+
+  return updated
 }
 
 export async function markPaid(id: string) {
   const expense = await prisma.expense.findUnique({ where: { id } })
   if (!expense) throw new NotFoundError('Gasto')
   if (expense.status !== ExpenseStatus.APPROVED) throw new AppError('Solo se pueden pagar gastos APPROVED', 400)
-  return prisma.expense.update({ where: { id }, data: { status: ExpenseStatus.PAID, paidAt: new Date() } })
+
+  const updated = await prisma.expense.update({ where: { id }, data: { status: ExpenseStatus.PAID, paidAt: new Date() } })
+
+  // Auto journal entry: Dr 2101 CxP proveedores / Cr 1102 Banco Popular
+  const config = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  if (config?.autoJournalEntries) {
+    const date = expense.paidAt ?? new Date()
+    const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    await autoJournalEntry({
+      type: 'PAYMENT',
+      businessUnit: expense.businessUnit as 'HAX' | 'KODER',
+      description: `Pago gasto: ${expense.description}`,
+      debitCode: '2101',
+      creditCode: '1102',
+      amount: expense.total,
+      expenseId: id,
+      period,
+    })
+  }
+
+  return updated
 }
 
 export async function deleteExpense(id: string) {

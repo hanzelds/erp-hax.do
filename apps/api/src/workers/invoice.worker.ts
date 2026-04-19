@@ -59,7 +59,24 @@ async function createApprovalJournalEntries(invoiceId: string, approvedAt: Date)
 
   const period = `${approvedAt.getFullYear()}-${String(approvedAt.getMonth() + 1).padStart(2, '0')}`
   const incomeAccount = invoice.businessUnit === 'HAX' ? '4101' : '4102'
+  const isCreditNote = invoice.type === 'NOTA_CREDITO'
 
+  if (isCreditNote) {
+    // Nota de crédito aprobada — reverso: Dr Ingresos / Cr CxC
+    await autoJournalEntry({
+      type: 'CREDIT_NOTE',
+      businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+      description: `Nota de crédito aprobada ${invoice.number ?? invoiceId}`,
+      debitCode: incomeAccount,
+      creditCode: '1201',
+      amount: invoice.subtotal,
+      invoiceId,
+      period,
+    })
+    return
+  }
+
+  // Factura normal aprobada
   // Entry 1: Dr 1201 CxC (subtotal) / Cr income account (subtotal)
   await autoJournalEntry({
     type: 'INVOICE',
@@ -72,7 +89,7 @@ async function createApprovalJournalEntries(invoiceId: string, approvedAt: Date)
     period,
   })
 
-  // Entry 2: Dr 1201 CxC (taxAmount) / Cr 2201 ITBIS por pagar (taxAmount) — only if taxAmount > 0
+  // Entry 2: Dr 1201 CxC (taxAmount) / Cr 2201 ITBIS por pagar — only if taxAmount > 0
   if (invoice.taxAmount > 0) {
     await autoJournalEntry({
       type: 'INVOICE',

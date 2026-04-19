@@ -29,7 +29,7 @@ import fixedAssetRoutes      from './modules/fixed-assets/fixed-assets.routes'
 import budgetRoutes          from './modules/budgets/budgets.routes'
 import bankReconciliationRoutes from './modules/bank-reconciliation/bank-reconciliation.routes'
 import reportRoutes          from './modules/reports/reports.routes'
-import payrollRoutes         from './modules/payroll/payroll.routes'
+import payrollRoutes          from './modules/payroll/payroll.routes'
 import settingsRoutes        from './modules/settings/settings.routes'
 import notificationRoutes   from './modules/notifications/notifications.routes'
 

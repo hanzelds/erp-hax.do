@@ -3,16 +3,23 @@ import { NotFoundError, AppError } from '../../middleware/errorHandler'
 import { parsePagination } from '../../utils/response'
 import { ExpenseStatus, BusinessUnit } from '@prisma/client'
 
-// Map expense category → debit account code
-const CATEGORY_ACCOUNT: Record<string, string> = {
-  OPERATIONS:  '5101',
-  TECHNOLOGY:  '5101',
-  RENT:        '5101',
-  UTILITIES:   '5101',
-  TAXES:       '5101',
-  OTHER:       '5101',
-  MARKETING:   '5103',
-  SALARIES:    '5102',
+/** Load account codes from DB config at runtime */
+async function getExpenseAcctCodes() {
+  const cfg = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  return {
+    GENERAL:   cfg?.acctExpenseGeneral    ?? '5101',
+    SALARIES:  cfg?.acctExpenseSalaries   ?? '5102',
+    MARKETING: cfg?.acctExpenseMarketing  ?? '5103',
+    SUPPLIERS: cfg?.acctPayablesSuppliers ?? '2101',
+    BANK:      cfg?.acctBank              ?? '1102',
+  }
+}
+
+/** Map expense category → code key */
+function categoryToKey(category: string): 'GENERAL' | 'SALARIES' | 'MARKETING' {
+  if (category === 'SALARIES')  return 'SALARIES'
+  if (category === 'MARKETING') return 'MARKETING'
+  return 'GENERAL'
 }
 
 async function autoJournalEntry(opts: {
@@ -104,18 +111,19 @@ export async function approveExpense(id: string) {
 
   const updated = await prisma.expense.update({ where: { id }, data: { status: ExpenseStatus.APPROVED, approvedAt: new Date() } })
 
-  // Auto journal entry: Dr 5101/5103 Gastos / Cr 2101 CxP proveedores
+  // Auto journal entry: Dr acctExpense* / Cr acctPayablesSuppliers
   const config = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (config?.autoJournalEntries) {
-    const date = expense.expenseDate ?? new Date()
+    const codes  = await getExpenseAcctCodes()
+    const date   = expense.expenseDate ?? new Date()
     const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    const debitCode = CATEGORY_ACCOUNT[expense.category] ?? '5101'
+    const debitCode = codes[categoryToKey(expense.category)]
     await autoJournalEntry({
       type: 'INVOICE',
       businessUnit: expense.businessUnit as 'HAX' | 'KODER',
       description: `Gasto registrado: ${expense.description}`,
       debitCode,
-      creditCode: '2101',
+      creditCode: codes.SUPPLIERS,
       amount: expense.total,
       expenseId: id,
       period,
@@ -132,17 +140,18 @@ export async function markPaid(id: string) {
 
   const updated = await prisma.expense.update({ where: { id }, data: { status: ExpenseStatus.PAID, paidAt: new Date() } })
 
-  // Auto journal entry: Dr 2101 CxP proveedores / Cr 1102 Banco Popular
+  // Auto journal entry: Dr acctPayablesSuppliers / Cr acctBank
   const config = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (config?.autoJournalEntries) {
-    const date = expense.paidAt ?? new Date()
+    const codes  = await getExpenseAcctCodes()
+    const date   = expense.paidAt ?? new Date()
     const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
     await autoJournalEntry({
       type: 'PAYMENT',
       businessUnit: expense.businessUnit as 'HAX' | 'KODER',
       description: `Pago gasto: ${expense.description}`,
-      debitCode: '2101',
-      creditCode: '1102',
+      debitCode: codes.SUPPLIERS,
+      creditCode: codes.BANK,
       amount: expense.total,
       expenseId: id,
       period,

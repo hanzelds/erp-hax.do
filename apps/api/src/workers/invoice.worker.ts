@@ -58,7 +58,11 @@ async function createApprovalJournalEntries(invoiceId: string, approvedAt: Date)
   if (!ecfConfig?.autoJournalEntries) return
 
   const period = `${approvedAt.getFullYear()}-${String(approvedAt.getMonth() + 1).padStart(2, '0')}`
-  const incomeAccount = invoice.businessUnit === 'HAX' ? '4101' : '4102'
+  const incomeAccount = invoice.businessUnit === 'HAX'
+    ? (ecfConfig.acctIncomeHax   || '4101')
+    : (ecfConfig.acctIncomeKoder || '4102')
+  const acctReceivables  = ecfConfig.acctReceivables  || '1201'
+  const acctItbisPayable = ecfConfig.acctItbisPayable || '2201'
   const isCreditNote = invoice.type === 'NOTA_CREDITO'
 
   if (isCreditNote) {
@@ -68,7 +72,7 @@ async function createApprovalJournalEntries(invoiceId: string, approvedAt: Date)
       businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
       description: `Nota de crédito aprobada ${invoice.number ?? invoiceId}`,
       debitCode: incomeAccount,
-      creditCode: '1201',
+      creditCode: acctReceivables,
       amount: invoice.subtotal,
       invoiceId,
       period,
@@ -77,26 +81,26 @@ async function createApprovalJournalEntries(invoiceId: string, approvedAt: Date)
   }
 
   // Factura normal aprobada
-  // Entry 1: Dr 1201 CxC (subtotal) / Cr income account (subtotal)
+  // Entry 1: Dr CxC (subtotal) / Cr Ingreso (subtotal)
   await autoJournalEntry({
     type: 'INVOICE',
     businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
     description: `Factura aprobada ${invoice.number ?? invoiceId} - subtotal`,
-    debitCode: '1201',
+    debitCode: acctReceivables,
     creditCode: incomeAccount,
     amount: invoice.subtotal,
     invoiceId,
     period,
   })
 
-  // Entry 2: Dr 1201 CxC (taxAmount) / Cr 2201 ITBIS por pagar — only if taxAmount > 0
+  // Entry 2: Dr CxC (taxAmount) / Cr ITBIS por pagar — only if taxAmount > 0
   if (invoice.taxAmount > 0) {
     await autoJournalEntry({
       type: 'INVOICE',
       businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
       description: `Factura aprobada ${invoice.number ?? invoiceId} - ITBIS`,
-      debitCode: '1201',
-      creditCode: '2201',
+      debitCode: acctReceivables,
+      creditCode: acctItbisPayable,
       amount: invoice.taxAmount,
       invoiceId,
       period,

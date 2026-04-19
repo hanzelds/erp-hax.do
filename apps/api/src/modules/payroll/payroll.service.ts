@@ -3,12 +3,36 @@ import { NotFoundError, AppError } from '../../middleware/errorHandler'
 import { parsePagination } from '../../utils/response'
 import { BusinessUnit, EmployeeType } from '@prisma/client'
 
-// ── TSS / ISR rates (Dominican Republic 2024) ────────────────
-const AFP_EMPLOYEE   = 0.0287
-const AFP_EMPLOYER   = 0.0710
-const SFS_EMPLOYEE   = 0.0304
-const SFS_EMPLOYER   = 0.0709
-const SFS_RIESGO     = 0.0120  // employer only
+// ── TSS / ISR defaults (overridden by DB config at runtime) ──
+const AFP_EMPLOYEE_DEFAULT   = 0.0287
+const AFP_EMPLOYER_DEFAULT   = 0.0710
+const SFS_EMPLOYEE_DEFAULT   = 0.0304
+const SFS_EMPLOYER_DEFAULT   = 0.0709
+const SFS_RIESGO_DEFAULT     = 0.0120
+
+/** Load TSS rates from DB config, falling back to statutory defaults */
+async function getTssRates() {
+  const cfg = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  return {
+    AFP_EMPLOYEE:   cfg?.payrollAfpEmployee   ?? AFP_EMPLOYEE_DEFAULT,
+    AFP_EMPLOYER:   cfg?.payrollAfpEmployer   ?? AFP_EMPLOYER_DEFAULT,
+    SFS_EMPLOYEE:   cfg?.payrollSfsEmployee   ?? SFS_EMPLOYEE_DEFAULT,
+    SFS_EMPLOYER:   cfg?.payrollSfsEmployer   ?? SFS_EMPLOYER_DEFAULT,
+    SFS_RIESGO:     cfg?.payrollRiesgoLaboral ?? SFS_RIESGO_DEFAULT,
+  }
+}
+
+/** Load accounting codes from DB config */
+async function getAcctCodes() {
+  const cfg = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  return {
+    BANK:      cfg?.acctBank              ?? '1102',
+    EMPLOYEES: cfg?.acctPayablesEmployees ?? '2102',
+    TSS:       cfg?.acctPayablesTss       ?? '2103',
+    ISR:       cfg?.acctPayablesIsr       ?? '2104',
+    SALARIES:  cfg?.acctExpenseSalaries   ?? '5102',
+  }
+}
 
 /** Simplified ISR table (monthly) */
 function calcMonthlyISR(monthlyGross: number): number {
@@ -158,16 +182,18 @@ export async function calculatePayroll(businessUnit: string, period: string) {
   })
   if (employees.length === 0) throw new AppError('No hay empleados activos para esta unidad', 400)
 
+  const rates = await getTssRates()
+
   const items = employees.map((emp) => {
     const gross  = emp.baseSalary
-    const afpEmp = gross * AFP_EMPLOYEE
-    const sfsEmp = gross * SFS_EMPLOYEE
+    const afpEmp = gross * rates.AFP_EMPLOYEE
+    const sfsEmp = gross * rates.SFS_EMPLOYEE
     const isr    = calcMonthlyISR(gross)
     const net    = gross - afpEmp - sfsEmp - isr
 
-    const afpEr  = gross * AFP_EMPLOYER
-    const sfsEr  = gross * SFS_EMPLOYER
-    const riesgo = gross * SFS_RIESGO
+    const afpEr  = gross * rates.AFP_EMPLOYER
+    const sfsEr  = gross * rates.SFS_EMPLOYER
+    const riesgo = gross * rates.SFS_RIESGO
 
     return {
       employeeId:      emp.id,
@@ -235,13 +261,14 @@ export async function approvePayroll(id: string) {
   })
 
   // Auto journal entries:
-  // Dr 5102 Gastos nómina / Cr 2102 CxP empleados  (net salaries)
-  // Dr 5102 Gastos nómina / Cr 2103 TSS por pagar  (AFP+SFS employee + employer)
-  // Dr 5102 Gastos nómina / Cr 2104 ISR por pagar  (ISR total)
+  // Dr acctExpenseSalaries / Cr acctPayablesEmployees  (net)
+  // Dr acctExpenseSalaries / Cr acctPayablesTss        (AFP+SFS)
+  // Dr acctExpenseSalaries / Cr acctPayablesIsr        (ISR)
   const config = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (config?.autoJournalEntries) {
+    const codes  = await getAcctCodes()
     const period = payroll.period
-    const bu = payroll.businessUnit as 'HAX' | 'KODER'
+    const bu     = payroll.businessUnit as 'HAX' | 'KODER'
     const totalTss = payroll.totalAfpEmployee + payroll.totalAfpEmployer +
                      payroll.totalSfsEmployee + payroll.totalSfsEmployer
 
@@ -249,19 +276,19 @@ export async function approvePayroll(id: string) {
       autoJournalEntry({
         type: 'INVOICE', businessUnit: bu,
         description: `Nómina ${period} - salarios netos`,
-        debitCode: '5102', creditCode: '2102',
+        debitCode: codes.SALARIES, creditCode: codes.EMPLOYEES,
         amount: payroll.totalNet, payrollId: id, period,
       }),
       totalTss > 0 && autoJournalEntry({
         type: 'INVOICE', businessUnit: bu,
         description: `Nómina ${period} - TSS por pagar`,
-        debitCode: '5102', creditCode: '2103',
+        debitCode: codes.SALARIES, creditCode: codes.TSS,
         amount: totalTss, payrollId: id, period,
       }),
       payroll.totalIsr > 0 && autoJournalEntry({
         type: 'INVOICE', businessUnit: bu,
         description: `Nómina ${period} - ISR por pagar`,
-        debitCode: '5102', creditCode: '2104',
+        debitCode: codes.SALARIES, creditCode: codes.ISR,
         amount: payroll.totalIsr, payrollId: id, period,
       }),
     ])
@@ -280,15 +307,16 @@ export async function processPayment(id: string) {
     data: { status: 'PAID', paidAt: new Date() },
   })
 
-  // Dr 2102 CxP empleados / Cr 1102 Banco Popular
+  // Dr acctPayablesEmployees / Cr acctBank
   const config = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (config?.autoJournalEntries) {
+    const codes  = await getAcctCodes()
     const period = payroll.period
-    const bu = payroll.businessUnit as 'HAX' | 'KODER'
+    const bu     = payroll.businessUnit as 'HAX' | 'KODER'
     await autoJournalEntry({
       type: 'PAYMENT', businessUnit: bu,
       description: `Pago nómina ${period}`,
-      debitCode: '2102', creditCode: '1102',
+      debitCode: codes.EMPLOYEES, creditCode: codes.BANK,
       amount: payroll.totalNet, payrollId: id, period,
     })
   }
@@ -306,12 +334,13 @@ export async function payTss(id: string) {
 
   const config = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (config?.autoJournalEntries && totalTss > 0) {
+    const codes  = await getAcctCodes()
     const period = payroll.period
-    const bu = payroll.businessUnit as 'HAX' | 'KODER'
+    const bu     = payroll.businessUnit as 'HAX' | 'KODER'
     await autoJournalEntry({
       type: 'PAYMENT', businessUnit: bu,
       description: `Pago TSS nómina ${period}`,
-      debitCode: '2103', creditCode: '1102',
+      debitCode: codes.TSS, creditCode: codes.BANK,
       amount: totalTss, payrollId: id, period,
     })
   }
@@ -326,12 +355,13 @@ export async function payIsr(id: string) {
 
   const config = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (config?.autoJournalEntries && payroll.totalIsr > 0) {
+    const codes  = await getAcctCodes()
     const period = payroll.period
-    const bu = payroll.businessUnit as 'HAX' | 'KODER'
+    const bu     = payroll.businessUnit as 'HAX' | 'KODER'
     await autoJournalEntry({
       type: 'PAYMENT', businessUnit: bu,
       description: `Pago ISR nómina ${period}`,
-      debitCode: '2104', creditCode: '1102',
+      debitCode: codes.ISR, creditCode: codes.BANK,
       amount: payroll.totalIsr, payrollId: id, period,
     })
   }

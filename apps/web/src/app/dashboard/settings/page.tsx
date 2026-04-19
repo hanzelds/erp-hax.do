@@ -8,7 +8,7 @@ import { formatDate, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
-const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Presupuestos', 'Activos Fijos'] as const
+const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Presupuestos', 'Activos Fijos', 'Nómina', 'Cuentas Contables', 'Correo'] as const
 type Tab = typeof TABS[number]
 
 export default function SettingsPage() {
@@ -19,13 +19,13 @@ export default function SettingsPage() {
     <div className="space-y-5">
       <PageHeader title="Configuración" subtitle="Ajustes del sistema" />
 
-      <div className="flex items-center gap-1 border-b border-gray-100">
+      <div className="flex items-center gap-1 border-b border-gray-100 overflow-x-auto scrollbar-none">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px',
+              'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap shrink-0',
               tab === t ? 'border-[#293c4f] text-[#293c4f]' : 'border-transparent text-gray-500 hover:text-gray-700'
             )}
           >
@@ -40,6 +40,9 @@ export default function SettingsPage() {
       {tab === 'Facturación General'  && <GeneralTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Presupuestos'         && <BudgetsTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Activos Fijos'        && <FixedAssetsTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Nómina'               && <PayrollTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Cuentas Contables'    && <AccountsTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Correo'               && <EmailTab isAdmin={user?.role === 'ADMIN'} />}
     </div>
   )
 }
@@ -105,6 +108,9 @@ function CompanyTab({ isAdmin }: { isAdmin: boolean }) {
         </F>
         <F label="Email de contacto">
           <input type="email" value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} className={ic} disabled={readOnly} placeholder="facturacion@empresa.com" />
+        </F>
+        <F label="Sitio web (opcional)">
+          <input type="url" value={(form as any).website ?? ''} onChange={(e) => set('website' as any, e.target.value)} className={ic} disabled={readOnly} placeholder="https://hax.com.do" />
         </F>
       </div>
 
@@ -744,6 +750,431 @@ function FixedAssetsTab({ isAdmin }: { isAdmin: boolean }) {
         </div>
         <p className="text-xs text-gray-400 mt-3">Fuente: Art. 287 Ley 11-92 Código Tributario RD y sus modificaciones</p>
       </Card>
+    </div>
+  )
+}
+
+// ── Payroll / TSS Rates Tab ──────────────────────────────────
+
+interface PayrollConfig {
+  payrollAfpEmployee:   number
+  payrollAfpEmployer:   number
+  payrollSfsEmployee:   number
+  payrollSfsEmployer:   number
+  payrollRiesgoLaboral: number
+}
+
+function PayrollTab({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient()
+  const [saved, setSaved] = useState(false)
+
+  const { data: config, isLoading } = useQuery<PayrollConfig>({
+    queryKey: ['payroll-config'],
+    queryFn: async () => {
+      const { data } = await api.get('/settings/payroll')
+      return data.data ?? data
+    },
+  })
+
+  const [form, setForm] = useState<PayrollConfig | null>(null)
+  if (config && form === null) setForm({ ...config })
+
+  const save = useMutation({
+    mutationFn: async (body: PayrollConfig) => api.put('/settings/payroll', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payroll-config'] })
+      setForm(null)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    },
+  })
+
+  const set = (key: keyof PayrollConfig, value: number) =>
+    setForm((f) => f ? { ...f, [key]: value } : f)
+
+  if (isLoading || !form) return <div className="animate-pulse bg-gray-100 rounded-xl h-48" />
+
+  const readOnly = !isAdmin
+
+  const totalEmployee = form.payrollAfpEmployee + form.payrollSfsEmployee
+  const totalEmployer = form.payrollAfpEmployer + form.payrollSfsEmployer + form.payrollRiesgoLaboral
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader title="Tasas TSS — Empleado" subtitle="Deducciones del salario bruto del empleado" />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <F label={`AFP Empleado — ${(form.payrollAfpEmployee * 100).toFixed(2)}%`}>
+            <input type="number" min="0" max="20" step="0.01"
+              value={(form.payrollAfpEmployee * 100).toFixed(2)}
+              onChange={(e) => set('payrollAfpEmployee', parseFloat(e.target.value) / 100 || 0)}
+              className={ic} disabled={readOnly} />
+            <p className="text-xs text-gray-400 mt-1">Tasa oficial vigente: <strong>2.87%</strong> — Art. 33 Ley 87-01</p>
+          </F>
+          <F label={`SFS Empleado — ${(form.payrollSfsEmployee * 100).toFixed(2)}%`}>
+            <input type="number" min="0" max="20" step="0.01"
+              value={(form.payrollSfsEmployee * 100).toFixed(2)}
+              onChange={(e) => set('payrollSfsEmployee', parseFloat(e.target.value) / 100 || 0)}
+              className={ic} disabled={readOnly} />
+            <p className="text-xs text-gray-400 mt-1">Tasa oficial vigente: <strong>3.04%</strong> — Seguro Familiar de Salud</p>
+          </F>
+        </div>
+        <div className="mt-3 px-4 py-2.5 bg-blue-50 rounded-lg text-xs text-blue-700 font-medium">
+          Total retención empleado: {(totalEmployee * 100).toFixed(2)}% del salario bruto
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Tasas TSS — Empleador" subtitle="Costo adicional a cargo de la empresa" />
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <F label={`AFP Empleador — ${(form.payrollAfpEmployer * 100).toFixed(2)}%`}>
+            <input type="number" min="0" max="30" step="0.01"
+              value={(form.payrollAfpEmployer * 100).toFixed(2)}
+              onChange={(e) => set('payrollAfpEmployer', parseFloat(e.target.value) / 100 || 0)}
+              className={ic} disabled={readOnly} />
+            <p className="text-xs text-gray-400 mt-1">Tasa oficial: <strong>7.10%</strong></p>
+          </F>
+          <F label={`SFS Empleador — ${(form.payrollSfsEmployer * 100).toFixed(2)}%`}>
+            <input type="number" min="0" max="30" step="0.01"
+              value={(form.payrollSfsEmployer * 100).toFixed(2)}
+              onChange={(e) => set('payrollSfsEmployer', parseFloat(e.target.value) / 100 || 0)}
+              className={ic} disabled={readOnly} />
+            <p className="text-xs text-gray-400 mt-1">Tasa oficial: <strong>7.09%</strong></p>
+          </F>
+          <F label={`Riesgo Laboral — ${(form.payrollRiesgoLaboral * 100).toFixed(2)}%`}>
+            <input type="number" min="0" max="10" step="0.01"
+              value={(form.payrollRiesgoLaboral * 100).toFixed(2)}
+              onChange={(e) => set('payrollRiesgoLaboral', parseFloat(e.target.value) / 100 || 0)}
+              className={ic} disabled={readOnly} />
+            <p className="text-xs text-gray-400 mt-1">Tasa oficial: <strong>1.20%</strong></p>
+          </F>
+        </div>
+        <div className="mt-3 px-4 py-2.5 bg-amber-50 rounded-lg text-xs text-amber-700 font-medium">
+          Total costo empleador TSS: {(totalEmployer * 100).toFixed(2)}% del salario bruto
+        </div>
+      </Card>
+
+      {/* ISR brackets (read-only display) */}
+      <Card>
+        <CardHeader title="Escala ISR — Impuesto Sobre la Renta" subtitle="Tramos progresivos según Art. 296 Código Tributario RD (actualizado DGII)" />
+        <div className="overflow-hidden rounded-xl border border-gray-100">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50">
+                {['Renta anual desde', 'Renta anual hasta', 'Tasa marginal', 'Cuota fija'].map((h) => (
+                  <th key={h} className="text-left text-xs font-medium text-gray-500 px-4 py-3">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {[
+                { from: '0',             to: 'RD$ 416,220.01',  rate: '0%',   fixed: '—' },
+                { from: 'RD$ 416,220.01', to: 'RD$ 624,329.01',  rate: '15%',  fixed: '0' },
+                { from: 'RD$ 624,329.01', to: 'RD$ 867,123.01',  rate: '20%',  fixed: 'RD$ 31,216.00' },
+                { from: 'RD$ 867,123.01', to: '∞',               rate: '25%',  fixed: 'RD$ 79,776.00' },
+              ].map((r, i) => (
+                <tr key={i} className="hover:bg-gray-50/60">
+                  <td className="px-4 py-3 text-xs font-mono text-gray-700">{r.from}</td>
+                  <td className="px-4 py-3 text-xs font-mono text-gray-700">{r.to}</td>
+                  <td className="px-4 py-3 text-xs font-bold text-[#293c4f]">{r.rate}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{r.fixed}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">Los tramos ISR son fijados por la DGII y se actualizan con la inflación. Requiere actualización manual si la DGII publica nuevos valores.</p>
+      </Card>
+
+      {isAdmin && (
+        <div className="flex items-center justify-end gap-3">
+          {saved && <span className="flex items-center gap-1.5 text-green-600 text-sm"><CheckCircle2 className="w-4 h-4" /> Guardado</span>}
+          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(form)}>Guardar tasas</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Accounting Accounts Tab ──────────────────────────────────
+
+interface AccountsConfig {
+  acctCash:              string
+  acctBank:              string
+  acctReceivables:       string
+  acctItbisReceivable:   string
+  acctPayablesSuppliers: string
+  acctPayablesEmployees: string
+  acctPayablesTss:       string
+  acctPayablesIsr:       string
+  acctItbisPayable:      string
+  acctIncomeHax:         string
+  acctIncomeKoder:       string
+  acctExpenseGeneral:    string
+  acctExpenseSalaries:   string
+  acctExpenseMarketing:  string
+}
+
+function AccountsTab({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient()
+  const [saved, setSaved] = useState(false)
+
+  const { data: config, isLoading } = useQuery<AccountsConfig>({
+    queryKey: ['accounts-config'],
+    queryFn: async () => {
+      const { data } = await api.get('/settings/accounts')
+      return data.data ?? data
+    },
+  })
+
+  const [form, setForm] = useState<AccountsConfig | null>(null)
+  if (config && form === null) setForm({ ...config })
+
+  const save = useMutation({
+    mutationFn: async (body: AccountsConfig) => api.put('/settings/accounts', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts-config'] })
+      setForm(null)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    },
+  })
+
+  const set = (key: keyof AccountsConfig, value: string) =>
+    setForm((f) => f ? { ...f, [key]: value } : f)
+
+  if (isLoading || !form) return <div className="animate-pulse bg-gray-100 rounded-xl h-48" />
+  const readOnly = !isAdmin
+
+  const groups: { title: string; subtitle: string; fields: { key: keyof AccountsConfig; label: string; hint: string }[] }[] = [
+    {
+      title: 'Activos', subtitle: 'Cuentas de activo (clase 1)',
+      fields: [
+        { key: 'acctCash',            label: 'Caja / Efectivo',          hint: 'Cuenta de efectivo en caja' },
+        { key: 'acctBank',            label: 'Banco',                    hint: 'Cuenta corriente bancaria principal' },
+        { key: 'acctReceivables',     label: 'Cuentas por Cobrar',       hint: 'CxC clientes (facturas aprobadas)' },
+        { key: 'acctItbisReceivable', label: 'ITBIS Acreditable',        hint: 'ITBIS pagado en compras (crédito fiscal)' },
+      ],
+    },
+    {
+      title: 'Pasivos', subtitle: 'Cuentas de pasivo (clase 2)',
+      fields: [
+        { key: 'acctPayablesSuppliers', label: 'Cuentas por Pagar — Proveedores', hint: 'Gastos aprobados pendientes de pago' },
+        { key: 'acctPayablesEmployees', label: 'Cuentas por Pagar — Empleados',   hint: 'Salarios netos pendientes de pago' },
+        { key: 'acctPayablesTss',       label: 'TSS por Pagar',                   hint: 'AFP + SFS pendiente de remesa' },
+        { key: 'acctPayablesIsr',       label: 'ISR Empleados por Pagar',         hint: 'ISR nómina pendiente de pago a DGII' },
+        { key: 'acctItbisPayable',      label: 'ITBIS por Pagar',                 hint: 'ITBIS cobrado en ventas (IT-1)' },
+      ],
+    },
+    {
+      title: 'Ingresos', subtitle: 'Cuentas de ingreso (clase 4)',
+      fields: [
+        { key: 'acctIncomeHax',    label: 'Ingresos — HAX',    hint: 'Cuenta de ingresos para facturas HAX' },
+        { key: 'acctIncomeKoder',  label: 'Ingresos — KODER',  hint: 'Cuenta de ingresos para facturas KODER' },
+      ],
+    },
+    {
+      title: 'Gastos', subtitle: 'Cuentas de gasto (clase 5)',
+      fields: [
+        { key: 'acctExpenseGeneral',   label: 'Gastos Generales',   hint: 'Operaciones, tecnología, alquiler, etc.' },
+        { key: 'acctExpenseSalaries',  label: 'Gastos de Nómina',   hint: 'Salarios y carga social' },
+        { key: 'acctExpenseMarketing', label: 'Gastos de Marketing', hint: 'Publicidad y mercadeo' },
+      ],
+    },
+  ]
+
+  return (
+    <div className="space-y-4">
+      {!readOnly && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-700">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          Modificar los códigos de cuenta afecta los asientos automáticos de facturas, gastos y nómina. Solo cambiar si el plan de cuentas fue actualizado.
+        </div>
+      )}
+      {groups.map((group) => (
+        <Card key={group.title}>
+          <CardHeader title={group.title} subtitle={group.subtitle} />
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {group.fields.map(({ key, label, hint }) => (
+              <F key={key} label={label}>
+                <input
+                  type="text"
+                  value={form[key]}
+                  onChange={(e) => set(key, e.target.value)}
+                  className={cn(ic, 'font-mono')}
+                  disabled={readOnly}
+                  placeholder="0000"
+                  maxLength={10}
+                />
+                <p className="text-xs text-gray-400 mt-1">{hint}</p>
+              </F>
+            ))}
+          </div>
+        </Card>
+      ))}
+      {isAdmin && (
+        <div className="flex items-center justify-end gap-3">
+          {saved && <span className="flex items-center gap-1.5 text-green-600 text-sm"><CheckCircle2 className="w-4 h-4" /> Guardado</span>}
+          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(form)}>Guardar códigos</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Email / SMTP Tab ─────────────────────────────────────────
+
+interface EmailConfig {
+  smtpEnabled: boolean
+  smtpHost:    string | null
+  smtpPort:    number
+  smtpUser:    string | null
+  smtpFrom:    string | null
+  smtpSsl:     boolean
+  hasSmtpPass: boolean
+}
+
+function EmailTab({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient()
+  const [saved, setSaved]     = useState(false)
+  const [showPass, setShowPass] = useState(false)
+
+  const { data: config, isLoading } = useQuery<EmailConfig>({
+    queryKey: ['email-config'],
+    queryFn: async () => {
+      const { data } = await api.get('/settings/email')
+      return data.data ?? data
+    },
+  })
+
+  const [form, setForm] = useState<any>(null)
+  if (config && form === null) {
+    setForm({
+      smtpEnabled: config.smtpEnabled,
+      smtpHost:    config.smtpHost    ?? '',
+      smtpPort:    config.smtpPort    ?? 587,
+      smtpUser:    config.smtpUser    ?? '',
+      smtpPass:    '',
+      smtpFrom:    config.smtpFrom    ?? '',
+      smtpSsl:     config.smtpSsl     ?? false,
+    })
+  }
+
+  const save = useMutation({
+    mutationFn: async (body: any) => api.put('/settings/email', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['email-config'] })
+      setForm(null)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    },
+  })
+
+  const set = (key: string, value: any) => setForm((f: any) => ({ ...f, [key]: value }))
+
+  if (isLoading || !form) return <div className="animate-pulse bg-gray-100 rounded-xl h-48" />
+  const readOnly = !isAdmin
+
+  return (
+    <div className="space-y-4">
+      {/* Status */}
+      <div className={cn(
+        'flex items-center gap-3 px-4 py-3 rounded-xl border text-sm',
+        form.smtpEnabled ? 'bg-green-50 border-green-100 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-500'
+      )}>
+        {form.smtpEnabled ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+        <span>{form.smtpEnabled ? `Correo habilitado — ${form.smtpFrom || 'sin remitente configurado'}` : 'Correo deshabilitado — las notificaciones por email no se enviarán'}</span>
+      </div>
+
+      <Card>
+        <CardHeader title="Configuración SMTP" subtitle="Servidor de correo saliente para facturas, cotizaciones y alertas" />
+        <div className="space-y-4">
+          <Toggle
+            label="Habilitar envío de correos"
+            description="Activa el envío automático de facturas PDF y notificaciones por email"
+            value={form.smtpEnabled}
+            onChange={(v) => set('smtpEnabled', v)}
+            disabled={readOnly}
+          />
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <F label="Servidor SMTP (host)">
+              <input type="text" value={form.smtpHost} onChange={(e) => set('smtpHost', e.target.value)}
+                className={ic} disabled={readOnly} placeholder="smtp.gmail.com" />
+            </F>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Puerto">
+                <input type="number" min="1" max="65535" value={form.smtpPort}
+                  onChange={(e) => set('smtpPort', parseInt(e.target.value) || 587)}
+                  className={ic} disabled={readOnly} />
+              </F>
+              <F label="SSL/TLS">
+                <div className="flex items-center h-[38px]">
+                  <Toggle label="" description="" value={form.smtpSsl} onChange={(v) => set('smtpSsl', v)} disabled={readOnly} />
+                  <span className="text-xs text-gray-500 ml-3">{form.smtpSsl ? 'SSL activo' : 'STARTTLS'}</span>
+                </div>
+              </F>
+            </div>
+            <F label="Usuario SMTP">
+              <input type="text" value={form.smtpUser} onChange={(e) => set('smtpUser', e.target.value)}
+                className={ic} disabled={readOnly} placeholder="facturacion@empresa.com" />
+            </F>
+            <F label="Contraseña SMTP">
+              <div className="relative">
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  value={form.smtpPass}
+                  onChange={(e) => set('smtpPass', e.target.value)}
+                  className={ic}
+                  disabled={readOnly}
+                  placeholder={config?.hasSmtpPass ? '••••••••' : 'Contraseña o App Password'}
+                />
+                <button type="button" onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {config?.hasSmtpPass && !form.smtpPass && (
+                <p className="text-xs text-gray-400 mt-1">Deja vacío para mantener la contraseña actual</p>
+              )}
+            </F>
+            <F label="Remitente (From)">
+              <input type="email" value={form.smtpFrom} onChange={(e) => set('smtpFrom', e.target.value)}
+                className={ic} disabled={readOnly} placeholder={'`"HAX Facturación" <facturacion@hax.com.do>`'} />
+              <p className="text-xs text-gray-400 mt-1">Acepta formato: &quot;Nombre&quot; &lt;email@dominio.com&gt;</p>
+            </F>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Guías de configuración" subtitle="Configuración para los proveedores más comunes" />
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+          {[
+            { name: 'Gmail', host: 'smtp.gmail.com', port: 587, ssl: false, note: 'Usar App Password (2FA requerido)' },
+            { name: 'Outlook / Office 365', host: 'smtp.office365.com', port: 587, ssl: false, note: 'Usar contraseña de la cuenta' },
+            { name: 'Amazon SES', host: 'email-smtp.us-east-1.amazonaws.com', port: 587, ssl: false, note: 'Usar SMTP credentials de IAM' },
+          ].map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              disabled={readOnly}
+              onClick={() => setForm((f: any) => ({ ...f, smtpHost: p.host, smtpPort: p.port, smtpSsl: p.ssl }))}
+              className="text-left p-3 rounded-xl border border-gray-100 hover:border-[#293c4f]/30 hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <p className="text-xs font-semibold text-gray-800">{p.name}</p>
+              <p className="font-mono text-xs text-gray-500 mt-1">{p.host}:{p.port}</p>
+              <p className="text-xs text-gray-400 mt-1">{p.note}</p>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      {isAdmin && (
+        <div className="flex items-center justify-end gap-3">
+          {saved && <span className="flex items-center gap-1.5 text-green-600 text-sm"><CheckCircle2 className="w-4 h-4" /> Guardado</span>}
+          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(form)}>Guardar configuración</Button>
+        </div>
+      )}
     </div>
   )
 }

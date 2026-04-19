@@ -20,3 +20,21 @@ export async function getGeneral(req: Request, res: Response) {
 export async function updateGeneral(req: Request, res: Response) {
   sendSuccess(res, await svc.updateGeneralConfig(req.body))
 }
+export async function getPayroll(req: Request, res: Response) {
+  sendSuccess(res, await svc.getPayrollConfig())
+}
+export async function updatePayroll(req: Request, res: Response) {
+  sendSuccess(res, await svc.updatePayrollConfig(req.body))
+}
+export async function getAccounts(req: Request, res: Response) {
+  sendSuccess(res, await svc.getAccountsConfig())
+}
+export async function updateAccounts(req: Request, res: Response) {
+  sendSuccess(res, await svc.updateAccountsConfig(req.body))
+}
+export async function getEmail(req: Request, res: Response) {
+  sendSuccess(res, await svc.getEmailConfig())
+}
+export async function updateEmail(req: Request, res: Response) {
+  sendSuccess(res, await svc.updateEmailConfig(req.body))
+}

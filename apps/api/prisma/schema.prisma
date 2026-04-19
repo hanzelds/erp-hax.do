@@ -641,6 +641,15 @@ model CompanyConfig {
   phone       String?
   email       String?
   logoUrl     String?
+  website     String?
+  // SMTP email settings
+  smtpEnabled Boolean  @default(false)
+  smtpHost    String?
+  smtpPort    Int      @default(587)
+  smtpUser    String?
+  smtpPass    String?
+  smtpFrom    String?
+  smtpSsl     Boolean  @default(false)
   updatedAt   DateTime @updatedAt
 
   @@map("company_config")
@@ -762,14 +771,35 @@ model EcfConfig {
   pollIntervalSeconds Int      @default(3)
   pollTimeoutMinutes  Int      @default(5)
   // Invoice settings
-  invoiceDueDays      Int      @default(30)
-  defaultPaymentMethod String  @default("TRANSFER")
+  invoiceDueDays       Int    @default(30)
+  defaultPaymentMethod String @default("TRANSFER")
   // Budget settings
   budgetAlertThreshold    Float @default(0.8)
   budgetExceededThreshold Float @default(1.0)
   // Fixed asset settings
-  fixedAssetThreshold Float    @default(10000)
-  updatedAt           DateTime @updatedAt
+  fixedAssetThreshold Float @default(10000)
+  // Payroll / TSS rates (Dominican Republic)
+  payrollAfpEmployee   Float @default(0.0287)
+  payrollAfpEmployer   Float @default(0.0710)
+  payrollSfsEmployee   Float @default(0.0304)
+  payrollSfsEmployer   Float @default(0.0709)
+  payrollRiesgoLaboral Float @default(0.0120)
+  // Accounting account codes
+  acctCash              String @default("1101")
+  acctBank              String @default("1102")
+  acctReceivables       String @default("1201")
+  acctItbisReceivable   String @default("1302")
+  acctPayablesSuppliers String @default("2101")
+  acctPayablesEmployees String @default("2102")
+  acctPayablesTss       String @default("2103")
+  acctPayablesIsr       String @default("2104")
+  acctItbisPayable      String @default("2201")
+  acctIncomeHax         String @default("4101")
+  acctIncomeKoder       String @default("4102")
+  acctExpenseGeneral    String @default("5101")
+  acctExpenseSalaries   String @default("5102")
+  acctExpenseMarketing  String @default("5103")
+  updatedAt             DateTime @updatedAt
 
   @@map("ecf_config")
 }

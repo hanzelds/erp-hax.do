@@ -175,7 +175,7 @@ export async function getNotifications(): Promise<Notification[]> {
     const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const [payrollThisMonth, activeEmployees] = await Promise.all([
       prisma.payroll.findFirst({ where: { period: thisMonth } }),
-      prisma.employee.count({ where: { status: 'ACTIVE' } }),
+      prisma.employee.count({ where: { isActive: true } }),
     ])
     if (!payrollThisMonth && activeEmployees > 0 && now.getDate() >= 15) {
       results.push({

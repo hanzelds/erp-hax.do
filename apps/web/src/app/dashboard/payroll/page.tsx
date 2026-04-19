@@ -208,7 +208,7 @@ function PayrollsTab() {
                                 <td className="px-2 py-2">
                                   <button
                                     className="flex items-center gap-1 text-[#293c4f] hover:text-blue-700 text-xs underline underline-offset-2"
-                                    onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/payroll/${p.id}/slip/${item.employee.id}`, '_blank')}
+                                    onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/payroll/${p.id}/slip/${item.employee.id}`, '_blank')}
                                   >
                                     <FileDown className="w-3 h-3" /> PDF
                                   </button>

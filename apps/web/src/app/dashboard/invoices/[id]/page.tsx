@@ -419,7 +419,7 @@ export default function InvoiceDetailPage() {
                 )}
                 <Button
                   variant="secondary" size="sm"
-                  onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/invoices/${invoice.id}/pdf`, '_blank')}
+                  onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/invoices/${invoice.id}/pdf`, '_blank')}
                 >
                   Descargar PDF
                 </Button>

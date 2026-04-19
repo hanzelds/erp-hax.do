@@ -76,13 +76,13 @@ export default function ReportsPage() {
           </select>
           {tab === 'P&L' && (
             <Button variant="secondary" size="sm" icon={<FileDown className="w-3.5 h-3.5" />}
-              onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/reports/pnl/${period}/pdf`, '_blank')}>
+              onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/reports/pnl/${period}/pdf`, '_blank')}>
               PDF P&amp;L
             </Button>
           )}
           {tab === 'Flujo de Caja' && (
             <Button variant="secondary" size="sm" icon={<FileDown className="w-3.5 h-3.5" />}
-              onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/reports/cash-flow/${period}/pdf`, '_blank')}>
+              onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/reports/cash-flow/${period}/pdf`, '_blank')}>
               PDF Flujo
             </Button>
           )}
@@ -91,7 +91,7 @@ export default function ReportsPage() {
       {tab === 'Balance General' && (
         <div className="flex justify-end">
           <Button variant="secondary" size="sm" icon={<FileDown className="w-3.5 h-3.5" />}
-            onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/reports/balance-sheet/pdf`, '_blank')}>
+            onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/reports/balance-sheet/pdf`, '_blank')}>
             PDF Balance
           </Button>
         </div>

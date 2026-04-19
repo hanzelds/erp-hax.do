@@ -88,6 +88,12 @@ export const authController = {
     return sendSuccess(res, user)
   },
 
+  // DELETE /auth/users/:id
+  async deleteUser(req: AuthRequest, res: Response) {
+    const result = await authService.deleteUser(req.params.id, req.user!.id)
+    return sendSuccess(res, result)
+  },
+
   // POST /auth/users/:id/reset-password
   async resetPassword(req: AuthRequest, res: Response) {
     const { newPassword } = req.body

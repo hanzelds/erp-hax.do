@@ -21,6 +21,7 @@ router.use(requireAdmin)
 router.get('/users',                        authController.listUsers)
 router.post('/users',                       authController.createUser)
 router.patch('/users/:id',                  authController.updateUser)
+router.delete('/users/:id',                 authController.deleteUser)
 router.post('/users/:id/reset-password',    authController.resetPassword)
 
 export default router

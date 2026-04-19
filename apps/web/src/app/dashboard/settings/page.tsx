@@ -134,11 +134,38 @@ function CompanyTab({ isAdmin }: { isAdmin: boolean }) {
 
 // ── Users tab ─────────────────────────────────────────────────
 
+// ── Módulos del sistema ───────────────────────────────────────
+const SYSTEM_MODULES = [
+  { key: 'dashboard',           label: 'Dashboard',            group: 'General' },
+  { key: 'invoices',            label: 'Facturas',             group: 'Ventas' },
+  { key: 'quotes',              label: 'Cotizaciones',         group: 'Ventas' },
+  { key: 'clients',             label: 'Clientes',             group: 'Ventas' },
+  { key: 'payments',            label: 'Cobros',               group: 'Ventas' },
+  { key: 'expenses',            label: 'Gastos',               group: 'Compras' },
+  { key: 'suppliers',           label: 'Proveedores',          group: 'Compras' },
+  { key: 'products',            label: 'Productos',            group: 'Compras' },
+  { key: 'payroll',             label: 'Nómina',               group: 'RR.HH.' },
+  { key: 'fixed-assets',        label: 'Activos Fijos',        group: 'Contabilidad' },
+  { key: 'accounting',          label: 'Contabilidad',         group: 'Contabilidad' },
+  { key: 'bank-accounts',       label: 'Cuentas Bancarias',    group: 'Contabilidad' },
+  { key: 'bank-reconciliation', label: 'Conciliación Bancaria',group: 'Contabilidad' },
+  { key: 'budgets',             label: 'Presupuestos',         group: 'Contabilidad' },
+  { key: 'reports',             label: 'Reportes',             group: 'Contabilidad' },
+  { key: 'settings',            label: 'Configuración',        group: 'Sistema' },
+]
+const MODULE_GROUPS = ['General', 'Ventas', 'Compras', 'RR.HH.', 'Contabilidad', 'Sistema']
+
 function UsersTab() {
   const { user: me } = useAuthStore()
   const qc = useQueryClient()
 
-  const { data: users = [] } = useQuery<any[]>({
+  // ── Which panel is open ───────────────────────────────────
+  type Panel = { mode: 'create' } | { mode: 'edit'; user: any } | { mode: 'perms'; user: any } | null
+  const [panel, setPanel]   = useState<Panel>(null)
+  const [pwPanel, setPwPanel] = useState<string | null>(null) // userId for reset-pw modal
+  const [msg, setMsg]       = useState<{ ok: boolean; text: string } | null>(null)
+
+  const { data: users = [], isLoading } = useQuery<any[]>({
     queryKey: ['users'],
     queryFn: async () => {
       const { data } = await api.get('/auth/users')
@@ -147,19 +174,7 @@ function UsersTab() {
     enabled: me?.role === 'ADMIN',
   })
 
-  const resetPw = useMutation({
-    mutationFn: async ({ id, password }: { id: string; password: string }) => {
-      await api.post(`/auth/users/${id}/reset-password`, { newPassword: password })
-    },
-    onSuccess: () => alert('Contraseña reseteada'),
-  })
-
-  const toggleActive = useMutation({
-    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      await api.patch(`/auth/users/${id}`, { isActive: !isActive })
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
-  })
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] })
 
   if (me?.role !== 'ADMIN') {
     return (
@@ -170,45 +185,345 @@ function UsersTab() {
   }
 
   return (
-    <Card padding="sm">
-      <div className="px-1 pt-1 pb-3">
-        <h3 className="font-semibold text-gray-900 text-sm">Usuarios del sistema</h3>
+    <div className="space-y-4">
+      {msg && (
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm ${msg.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {msg.ok ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />} {msg.text}
+          <button className="ml-auto text-current opacity-50 hover:opacity-100" onClick={() => setMsg(null)}>✕</button>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">{users.length} usuario{users.length !== 1 ? 's' : ''} registrado{users.length !== 1 ? 's' : ''}</p>
+        <Button variant="primary" size="sm" icon={<Eye className="w-3.5 h-3.5" />}
+          onClick={() => { setPanel({ mode: 'create' }); setPwPanel(null) }}>
+          Nuevo usuario
+        </Button>
       </div>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100">
-            {['Nombre', 'Email', 'Rol', 'Último acceso', 'Estado', ''].map((h) => (
-              <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2.5">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u: any) => (
-            <tr key={u.id} className={cn('border-b border-gray-50', !u.isActive && 'opacity-50')}>
-              <td className="px-3 py-3 text-xs font-medium text-gray-800">{u.name}</td>
-              <td className="px-3 py-3 text-xs text-gray-500">{u.email}</td>
-              <td className="px-3 py-3">
-                <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', u.role === 'ADMIN' ? 'bg-[#293c4f] text-white' : 'bg-gray-100 text-gray-600')}>
-                  {u.role === 'ADMIN' ? 'Admin' : 'Contabilidad'}
-                </span>
-              </td>
-              <td className="px-3 py-3 text-xs text-gray-400">{u.lastLogin ? formatDate(u.lastLogin) : 'Nunca'}</td>
-              <td className="px-3 py-3">
-                <span className={cn('text-xs font-medium', u.isActive ? 'text-green-600' : 'text-gray-400')}>
-                  {u.isActive ? 'Activo' : 'Inactivo'}
-                </span>
-              </td>
-              <td className="px-3 py-3">
-                {u.id !== me?.id && (
-                  <Button variant="ghost" size="sm" onClick={() => toggleActive.mutate({ id: u.id, isActive: u.isActive })}>
-                    {u.isActive ? 'Desactivar' : 'Activar'}
-                  </Button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+
+      {/* User list */}
+      <Card padding="sm">
+        {isLoading ? (
+          <div className="px-4 py-6 text-sm text-gray-400 text-center">Cargando…</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100">
+                {['Usuario', 'Rol', 'Acceso', 'Estado', 'Acciones'].map(h => (
+                  <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2.5">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u: any) => (
+                <tr key={u.id} className={cn('border-b border-gray-50 hover:bg-gray-50/50', !u.isActive && 'opacity-50')}>
+                  <td className="px-3 py-3">
+                    <p className="text-xs font-semibold text-gray-800">{u.name}</p>
+                    <p className="text-xs text-gray-400">{u.email}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
+                      u.role === 'ADMIN' ? 'bg-[#293c4f] text-white' : 'bg-gray-100 text-gray-600')}>
+                      {u.role === 'ADMIN' ? 'Administrador' : 'Contabilidad'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-xs text-gray-400">
+                    {u.lastLogin ? formatDate(u.lastLogin) : 'Nunca'}
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={cn('text-xs font-medium', u.isActive ? 'text-green-600' : 'text-red-400')}>
+                      {u.isActive ? '● Activo' : '○ Inactivo'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-1">
+                      <button title="Editar"
+                        className="p-1.5 text-gray-400 hover:text-[#293c4f] rounded"
+                        onClick={() => { setPanel({ mode: 'edit', user: u }); setPwPanel(null) }}>
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button title="Permisos de acceso"
+                        className="p-1.5 text-gray-400 hover:text-[#293c4f] rounded"
+                        onClick={() => { setPanel({ mode: 'perms', user: u }); setPwPanel(null) }}>
+                        <ToggleRight className="w-4 h-4" />
+                      </button>
+                      <button title="Resetear contraseña"
+                        className="p-1.5 text-gray-400 hover:text-amber-600 rounded"
+                        onClick={() => { setPwPanel(u.id); setPanel(null) }}>
+                        <EyeOff className="w-3.5 h-3.5" />
+                      </button>
+                      {u.id !== me?.id && (
+                        <button
+                          title={u.isActive ? 'Desactivar' : 'Activar'}
+                          className={cn('p-1.5 rounded', u.isActive ? 'text-gray-400 hover:text-red-500' : 'text-gray-400 hover:text-green-600')}
+                          onClick={async () => {
+                            await api.patch(`/auth/users/${u.id}`, { isActive: !u.isActive })
+                            invalidate()
+                            setMsg({ ok: true, text: u.isActive ? `${u.name} desactivado` : `${u.name} activado` })
+                          }}>
+                          <ToggleLeft className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {/* Create / Edit panel */}
+      {panel && (panel.mode === 'create' || panel.mode === 'edit') && (
+        <UserFormPanel
+          mode={panel.mode}
+          user={panel.mode === 'edit' ? panel.user : undefined}
+          onClose={() => setPanel(null)}
+          onSaved={() => { invalidate(); setPanel(null); setMsg({ ok: true, text: panel.mode === 'create' ? 'Usuario creado' : 'Usuario actualizado' }) }}
+        />
+      )}
+
+      {/* Permissions panel */}
+      {panel?.mode === 'perms' && (
+        <PermissionsPanel
+          user={panel.user}
+          onClose={() => setPanel(null)}
+          onSaved={() => { invalidate(); setPanel(null); setMsg({ ok: true, text: 'Permisos actualizados' }) }}
+        />
+      )}
+
+      {/* Reset password panel */}
+      {pwPanel && (
+        <ResetPasswordPanel
+          userId={pwPanel}
+          userName={users.find(u => u.id === pwPanel)?.name ?? ''}
+          onClose={() => setPwPanel(null)}
+          onSaved={() => { setPwPanel(null); setMsg({ ok: true, text: 'Contraseña reseteada exitosamente' }) }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Sub-panel: Crear / Editar usuario ─────────────────────────
+function UserFormPanel({ mode, user, onClose, onSaved }: {
+  mode: 'create' | 'edit'; user?: any
+  onClose: () => void; onSaved: () => void
+}) {
+  const [form, setForm] = useState({
+    name:     user?.name     ?? '',
+    email:    user?.email    ?? '',
+    password: '',
+    role:     user?.role     ?? 'ACCOUNTANT',
+  })
+  const [saving, setSaving] = useState(false)
+  const [err,    setErr]    = useState('')
+
+  async function handleSubmit() {
+    if (!form.name.trim() || !form.email.trim()) { setErr('Nombre y email son requeridos'); return }
+    if (mode === 'create' && form.password.length < 8) { setErr('La contraseña debe tener al menos 8 caracteres'); return }
+    setSaving(true); setErr('')
+    try {
+      if (mode === 'create') {
+        await api.post('/auth/users', form)
+      } else {
+        await api.patch(`/auth/users/${user.id}`, { name: form.name, role: form.role })
+      }
+      onSaved()
+    } catch (e: any) {
+      setErr(e.response?.data?.error ?? 'Error al guardar')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Card padding="sm">
+      <div className="px-4 py-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold text-gray-800 text-sm">{mode === 'create' ? 'Nuevo usuario' : `Editar — ${user.name}`}</p>
+          <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600">Cerrar</button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <F label="Nombre completo *">
+            <input className={ic} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Juan Pérez" />
+          </F>
+          <F label="Email *">
+            <input className={ic} type="email" value={form.email} disabled={mode === 'edit'}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="juan@empresa.com" />
+          </F>
+          {mode === 'create' && (
+            <F label="Contraseña *">
+              <input className={ic} type="password" value={form.password}
+                onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número" />
+            </F>
+          )}
+          <F label="Rol">
+            <select className={ic} value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+              <option value="ACCOUNTANT">Contabilidad</option>
+              <option value="ADMIN">Administrador</option>
+            </select>
+          </F>
+        </div>
+        {err && <p className="text-xs text-red-500">{err}</p>}
+        <div className="flex gap-2">
+          <Button variant="primary" size="sm" loading={saving} onClick={handleSubmit}>
+            {mode === 'create' ? 'Crear usuario' : 'Guardar cambios'}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={onClose}>Cancelar</Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+// ── Sub-panel: Permisos por módulo ────────────────────────────
+function PermissionsPanel({ user, onClose, onSaved }: {
+  user: any; onClose: () => void; onSaved: () => void
+}) {
+  const isAdmin = user.role === 'ADMIN'
+  const [perms, setPerms] = useState<string[]>(user.permissions ?? SYSTEM_MODULES.map(m => m.key))
+  const [saving, setSaving] = useState(false)
+
+  function toggle(key: string) {
+    setPerms(p => p.includes(key) ? p.filter(x => x !== key) : [...p, key])
+  }
+
+  function toggleGroup(group: string) {
+    const groupKeys = SYSTEM_MODULES.filter(m => m.group === group).map(m => m.key)
+    const allOn     = groupKeys.every(k => perms.includes(k))
+    setPerms(p => allOn ? p.filter(k => !groupKeys.includes(k)) : [...new Set([...p, ...groupKeys])])
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await api.patch(`/auth/users/${user.id}`, { permissions: perms })
+      onSaved()
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Card padding="sm">
+      <div className="px-4 py-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-gray-800 text-sm">Permisos de acceso — {user.name}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{user.email} · {user.role === 'ADMIN' ? 'Administrador' : 'Contabilidad'}</p>
+          </div>
+          <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600">Cerrar</button>
+        </div>
+
+        {isAdmin ? (
+          <div className="bg-blue-50 text-blue-700 text-sm px-4 py-3 rounded-lg flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            Los administradores tienen acceso completo a todos los módulos.
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 text-xs text-gray-500">
+              <span>{perms.length} de {SYSTEM_MODULES.length} módulos habilitados</span>
+              <button className="underline hover:text-[#293c4f]"
+                onClick={() => setPerms(SYSTEM_MODULES.map(m => m.key))}>Habilitar todos</button>
+              <button className="underline hover:text-red-500"
+                onClick={() => setPerms([])}>Quitar todos</button>
+            </div>
+
+            <div className="space-y-4">
+              {MODULE_GROUPS.map(group => {
+                const mods     = SYSTEM_MODULES.filter(m => m.group === group)
+                const allOn    = mods.every(m => perms.includes(m.key))
+                const someOn   = mods.some(m => perms.includes(m.key))
+                return (
+                  <div key={group}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <input type="checkbox" className="w-3.5 h-3.5 accent-[#293c4f] cursor-pointer"
+                        checked={allOn} ref={el => { if (el) el.indeterminate = someOn && !allOn }}
+                        onChange={() => toggleGroup(group)} />
+                      <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">{group}</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pl-5">
+                      {mods.map(m => (
+                        <label key={m.key} className="flex items-center gap-2 cursor-pointer group">
+                          <input type="checkbox" className="w-3.5 h-3.5 accent-[#293c4f] cursor-pointer"
+                            checked={perms.includes(m.key)}
+                            onChange={() => toggle(m.key)} />
+                          <span className={cn('text-sm', perms.includes(m.key) ? 'text-gray-800' : 'text-gray-400')}>
+                            {m.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {!isAdmin && (
+          <div className="flex gap-2 pt-1">
+            <Button variant="primary" size="sm" loading={saving} onClick={handleSave}>Guardar permisos</Button>
+            <Button variant="secondary" size="sm" onClick={onClose}>Cancelar</Button>
+          </div>
+        )}
+        {isAdmin && (
+          <Button variant="secondary" size="sm" onClick={onClose}>Cerrar</Button>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+// ── Sub-panel: Resetear contraseña ────────────────────────────
+function ResetPasswordPanel({ userId, userName, onClose, onSaved }: {
+  userId: string; userName: string; onClose: () => void; onSaved: () => void
+}) {
+  const [pw, setPw]         = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [show, setShow]     = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr]       = useState('')
+
+  async function handleReset() {
+    if (pw.length < 8)    { setErr('Mínimo 8 caracteres'); return }
+    if (pw !== confirm)   { setErr('Las contraseñas no coinciden'); return }
+    setSaving(true); setErr('')
+    try {
+      await api.post(`/auth/users/${userId}/reset-password`, { newPassword: pw })
+      onSaved()
+    } catch (e: any) {
+      setErr(e.response?.data?.error ?? 'Error al resetear')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Card padding="sm">
+      <div className="px-4 py-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold text-gray-800 text-sm">Resetear contraseña — {userName}</p>
+          <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600">Cerrar</button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <F label="Nueva contraseña">
+            <div className="relative">
+              <input className={ic + ' pr-9'} type={show ? 'text' : 'password'} value={pw}
+                onChange={e => setPw(e.target.value)} placeholder="Mín. 8 caracteres" />
+              <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" onClick={() => setShow(s => !s)}>
+                {show ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </F>
+          <F label="Confirmar contraseña">
+            <input className={ic} type={show ? 'text' : 'password'} value={confirm}
+              onChange={e => setConfirm(e.target.value)} placeholder="Repite la contraseña" />
+          </F>
+        </div>
+        {err && <p className="text-xs text-red-500">{err}</p>}
+        <div className="flex gap-2">
+          <Button variant="primary" size="sm" loading={saving} onClick={handleReset}>Resetear contraseña</Button>
+          <Button variant="secondary" size="sm" onClick={onClose}>Cancelar</Button>
+        </div>
+      </div>
     </Card>
   )
 }

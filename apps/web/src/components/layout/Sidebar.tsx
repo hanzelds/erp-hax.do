@@ -15,7 +15,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname  = usePathname()
-  const { user, logout } = useAuthStore()
+  const { user, logout, can } = useAuthStore()
 
   return (
     <aside
@@ -75,7 +75,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* ── Navigation ───────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto py-3 scrollbar-thin">
-        {navigation.map((section) => (
+        {navigation.map((section) => {
+          const visibleItems = section.items.filter(item => can(item.module))
+          if (visibleItems.length === 0) return null
+          return (
           <div key={section.title} className="mb-1">
             {/* Section title */}
             {!collapsed && (
@@ -87,7 +90,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <div className="mx-2 my-1 h-px bg-white/8" />
             )}
 
-            {section.items.map((item) => {
+            {visibleItems.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== '/dashboard' && pathname.startsWith(item.href))
@@ -124,7 +127,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               )
             })}
           </div>
-        ))}
+          )
+        })}
       </nav>
 
       {/* ── User footer ──────────────────────────────────── */}

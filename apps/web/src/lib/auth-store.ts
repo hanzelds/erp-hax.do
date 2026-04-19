@@ -2,11 +2,12 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import api from '@/lib/api'
 
-interface User {
+export interface User {
   id: string
   name: string
   email: string
   role: 'ADMIN' | 'ACCOUNTANT'
+  permissions: string[]
 }
 
 interface AuthState {
@@ -15,14 +16,16 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
 
-  login: (email: string, password: string) => Promise<void>
-  logout: () => void
+  login:   (email: string, password: string) => Promise<void>
+  logout:  () => void
   setUser: (user: User) => void
+  /** Check if the logged-in user has access to a module */
+  can:     (module: string) => boolean
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
@@ -33,7 +36,6 @@ export const useAuthStore = create<AuthState>()(
         try {
           const { data } = await api.post('/auth/login', { email, password })
           const { user, accessToken } = data.data
-
           localStorage.setItem('hax_token', accessToken)
           set({ user, token: accessToken, isAuthenticated: true, isLoading: false })
         } catch (error) {
@@ -50,12 +52,19 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setUser: (user: User) => set({ user }),
+
+      can: (module: string) => {
+        const { user } = get()
+        if (!user) return false
+        if (user.role === 'ADMIN') return true
+        return (user.permissions ?? []).includes(module)
+      },
     }),
     {
       name: 'hax_auth',
       partialize: (state) => ({
-        user: state.user,
-        token: state.token,
+        user:            state.user,
+        token:           state.token,
         isAuthenticated: state.isAuthenticated,
       }),
     }

@@ -47,9 +47,10 @@ export const createUserSchema = z.object({
 })
 
 export const updateUserSchema = z.object({
-  name: z.string().min(2, 'Mínimo 2 caracteres').trim().optional(),
-  role: z.enum(['ADMIN', 'ACCOUNTANT']).optional(),
-  isActive: z.boolean().optional(),
+  name:        z.string().min(2, 'Mínimo 2 caracteres').trim().optional(),
+  role:        z.enum(['ADMIN', 'ACCOUNTANT']).optional(),
+  isActive:    z.boolean().optional(),
+  permissions: z.array(z.string()).optional(),
 })
 
 export const refreshTokenSchema = z.object({

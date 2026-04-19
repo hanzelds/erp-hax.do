@@ -13,6 +13,7 @@ model User {
   email                 String               @unique
   password              String
   role                  UserRole             @default(ACCOUNTANT)
+  permissions           Json?                // null = role defaults; array of module keys
   isActive              Boolean              @default(true)
   lastLogin             DateTime?
   createdAt             DateTime             @default(now())

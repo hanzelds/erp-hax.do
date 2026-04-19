@@ -1,6 +1,26 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { UserRole } from '@prisma/client'
+
+// ── Module permissions ────────────────────────────────────────
+export const ALL_MODULES = [
+  'dashboard', 'invoices', 'quotes', 'clients', 'payments',
+  'expenses', 'suppliers', 'products', 'payroll', 'fixed-assets',
+  'accounting', 'bank-accounts', 'bank-reconciliation', 'budgets',
+  'reports', 'settings',
+]
+const ADMIN_MODULES      = ALL_MODULES
+const ACCOUNTANT_MODULES = ALL_MODULES.filter(m => m !== 'settings')
+
+export function defaultModules(role: UserRole): string[] {
+  return role === 'ADMIN' ? ADMIN_MODULES : ACCOUNTANT_MODULES
+}
+
+/** Resolve effective permissions: explicit list or role defaults */
+export function effectivePermissions(role: UserRole, permissions: any): string[] {
+  if (Array.isArray(permissions) && permissions.length > 0) return permissions as string[]
+  return defaultModules(role)
+}
 import { prisma } from '../../config/database'
 import { env } from '../../config/env'
 import { AppError, UnauthorizedError, ForbiddenError, NotFoundError } from '../../middleware/errorHandler'
@@ -131,18 +151,12 @@ export const authService = {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        isActive: true,
-        lastLogin: true,
-        createdAt: true,
+        id: true, name: true, email: true, role: true,
+        permissions: true, isActive: true, lastLogin: true, createdAt: true,
       },
     })
-
     if (!user) throw new NotFoundError('Usuario')
-    return user
+    return { ...user, permissions: effectivePermissions(user.role, user.permissions) }
   },
 
   // ── Change password ────────────────────────────────────────
@@ -205,56 +219,62 @@ export const authService = {
 
   // ── List users (admin only) ────────────────────────────────
   async listUsers() {
-    return prisma.user.findMany({
+    const users = await prisma.user.findMany({
       select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        isActive: true,
-        lastLogin: true,
-        createdAt: true,
+        id: true, name: true, email: true, role: true,
+        permissions: true, isActive: true, lastLogin: true, createdAt: true,
       },
       orderBy: { createdAt: 'asc' },
     })
+    return users.map(u => ({ ...u, permissions: effectivePermissions(u.role, u.permissions) }))
   },
 
   // ── Update user (admin only) ───────────────────────────────
-  async updateUser(targetId: string, data: UpdateUserInput, adminId: string) {
+  async updateUser(targetId: string, data: UpdateUserInput & { permissions?: string[] }, adminId: string) {
     const existing = await prisma.user.findUnique({ where: { id: targetId } })
     if (!existing) throw new NotFoundError('Usuario')
 
-    // Prevent admin from deactivating themselves
     if (targetId === adminId && data.isActive === false) {
       throw new ForbiddenError('No puedes desactivar tu propia cuenta')
     }
 
-    const before = {
-      name: existing.name,
-      role: existing.role,
-      isActive: existing.isActive,
+    const before = { name: existing.name, role: existing.role, isActive: existing.isActive }
+
+    const updateData: any = {}
+    if (data.name     !== undefined) updateData.name     = data.name
+    if (data.role     !== undefined) updateData.role     = data.role as UserRole
+    if (data.isActive !== undefined) updateData.isActive = data.isActive
+    if (data.permissions !== undefined) {
+      // null means "use role defaults" — store as null
+      const newRole = (data.role as UserRole) ?? existing.role
+      const defaults = defaultModules(newRole)
+      const isSameAsDefault = data.permissions.length === defaults.length &&
+        data.permissions.every(p => defaults.includes(p))
+      updateData.permissions = isSameAsDefault ? null : data.permissions
     }
 
     const user = await prisma.user.update({
       where: { id: targetId },
-      data: {
-        ...(data.name     !== undefined && { name:     data.name }),
-        ...(data.role     !== undefined && { role:     data.role as UserRole }),
-        ...(data.isActive !== undefined && { isActive: data.isActive }),
-      },
-      select: { id: true, name: true, email: true, role: true, isActive: true },
+      data: updateData,
+      select: { id: true, name: true, email: true, role: true, permissions: true, isActive: true },
     })
 
     await createAuditLog({
-      userId:   adminId,
-      action:   'UPDATE',
-      entity:   'user',
-      entityId: targetId,
-      before,
-      after: { name: user.name, role: user.role, isActive: user.isActive },
+      userId: adminId, action: 'UPDATE', entity: 'user', entityId: targetId,
+      before, after: { name: user.name, role: user.role, isActive: user.isActive },
     })
 
-    return user
+    return { ...user, permissions: effectivePermissions(user.role, user.permissions) }
+  },
+
+  // ── Delete user (admin only — soft delete via isActive) ───
+  async deleteUser(targetId: string, adminId: string) {
+    if (targetId === adminId) throw new ForbiddenError('No puedes eliminar tu propia cuenta')
+    const existing = await prisma.user.findUnique({ where: { id: targetId } })
+    if (!existing) throw new NotFoundError('Usuario')
+    await prisma.user.update({ where: { id: targetId }, data: { isActive: false } })
+    await createAuditLog({ userId: adminId, action: 'DELETE', entity: 'user', entityId: targetId })
+    return { message: 'Usuario desactivado' }
   },
 
   // ── Reset password (admin only) ────────────────────────────

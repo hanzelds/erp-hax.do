@@ -150,10 +150,34 @@ export async function cancelInvoice(id: string) {
   const invoice = await prisma.invoice.findUnique({ where: { id } })
   if (!invoice) throw new NotFoundError('Factura')
   if (invoice.status === InvoiceStatus.PAID) throw new AppError('No se puede cancelar una factura pagada', 400)
-  return prisma.invoice.update({
+
+  const updated = await prisma.invoice.update({
     where: { id },
     data: { status: InvoiceStatus.CANCELLED, cancelledAt: new Date() },
   })
+
+  // Reverse journal entry only if invoice was already APPROVED by DGII
+  if (invoice.status === InvoiceStatus.APPROVED && invoice.subtotal > 0) {
+    const config = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+    if (config?.autoJournalEntries) {
+      const now = new Date()
+      const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const creditCode = invoice.businessUnit === 'HAX' ? '4101' : '4102'
+      // Reverso: Dr Ingresos / Cr CxC
+      await autoJournalEntry({
+        type: 'CREDIT_NOTE',
+        businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+        description: `Anulación factura ${invoice.number}`,
+        debitCode: creditCode,
+        creditCode: '1201',
+        amount: invoice.subtotal,
+        invoiceId: id,
+        period,
+      })
+    }
+  }
+
+  return updated
 }
 
 export async function addPayment(invoiceId: string, data: any) {

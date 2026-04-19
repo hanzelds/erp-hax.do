@@ -15,5 +15,6 @@ router.post('/:id/payments', ctrl.addPayment)
 router.post('/:id/emit', ctrl.emit)
 router.post('/:id/retry', requireAdmin, ctrl.retry)
 router.post('/:id/credit-note', ctrl.creditNote)
+router.get('/:id/pdf', ctrl.pdf)
 
 export default router

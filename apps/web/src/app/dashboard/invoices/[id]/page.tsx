@@ -390,29 +390,37 @@ export default function InvoiceDetailPage() {
             </div>
           </Card>
 
-          {/* XML download */}
-          {invoice.xml && (
-            <Card padding="sm">
-              <div className="px-1 py-2 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-gray-800">Documento fiscal (XML)</p>
-                  <p className="text-xs text-gray-400">e-CF aceptado por DGII</p>
-                </div>
+          {/* PDF + XML download */}
+          <Card padding="sm">
+            <div className="px-1 py-2 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-gray-800">Documentos</p>
+                <p className="text-xs text-gray-400">PDF para el cliente · XML fiscal</p>
+              </div>
+              <div className="flex items-center gap-2">
                 <Button
                   variant="secondary" size="sm"
-                  onClick={() => {
-                    const blob = new Blob([invoice.xml!], { type: 'application/xml' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url; a.download = `${invoice.ncf ?? invoice.number}.xml`
-                    a.click(); URL.revokeObjectURL(url)
-                  }}
+                  onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/invoices/${invoice.id}/pdf`, '_blank')}
                 >
-                  Descargar XML
+                  Descargar PDF
                 </Button>
+                {invoice.xml && (
+                  <Button
+                    variant="secondary" size="sm"
+                    onClick={() => {
+                      const blob = new Blob([invoice.xml!], { type: 'application/xml' })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url; a.download = `${invoice.ncf ?? invoice.number}.xml`
+                      a.click(); URL.revokeObjectURL(url)
+                    }}
+                  >
+                    Descargar XML
+                  </Button>
+                )}
               </div>
-            </Card>
-          )}
+            </div>
+          </Card>
 
           {/* Notes */}
           {invoice.notes && (

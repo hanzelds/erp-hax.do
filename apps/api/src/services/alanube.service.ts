@@ -45,21 +45,23 @@ export interface AlanubeEmitResult {
 
 // ── NCF mappings ───────────────────────────────────────────
 export const NCF_PREFIX: Record<string, string> = {
-  CREDITO_FISCAL: 'B01',
-  CONSUMO:        'B02',
-  NOTA_DEBITO:    'B03',
-  NOTA_CREDITO:   'B04',
-  COMPRAS:        'B11',
-  REGIMEN:        'B14',
+  CREDITO_FISCAL:  'B01',
+  CONSUMO:         'B02',
+  NOTA_DEBITO:     'B03',
+  NOTA_CREDITO:    'B04',
+  COMPRAS:         'B11',
+  REGIMEN:         'B14',  // legacy key
+  REGIMEN_ESPECIAL:'B14',
 }
 
 export const SEQ_FIELD: Record<string, string> = {
-  CREDITO_FISCAL: 'ncfCreditoFiscal',
-  CONSUMO:        'ncfConsumidor',
-  NOTA_DEBITO:    'ncfNotaDebito',
-  NOTA_CREDITO:   'ncfNotaCredito',
-  COMPRAS:        'ncfCompras',
-  REGIMEN:        'ncfRegimen',
+  CREDITO_FISCAL:  'ncfCreditoFiscal',
+  CONSUMO:         'ncfConsumidor',
+  NOTA_DEBITO:     'ncfNotaDebito',
+  NOTA_CREDITO:    'ncfNotaCredito',
+  COMPRAS:         'ncfCompras',
+  REGIMEN:         'ncfRegimen',  // legacy key
+  REGIMEN_ESPECIAL:'ncfRegimen',
 }
 
 export function buildNcf(type: string, sequence: number): string {

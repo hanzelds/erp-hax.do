@@ -30,9 +30,11 @@ function fmtShort(d: Date | string) {
 
 const NCF_TYPE: Record<string, string> = {
   CREDITO_FISCAL:   'B01 — Crédito Fiscal',
+  CONSUMO:          'B02 — Consumidor Final',
   CONSUMIDOR_FINAL: 'B02 — Consumidor Final',
   NOTA_DEBITO:      'B03 — Nota de Débito',
   NOTA_CREDITO:     'B04 — Nota de Crédito',
+  REGIMEN_ESPECIAL: 'B14 — Régimen Especial',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -65,8 +67,10 @@ export async function generateInvoicePdf(invoice: any): Promise<Uint8Array> {
   page.drawText('RNC: 133-290251', { x: 40, y: height - 54, size: 9, font: regular, color: rgb(0.8, 0.85, 0.9) })
   page.drawText('Santo Domingo, República Dominicana', { x: 40, y: height - 68, size: 9, font: regular, color: rgb(0.8, 0.85, 0.9) })
 
-  const docLabel = invoice.type === 'NOTA_CREDITO' ? 'NOTA DE CRÉDITO' :
-                   invoice.type === 'NOTA_DEBITO'  ? 'NOTA DE DÉBITO'  : 'FACTURA'
+  const docLabel = invoice.type === 'NOTA_CREDITO'    ? 'NOTA DE CRÉDITO' :
+                   invoice.type === 'NOTA_DEBITO'     ? 'NOTA DE DÉBITO'  :
+                   invoice.type === 'REGIMEN_ESPECIAL'? 'FACTURA B14 — RÉGIMEN ESPECIAL' :
+                   'FACTURA'
   page.drawText(docLabel,          { x: width - 180, y: height - 36, size: 13, font: bold,    color: WHITE })
   page.drawText(`N° ${invoice.number}`, { x: width - 180, y: height - 54, size: 11, font: bold,    color: WHITE })
   const buLabel = invoice.businessUnit === 'HAX' ? 'Hax Estudio' : 'Koder'
@@ -138,9 +142,10 @@ export async function generateInvoicePdf(invoice: any): Promise<Uint8Array> {
   rowY -= 18
   const totX = width - 200
 
+  const isRegimenEspecial = invoice.type === 'REGIMEN_ESPECIAL'
   const totLines = [
     { label: 'Subtotal:', value: fmt(invoice.subtotal ?? 0) },
-    { label: 'ITBIS (18%):', value: fmt(invoice.taxAmount ?? 0) },
+    { label: isRegimenEspecial ? 'ITBIS (B14):' : 'ITBIS (18%):', value: isRegimenEspecial ? 'Exento' : fmt(invoice.taxAmount ?? 0) },
   ]
   for (const t of totLines) {
     page.drawText(t.label, { x: totX, y: rowY, size: 9, font: regular, color: GRAY })
@@ -221,6 +226,7 @@ export async function generateInvoicePdf(invoice: any): Promise<Uint8Array> {
 /** Generate PDF — uses custom template if one is active, falls back to built-in */
 export async function generateInvoicePdfWithTemplate(invoice: any): Promise<Uint8Array> {
   const templateType = invoice.type === 'NOTA_CREDITO' ? 'CREDIT_NOTE' : 'INVOICE'
+  // REGIMEN_ESPECIAL uses INVOICE template — ITBIS already 0 in data
   const customTpl    = await getActiveTemplate(templateType as any)
 
   if (customTpl) {
@@ -239,8 +245,10 @@ function buildInvoiceTemplateData(invoice: any) {
     invoice: {
       number: invoice.number,
       ncf: invoice.ncf,
-      type: invoice.type === 'NOTA_CREDITO' ? 'NOTA DE CRÉDITO' :
-            invoice.type === 'CONSUMIDOR_FINAL' ? 'FACTURA CONSUMIDOR FINAL' : 'FACTURA DE CRÉDITO FISCAL',
+      type: invoice.type === 'NOTA_CREDITO'    ? 'NOTA DE CRÉDITO' :
+            invoice.type === 'CONSUMO'          ? 'FACTURA CONSUMIDOR FINAL' :
+            invoice.type === 'REGIMEN_ESPECIAL' ? 'FACTURA RÉGIMEN ESPECIAL (B14)' :
+            'FACTURA DE CRÉDITO FISCAL',
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,
       subtotal: invoice.subtotal,

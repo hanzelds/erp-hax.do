@@ -70,14 +70,16 @@ export default function NewInvoicePage() {
     onSuccess: (data) => router.push(`/dashboard/invoices/${data.id}`),
   })
 
-  // Totals
-  const lines     = items.map(calcLine)
+  const isRegimenEspecial = form.ncfType === 'B14'
+
+  // Totals — B14 forces all items exempt
+  const lines     = items.map(i => calcLine(isRegimenEspecial ? { ...i, isExempt: true, taxRate: 0 } : i))
   const subtotal  = lines.reduce((s, l) => s + l.subtotal, 0)
   const taxAmount = lines.reduce((s, l) => s + l.taxAmount, 0)
   const total     = subtotal + taxAmount
 
   function addItem() {
-    setItems([...items, { description: '', quantity: 1, unitPrice: 0, taxRate: 18, isExempt: false }])
+    setItems([...items, { description: '', quantity: 1, unitPrice: 0, taxRate: 18, isExempt: isRegimenEspecial }])
   }
 
   function removeItem(i: number) {
@@ -131,11 +133,16 @@ export default function NewInvoicePage() {
               </F>
               <F label="Tipo NCF">
                 <select value={form.ncfType} onChange={(e) => setForm({ ...form, ncfType: e.target.value })} className={ic}>
-                  <option value="B01">B01 - Crédito fiscal</option>
-                  <option value="B02">B02 - Consumidor final</option>
-                  <option value="B14">B14 - Regímenes especiales</option>
-                  <option value="B15">B15 - Gubernamental</option>
+                  <option value="B01">B01 — Crédito fiscal</option>
+                  <option value="B02">B02 — Consumidor final</option>
+                  <option value="B14">B14 — Regímenes especiales (ITBIS exento)</option>
+                  <option value="B15">B15 — Gubernamental</option>
                 </select>
+                {isRegimenEspecial && (
+                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                    <span>⚠</span> B14 — Régimen especial: ITBIS exento en todos los ítems
+                  </p>
+                )}
               </F>
               <F label="Fecha de emisión *">
                 <input type="date" value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} className={ic} />
@@ -202,14 +209,20 @@ export default function NewInvoicePage() {
                         <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => updateItem(i, { unitPrice: parseFloat(e.target.value) || 0 })} className={ic} />
                       </F>
                       <F label="ITBIS">
-                        <select value={item.isExempt ? 'exempt' : item.taxRate} onChange={(e) => {
-                          if (e.target.value === 'exempt') updateItem(i, { isExempt: true, taxRate: 0 })
-                          else updateItem(i, { isExempt: false, taxRate: parseInt(e.target.value) })
-                        }} className={ic}>
-                          <option value="exempt">Exento</option>
-                          <option value="18">18%</option>
-                          <option value="16">16%</option>
-                        </select>
+                        {isRegimenEspecial ? (
+                          <div className={`${ic} bg-amber-50 text-amber-700 font-medium cursor-not-allowed`}>
+                            Exento (B14)
+                          </div>
+                        ) : (
+                          <select value={item.isExempt ? 'exempt' : item.taxRate} onChange={(e) => {
+                            if (e.target.value === 'exempt') updateItem(i, { isExempt: true, taxRate: 0 })
+                            else updateItem(i, { isExempt: false, taxRate: parseInt(e.target.value) })
+                          }} className={ic}>
+                            <option value="exempt">Exento</option>
+                            <option value="18">18%</option>
+                            <option value="16">16%</option>
+                          </select>
+                        )}
                       </F>
                       <div>
                         <p className="text-xs text-gray-400 mb-1">Total línea</p>
@@ -236,7 +249,17 @@ export default function NewInvoicePage() {
             <CardHeader title="Resumen" />
             <div className="space-y-2.5 text-sm">
               <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-              <div className="flex justify-between text-gray-500"><span>ITBIS</span><span>{formatCurrency(taxAmount)}</span></div>
+              <div className="flex justify-between text-gray-500">
+                <span>ITBIS</span>
+                {isRegimenEspecial
+                  ? <span className="text-amber-600 font-medium">Exento</span>
+                  : <span>{formatCurrency(taxAmount)}</span>}
+              </div>
+              {isRegimenEspecial && (
+                <div className="text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1.5">
+                  B14 — Régimen especial de tributación. ITBIS no aplica.
+                </div>
+              )}
               <div className="flex justify-between font-bold text-gray-900 text-base border-t border-gray-100 pt-2">
                 <span>Total</span><span>{formatCurrency(total)}</span>
               </div>

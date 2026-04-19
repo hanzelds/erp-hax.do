@@ -14,6 +14,9 @@ import {
   Landmark,
   ShoppingCart,
   RefreshCcw,
+  Monitor,
+  PiggyBank,
+  Layers,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -125,6 +128,24 @@ export const navigation: NavSection[] = [
         href: '/dashboard/accounting',
         icon: BookOpen,
         description: 'Asientos y cuentas',
+      },
+      {
+        label: 'Activos Fijos',
+        href: '/dashboard/fixed-assets',
+        icon: Layers,
+        description: 'Depreciación de activos',
+      },
+      {
+        label: 'Presupuestos',
+        href: '/dashboard/budgets',
+        icon: PiggyBank,
+        description: 'Ejecución presupuestaria',
+      },
+      {
+        label: 'Conciliación',
+        href: '/dashboard/bank-reconciliation',
+        icon: Monitor,
+        description: 'Conciliación bancaria',
       },
       {
         label: 'Reportes',

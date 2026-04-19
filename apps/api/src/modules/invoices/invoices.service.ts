@@ -9,6 +9,38 @@ function generateInvoiceNumber(bu: string, count: number) {
   return `${prefix}-${String(count + 1).padStart(6, '0')}`
 }
 
+async function autoJournalEntry(opts: {
+  type: 'INVOICE' | 'PAYMENT' | 'CREDIT_NOTE'
+  businessUnit: 'HAX' | 'KODER'
+  description: string
+  debitCode: string
+  creditCode: string
+  amount: number
+  invoiceId?: string
+  paymentId?: string
+  period: string // "YYYY-MM"
+}) {
+  if (opts.amount <= 0) return null
+  const [debit, credit] = await Promise.all([
+    prisma.account.findUnique({ where: { code: opts.debitCode } }),
+    prisma.account.findUnique({ where: { code: opts.creditCode } }),
+  ])
+  if (!debit || !credit) return null
+  return prisma.journalEntry.create({
+    data: {
+      type: opts.type,
+      businessUnit: opts.businessUnit as any,
+      description: opts.description,
+      debitAccountId: debit.id,
+      creditAccountId: credit.id,
+      amount: opts.amount,
+      period: opts.period,
+      invoiceId: opts.invoiceId,
+      paymentId: opts.paymentId,
+    },
+  })
+}
+
 export async function listInvoices(query: any) {
   const { page, limit, skip } = parsePagination(query)
   const where: any = {}
@@ -138,6 +170,8 @@ export async function addPayment(invoiceId: string, data: any) {
   const isPaid = newAmountDue <= 0
   const paymentStatus = isPaid ? PaymentStatus.PAID : PaymentStatus.PARTIAL
 
+  const paidAt = data.paidAt ? new Date(data.paidAt) : new Date()
+
   const [payment] = await prisma.$transaction([
     prisma.payment.create({
       data: {
@@ -146,7 +180,7 @@ export async function addPayment(invoiceId: string, data: any) {
         method: data.method,
         reference: data.reference,
         notes: data.notes,
-        paidAt: data.paidAt ? new Date(data.paidAt) : new Date(),
+        paidAt,
       },
     }),
     prisma.invoice.update({
@@ -160,14 +194,82 @@ export async function addPayment(invoiceId: string, data: any) {
       },
     }),
   ])
+
+  // Auto journal entry: Dr 1102 Banco Popular / Cr 1201 CxC
+  const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  if (ecfConfig?.autoJournalEntries) {
+    const period = `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}`
+    await autoJournalEntry({
+      type: 'PAYMENT',
+      businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+      description: `Pago factura ${invoice.number}`,
+      debitCode: '1102',
+      creditCode: '1201',
+      amount,
+      invoiceId,
+      paymentId: payment.id,
+      period,
+    })
+  }
+
   return payment
 }
 
 export async function emitInvoice(id: string) {
-  const invoice = await prisma.invoice.findUnique({ where: { id } })
+  // Load invoice with items and client for validation
+  const invoice = await prisma.invoice.findUnique({
+    where: { id },
+    include: {
+      items: true,
+      client: true,
+    },
+  })
   if (!invoice) throw new NotFoundError('Factura')
   if (invoice.status !== InvoiceStatus.DRAFT) {
     throw new AppError(`No se puede emitir una factura en estado ${invoice.status}`, 400)
+  }
+
+  // Validate items
+  if (!invoice.items || invoice.items.length === 0) {
+    throw new AppError('La factura debe tener al menos un ítem', 400)
+  }
+  if (invoice.items.some((i: any) => i.unitPrice <= 0)) {
+    throw new AppError('Todos los ítems deben tener precio mayor a cero', 400)
+  }
+  if (invoice.items.some((i: any) => i.quantity <= 0)) {
+    throw new AppError('Las cantidades deben ser mayores a cero', 400)
+  }
+
+  // Load EcfConfig for validations
+  const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  if (ecfConfig) {
+    // Validate RNC for B01 (CREDITO_FISCAL) invoices
+    if (ecfConfig.requireRncB01 && invoice.type === 'CREDITO_FISCAL' && !invoice.client?.rnc) {
+      throw new AppError('Factura B01 requiere RNC del cliente', 400)
+    }
+
+    // Validate retroactive days
+    if (ecfConfig.maxRetroactiveDays > 0) {
+      const maxRetro = ecfConfig.maxRetroactiveDays
+      const issueDate = new Date(invoice.issueDate)
+      issueDate.setHours(0, 0, 0, 0)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const diffDays = Math.floor((today.getTime() - issueDate.getTime()) / 86400000)
+      if (diffDays > maxRetro) {
+        throw new AppError(`La fecha de emisión supera los ${maxRetro} días retroactivos permitidos`, 400)
+      }
+    }
+  }
+
+  // Validate issue date is not more than 1 day in the future
+  const issueDate = new Date(invoice.issueDate)
+  issueDate.setHours(0, 0, 0, 0)
+  const tomorrow = new Date()
+  tomorrow.setHours(0, 0, 0, 0)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  if (issueDate > tomorrow) {
+    throw new AppError('La fecha de emisión no puede ser más de 1 día en el futuro', 400)
   }
 
   // Transition to SENDING

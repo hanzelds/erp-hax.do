@@ -11,16 +11,88 @@ import { prisma } from '../config/database'
 import { env } from '../config/env'
 import { logger } from '../config/logger'
 import { emitEcf, pollStatus, buildNcf, getBuConfig, getSeqField } from '../services/alanube.service'
-import { invoicePollQueue } from '../queues/invoice.queue'
+import { invoicePollQueue, invoiceEmitQueue } from '../queues/invoice.queue'
 
 const connection = { url: env.REDIS_URL }
+
+// Exponential backoff delays (ms) per retry attempt (0-indexed)
+const RETRY_DELAYS = [5000, 15000, 45000]
+
+async function autoJournalEntry(opts: {
+  type: 'INVOICE' | 'PAYMENT' | 'CREDIT_NOTE'
+  businessUnit: 'HAX' | 'KODER'
+  description: string
+  debitCode: string
+  creditCode: string
+  amount: number
+  invoiceId?: string
+  paymentId?: string
+  period: string // "YYYY-MM"
+}) {
+  if (opts.amount <= 0) return null
+  const [debit, credit] = await Promise.all([
+    prisma.account.findUnique({ where: { code: opts.debitCode } }),
+    prisma.account.findUnique({ where: { code: opts.creditCode } }),
+  ])
+  if (!debit || !credit) return null
+  return prisma.journalEntry.create({
+    data: {
+      type: opts.type,
+      businessUnit: opts.businessUnit as any,
+      description: opts.description,
+      debitAccountId: debit.id,
+      creditAccountId: credit.id,
+      amount: opts.amount,
+      period: opts.period,
+      invoiceId: opts.invoiceId,
+      paymentId: opts.paymentId,
+    },
+  })
+}
+
+async function createApprovalJournalEntries(invoiceId: string, approvedAt: Date) {
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
+  if (!invoice) return
+
+  const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  if (!ecfConfig?.autoJournalEntries) return
+
+  const period = `${approvedAt.getFullYear()}-${String(approvedAt.getMonth() + 1).padStart(2, '0')}`
+  const incomeAccount = invoice.businessUnit === 'HAX' ? '4101' : '4102'
+
+  // Entry 1: Dr 1201 CxC (subtotal) / Cr income account (subtotal)
+  await autoJournalEntry({
+    type: 'INVOICE',
+    businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+    description: `Factura aprobada ${invoice.number ?? invoiceId} - subtotal`,
+    debitCode: '1201',
+    creditCode: incomeAccount,
+    amount: invoice.subtotal,
+    invoiceId,
+    period,
+  })
+
+  // Entry 2: Dr 1201 CxC (taxAmount) / Cr 2201 ITBIS por pagar (taxAmount) — only if taxAmount > 0
+  if (invoice.taxAmount > 0) {
+    await autoJournalEntry({
+      type: 'INVOICE',
+      businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+      description: `Factura aprobada ${invoice.number ?? invoiceId} - ITBIS`,
+      debitCode: '1201',
+      creditCode: '2201',
+      amount: invoice.taxAmount,
+      invoiceId,
+      period,
+    })
+  }
+}
 
 // ── Emit worker ───────────────────────────────────────────
 export const emitWorker = new Worker(
   'invoice-emit',
-  async (job: Job<{ invoiceId: string }>) => {
-    const { invoiceId } = job.data
-    logger.info(`[EmitWorker] Processing invoice ${invoiceId}`)
+  async (job: Job<{ invoiceId: string; retryAttempt?: number }>) => {
+    const { invoiceId, retryAttempt = 0 } = job.data
+    logger.info(`[EmitWorker] Processing invoice ${invoiceId} (attempt ${retryAttempt + 1})`)
 
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
@@ -103,15 +175,33 @@ export const emitWorker = new Worker(
           receivedAt: new Date(),
         },
       })
-      await prisma.invoice.update({
-        where: { id: invoiceId },
-        data: {
-          status: InvoiceStatus.REJECTED,
-          rejectedAt: new Date(),
-          rejectionReason: `Error de conexión: ${err.message}`,
-          retryCount: attempt,
-        },
-      })
+
+      // Exponential backoff retry
+      if (retryAttempt < RETRY_DELAYS.length) {
+        const delay = RETRY_DELAYS[retryAttempt]
+        logger.info(`[EmitWorker] Scheduling retry ${retryAttempt + 1} for invoice ${invoiceId} in ${delay}ms`)
+        await invoiceEmitQueue.add(
+          'emit',
+          { invoiceId, retryAttempt: retryAttempt + 1 },
+          {
+            jobId: `emit-${invoiceId}-retry-${retryAttempt + 1}-${Date.now()}`,
+            delay,
+            removeOnComplete: true,
+          },
+        )
+      } else {
+        // Max retries exceeded — mark as REJECTED
+        logger.warn(`[EmitWorker] Max retries reached for invoice ${invoiceId}, marking as REJECTED`)
+        await prisma.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            status: InvoiceStatus.REJECTED,
+            rejectedAt: new Date(),
+            rejectionReason: `Error de conexión tras ${RETRY_DELAYS.length} intentos: ${err.message}`,
+            retryCount: attempt,
+          },
+        })
+      }
       return
     }
 
@@ -130,11 +220,12 @@ export const emitWorker = new Worker(
     })
 
     if (result.status === 'APPROVED') {
+      const approvedAt = new Date()
       await prisma.invoice.update({
         where: { id: invoiceId },
         data: {
           status: InvoiceStatus.APPROVED,
-          approvedAt: new Date(),
+          approvedAt,
           ncf: result.ncf || ncf,
           xml: result.xml,
           alanubeId: result.alanubeId,
@@ -144,6 +235,13 @@ export const emitWorker = new Worker(
         },
       })
       logger.info(`[EmitWorker] Invoice ${invoiceId} APPROVED, NCF: ${result.ncf || ncf}`)
+
+      // Auto journal entries after approval
+      try {
+        await createApprovalJournalEntries(invoiceId, approvedAt)
+      } catch (je: any) {
+        logger.error(`[EmitWorker] Journal entry error for ${invoiceId}:`, je.message)
+      }
     } else if (result.status === 'REJECTED') {
       await prisma.invoice.update({
         where: { id: invoiceId },
@@ -227,17 +325,25 @@ export const pollWorker = new Worker(
     }
 
     if (result.status === 'APPROVED') {
+      const approvedAt = new Date()
       await prisma.invoice.update({
         where: { id: invoiceId },
         data: {
           status: InvoiceStatus.APPROVED,
-          approvedAt: new Date(),
+          approvedAt,
           ncf: result.ncf || invoice.ncf,
           xml: result.xml,
           alanubeStatus: 'APPROVED',
         },
       })
       logger.info(`[PollWorker] Invoice ${invoiceId} APPROVED via poll`)
+
+      // Auto journal entries after approval
+      try {
+        await createApprovalJournalEntries(invoiceId, approvedAt)
+      } catch (je: any) {
+        logger.error(`[PollWorker] Journal entry error for ${invoiceId}:`, je.message)
+      }
     } else {
       await prisma.invoice.update({
         where: { id: invoiceId },
@@ -260,4 +366,3 @@ emitWorker.on('failed', (job, err) => {
 pollWorker.on('failed', (job, err) => {
   logger.error(`[PollWorker] Job ${job?.id} failed:`, err.message)
 })
-

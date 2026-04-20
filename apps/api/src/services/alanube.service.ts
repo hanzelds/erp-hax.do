@@ -1,8 +1,10 @@
 /**
  * Alanube e-CF Service — Dominican Republic electronic fiscal documents
  *
- * All configuration is read from BusinessUnitConfig in the database.
- * NCF types: B01 B02 B03 B04 B11 B14
+ * e-CF format: E + 2-digit type + 10-digit sequential = 13 characters
+ * Types: 31 (Crédito Fiscal), 32 (Consumo), 33 (Nota Débito), 34 (Nota Crédito),
+ *        41 (Compras), 43 (Gastos Menores), 44 (Régimen Especial),
+ *        45 (Gubernamental), 46 (Exportaciones), 47 (Pagos Exterior)
  */
 
 import axios from 'axios'
@@ -43,16 +45,24 @@ export interface AlanubeEmitResult {
   errorMessage: string | null
 }
 
-// ── NCF mappings ───────────────────────────────────────────
-export const NCF_PREFIX: Record<string, string> = {
-  CREDITO_FISCAL:  'B01',
-  CONSUMO:         'B02',
-  NOTA_DEBITO:     'B03',
-  NOTA_CREDITO:    'B04',
-  COMPRAS:         'B11',
-  REGIMEN:         'B14',  // legacy key
-  REGIMEN_ESPECIAL:'B14',
+// ── e-CF type code mappings ────────────────────────────────
+// Format: E + 2-digit type code + 10-digit sequential = 13 chars
+export const ECF_TYPE_CODE: Record<string, string> = {
+  CREDITO_FISCAL:  '31',
+  CONSUMO:         '32',
+  NOTA_DEBITO:     '33',
+  NOTA_CREDITO:    '34',
+  COMPRAS:         '41',
+  GASTOS_MENORES:  '43',
+  REGIMEN_ESPECIAL:'44',
+  REGIMEN:         '44',  // legacy alias
+  GUBERNAMENTAL:   '45',
+  EXPORTACIONES:   '46',
+  PAGOS_EXTERIOR:  '47',
 }
+
+// Keep NCF_PREFIX as alias for backward compat with existing XML/reports
+export const NCF_PREFIX = ECF_TYPE_CODE
 
 export const SEQ_FIELD: Record<string, string> = {
   CREDITO_FISCAL:  'ncfCreditoFiscal',
@@ -60,13 +70,21 @@ export const SEQ_FIELD: Record<string, string> = {
   NOTA_DEBITO:     'ncfNotaDebito',
   NOTA_CREDITO:    'ncfNotaCredito',
   COMPRAS:         'ncfCompras',
-  REGIMEN:         'ncfRegimen',  // legacy key
+  GASTOS_MENORES:  'ncfGastosMenores',
   REGIMEN_ESPECIAL:'ncfRegimen',
+  REGIMEN:         'ncfRegimen',  // legacy alias
+  GUBERNAMENTAL:   'ncfGubernamental',
+  EXPORTACIONES:   'ncfExportaciones',
+  PAGOS_EXTERIOR:  'ncfPagosExterior',
 }
 
+/**
+ * Build e-CF number: E + 2-digit type + 10-digit sequential
+ * Example: E310000000001 (13 characters)
+ */
 export function buildNcf(type: string, sequence: number): string {
-  const prefix = NCF_PREFIX[type] ?? 'B02'
-  return `${prefix}${String(sequence).padStart(8, '0')}`
+  const typeCode = ECF_TYPE_CODE[type] ?? '32'
+  return `E${typeCode}${String(sequence).padStart(10, '0')}`
 }
 
 export function getSeqField(type: string): string {
@@ -104,7 +122,8 @@ function sandboxResult(payload: AlanubeEmitPayload): AlanubeEmitResult {
 }
 
 function buildMockXml(p: AlanubeEmitPayload): string {
-  return `<?xml version="1.0" encoding="UTF-8"?><eCF version="1.0"><Encabezado><IdDoc><TipoeCF>${NCF_PREFIX[p.type] ?? 'B02'}</TipoeCF><eNCF>${p.ncf}</eNCF><FechaEmision>${p.issueDate}</FechaEmision></IdDoc><Emisor><RNCEmisor>${env.COMPANY_RNC}</RNCEmisor><RazonSocialEmisor>${env.COMPANY_NAME}</RazonSocialEmisor></Emisor><Comprador><RNCComprador>${p.clientRnc ?? ''}</RNCComprador><RazonSocialComprador>${p.clientName}</RazonSocialComprador></Comprador><Totales><MontoGravadoTotal>${p.subtotal.toFixed(2)}</MontoGravadoTotal><ITBIS1>${p.taxAmount.toFixed(2)}</ITBIS1><MontoTotal>${p.total.toFixed(2)}</MontoTotal></Totales></Encabezado></eCF>`
+  const typeCode = ECF_TYPE_CODE[p.type] ?? '32'
+  return `<?xml version="1.0" encoding="UTF-8"?><eCF version="1.0"><Encabezado><IdDoc><TipoeCF>${typeCode}</TipoeCF><eNCF>${p.ncf}</eNCF><FechaEmision>${p.issueDate}</FechaEmision></IdDoc><Emisor><RNCEmisor>${env.COMPANY_RNC}</RNCEmisor><RazonSocialEmisor>${env.COMPANY_NAME}</RazonSocialEmisor></Emisor><Comprador><RNCComprador>${p.clientRnc ?? ''}</RNCComprador><RazonSocialComprador>${p.clientName}</RazonSocialComprador></Comprador><Totales><MontoGravadoTotal>${p.subtotal.toFixed(2)}</MontoGravadoTotal><ITBIS1>${p.taxAmount.toFixed(2)}</ITBIS1><MontoTotal>${p.total.toFixed(2)}</MontoTotal></Totales></Encabezado></eCF>`
 }
 
 // ── Production HTTP call ───────────────────────────────────

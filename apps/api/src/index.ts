@@ -5,6 +5,7 @@ import helmet from 'helmet'
 import compression from 'compression'
 import morgan from 'morgan'
 import rateLimit from 'express-rate-limit'
+import https from 'https'
 
 import { env } from './config/env'
 import { logger } from './config/logger'
@@ -86,6 +87,52 @@ app.get('/health', (_req, res) => {
     rnc: '133290251',
     env: env.NODE_ENV,
     timestamp: new Date().toISOString(),
+  })
+})
+
+// ── RNC Proxy (evita CORS llamando a rnc.megaplus.com.do) ─────
+app.get('/api/rnc-lookup', apiLimiter, (req, res) => {
+  const rnc = String(req.query.rnc ?? '').replace(/\D/g, '')
+  if (rnc.length < 9 || rnc.length > 11) {
+    return res.status(400).json({ error: true, mensaje: 'RNC/cédula debe tener 9 u 11 dígitos.' })
+  }
+  const url = `https://rnc.megaplus.com.do/api/consulta?rnc=${rnc}`
+  https.get(url, (upstream) => {
+    let body = ''
+    upstream.on('data', (chunk) => { body += chunk })
+    upstream.on('end', () => {
+      try {
+        const json = JSON.parse(body)
+        res.status(upstream.statusCode ?? 200).json(json)
+      } catch {
+        res.status(502).json({ error: true, mensaje: 'Respuesta inválida del servicio externo.' })
+      }
+    })
+  }).on('error', () => {
+    res.status(502).json({ error: true, mensaje: 'No se pudo conectar al servicio de consulta RNC.' })
+  })
+})
+
+// ── RNC search by name proxy ──────────────────────────────────
+app.get('/api/rnc-lookup/nombres', apiLimiter, (req, res) => {
+  const buscar = String(req.query.buscar ?? '').trim()
+  if (!buscar || buscar.length < 2) {
+    return res.status(400).json({ error: true, mensaje: 'Parámetro buscar requerido (mínimo 2 caracteres).' })
+  }
+  const url = `https://rnc.megaplus.com.do/api/consulta/nombres?buscar=${encodeURIComponent(buscar)}`
+  https.get(url, (upstream) => {
+    let body = ''
+    upstream.on('data', (chunk) => { body += chunk })
+    upstream.on('end', () => {
+      try {
+        const json = JSON.parse(body)
+        res.status(upstream.statusCode ?? 200).json(json)
+      } catch {
+        res.status(502).json({ error: true, mensaje: 'Respuesta inválida del servicio externo.' })
+      }
+    })
+  }).on('error', () => {
+    res.status(502).json({ error: true, mensaje: 'No se pudo conectar al servicio de consulta.' })
   })
 })
 

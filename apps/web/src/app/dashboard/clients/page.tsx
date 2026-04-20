@@ -1,13 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, X, Edit2, UserX, UserCheck } from 'lucide-react'
+import { Plus, Search, X, Edit2, Trash2, UserX, UserCheck } from 'lucide-react'
 import api from '@/lib/api'
 import { formatDate, cn } from '@/lib/utils'
 import {
   PageHeader, Button, Card, Skeleton, EmptyState,
 } from '@/components/ui'
+import { useRncLookup } from '@/hooks/useRncLookup'
+import NewContactPage from '@/components/NewContactPage'
+import ConfirmModal from '@/components/ConfirmModal'
 
 interface Client {
   id: string
@@ -46,10 +49,21 @@ function sanitize(f: ClientForm) {
 
 export default function ClientsPage() {
   const qc = useQueryClient()
-  const [search, setSearch]   = useState('')
-  const [editing, setEditing] = useState<ClientForm | null>(null)
-  const [isNew, setIsNew]     = useState(false)
-  const [error, setError]     = useState<string | null>(null)
+  const [search, setSearch]     = useState('')
+  const [editing, setEditing]   = useState<ClientForm | null>(null)
+  const [isNew, setIsNew]       = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+  const [showNewContact, setShowNewContact] = useState(false)
+  const [confirmDelete, setConfirmDelete]   = useState<Client | null>(null)
+
+  // RNC lookup — auto-fill name when RNC/cédula resolves (edit modal only)
+  const handleRncFound = useCallback((r: { nombre: string }) => {
+    setEditing((f) => f ? { ...f, name: r.nombre } : f)
+  }, [])
+  const { isLoading: rncLoading, isNotFound: rncNotFound } = useRncLookup(
+    editing?.rnc ?? '',
+    handleRncFound
+  )
 
   const { data: clients = [], isLoading } = useQuery<Client[]>({
     queryKey: ['clients', search],
@@ -70,6 +84,7 @@ export default function ClientsPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients'] })
+      qc.invalidateQueries({ queryKey: ['clients-list'] })
       setEditing(null)
       setIsNew(false)
       setError(null)
@@ -80,11 +95,27 @@ export default function ClientsPage() {
     },
   })
 
+  const destroy = useMutation({
+    mutationFn: (id: string) => api.delete(`/clients/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['clients'] })
+      qc.invalidateQueries({ queryKey: ['clients-list'] })
+      setConfirmDelete(null)
+    },
+    onError: (err: any) => {
+      setConfirmDelete(null)
+      alert(err?.response?.data?.error ?? 'No se pudo eliminar el cliente')
+    },
+  })
+
   const toggle = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
       await api.patch(`/clients/${id}`, { isActive: !isActive })
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['clients'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['clients'] })
+      qc.invalidateQueries({ queryKey: ['clients-list'] })
+    },
   })
 
   function openNew() {
@@ -109,13 +140,29 @@ export default function ClientsPage() {
     setEditing((f) => f ? { ...f, [field]: value } : f)
   }
 
+  // ── Full-page new contact view ────────────────────────────────
+  if (showNewContact) {
+    return (
+      <NewContactPage
+        mode="cliente"
+        onCreated={() => {
+          qc.invalidateQueries({ queryKey: ['clients'] })
+          qc.invalidateQueries({ queryKey: ['clients-list'] })
+          setShowNewContact(false)
+        }}
+        onBack={() => setShowNewContact(false)}
+      />
+    )
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
         title="Clientes"
         subtitle="Gestión de clientes"
         actions={
-          <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={openNew}>
+          <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />}
+            onClick={() => setShowNewContact(true)}>
             Nuevo cliente
           </Button>
         }
@@ -145,7 +192,7 @@ export default function ClientsPage() {
           <EmptyState
             title="No hay clientes"
             description="Agrega tu primer cliente para comenzar a facturar."
-            action={<Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={openNew}>Nuevo cliente</Button>}
+            action={<Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowNewContact(true)}>Nuevo cliente</Button>}
           />
         ) : (
           <table className="w-full text-sm">
@@ -168,16 +215,24 @@ export default function ClientsPage() {
                   <td className="px-3 py-3 text-xs text-gray-400">{formatDate(c.createdAt)}</td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(c)}>
+                      <Button variant="ghost" size="sm" title="Editar" onClick={() => openEdit(c)}>
                         <Edit2 className="w-3.5 h-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => toggle.mutate({ id: c.id, isActive: c.isActive })}
                         title={c.isActive ? 'Desactivar' : 'Activar'}
+                        onClick={() => toggle.mutate({ id: c.id, isActive: c.isActive })}
                       >
-                        {c.isActive ? <UserX className="w-3.5 h-3.5 text-red-400" /> : <UserCheck className="w-3.5 h-3.5 text-green-500" />}
+                        {c.isActive ? <UserX className="w-3.5 h-3.5 text-amber-400" /> : <UserCheck className="w-3.5 h-3.5 text-green-500" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Eliminar cliente"
+                        onClick={() => setConfirmDelete(c)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
                       </Button>
                     </div>
                   </td>
@@ -188,7 +243,19 @@ export default function ClientsPage() {
         )}
       </Card>
 
-      {/* Modal */}
+      {/* Confirm delete */}
+      {confirmDelete && (
+        <ConfirmModal
+          title="Eliminar cliente"
+          message={`¿Estás seguro que deseas eliminar a "${confirmDelete.name}"? Esta acción no se puede deshacer.`}
+          confirmLabel="Eliminar"
+          loading={destroy.isPending}
+          onConfirm={() => destroy.mutate(confirmDelete.id)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {/* Edit modal */}
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
@@ -217,13 +284,25 @@ export default function ClientsPage() {
                 />
               </Field>
               <Field label="RNC / Cédula">
-                <input
-                  type="text"
-                  value={editing.rnc}
-                  onChange={(e) => handleChange('rnc', e.target.value)}
-                  className={inputCls}
-                  placeholder="Opcional"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editing.rnc}
+                    onChange={(e) => handleChange('rnc', e.target.value)}
+                    className={inputCls}
+                    placeholder="Opcional — se auto-completa el nombre"
+                  />
+                  {rncLoading && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[#293c4f] animate-pulse">
+                      Consultando…
+                    </span>
+                  )}
+                  {rncNotFound && (editing.rnc?.replace(/\D/g,'').length ?? 0) >= 9 && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-amber-500">
+                      No encontrado
+                    </span>
+                  )}
+                </div>
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Email">

@@ -27,6 +27,7 @@ interface InvoiceDetail {
   sentAt: string | null
   issueDate: string
   dueDate: string | null
+  paymentTerms: string | null
   approvedAt: string | null
   rejectedAt: string | null
   paidAt: string | null
@@ -59,6 +60,18 @@ const METHOD_LABELS: Record<string, string> = {
   CASH:     'Efectivo',
   CHECK:    'Cheque',
   CARD:     'Tarjeta',
+}
+
+const PAYMENT_TERMS_LABELS: Record<string, string> = {
+  CONTADO:    'Contado (pago inmediato)',
+  NET_7:      'Net 7 — 7 días',
+  NET_15:     'Net 15 — 15 días',
+  NET_30:     'Net 30 — 30 días',
+  NET_45:     'Net 45 — 45 días',
+  NET_60:     'Net 60 — 60 días',
+  NET_90:     'Net 90 — 90 días',
+  ANTICIPADO: 'Pago anticipado',
+  PARCIAL:    'Pago parcial acordado',
 }
 
 export default function InvoiceDetailPage() {
@@ -195,6 +208,10 @@ export default function InvoiceDetailPage() {
               <div>
                 <p className="text-xs text-gray-400">Fecha emisión</p>
                 <p className="text-gray-700">{formatDate(invoice.issueDate)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Condiciones de pago</p>
+                <p className="text-gray-700 font-medium">{PAYMENT_TERMS_LABELS[invoice.paymentTerms ?? ''] ?? invoice.paymentTerms ?? '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400">Vencimiento</p>

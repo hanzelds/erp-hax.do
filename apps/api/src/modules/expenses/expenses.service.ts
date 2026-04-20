@@ -93,6 +93,9 @@ export async function getExpense(id: string) {
 
 export async function createExpense(data: any) {
   const total = (data.amount ?? 0) + (data.taxAmount ?? 0)
+  // Normalize expenseDate: convert YYYY-MM-DD string to Date object
+  if (!data.expenseDate) delete data.expenseDate
+  else data.expenseDate = new Date(data.expenseDate)
   return prisma.expense.create({ data: { ...data, total } })
 }
 
@@ -101,6 +104,8 @@ export async function updateExpense(id: string, data: any) {
   if (!expense) throw new NotFoundError('Gasto')
   if (expense.status === ExpenseStatus.PAID) throw new AppError('No se puede editar un gasto pagado', 400)
   const total = ((data.amount ?? expense.amount) + (data.taxAmount ?? expense.taxAmount))
+  if (!data.expenseDate) delete data.expenseDate
+  else data.expenseDate = new Date(data.expenseDate)
   return prisma.expense.update({ where: { id }, data: { ...data, total } })
 }
 
@@ -117,7 +122,8 @@ export async function approveExpense(id: string) {
     const codes  = await getExpenseAcctCodes()
     const date   = expense.expenseDate ?? new Date()
     const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    const debitCode = codes[categoryToKey(expense.category)]
+    // Use accountCode from expense if set, otherwise fall back to category mapping
+    const debitCode = (expense as any).accountCode ?? codes[categoryToKey(expense.category)]
     await autoJournalEntry({
       type: 'INVOICE',
       businessUnit: expense.businessUnit as 'HAX' | 'KODER',

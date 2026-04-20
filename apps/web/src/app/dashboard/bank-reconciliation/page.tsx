@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ArrowLeft, Check, X, MinusCircle, Upload } from 'lucide-react'
+import { Plus, ArrowLeft, Check, X, MinusCircle, Upload, BookOpen, TrendingUp, TrendingDown } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
@@ -144,6 +144,7 @@ function ReconciliationDetail({ id, onBack }: { id: string; onBack: () => void }
   const isAdmin = user?.role === 'ADMIN'
   const [showImport, setShowImport] = useState(false)
   const [ignoreModal, setIgnoreModal] = useState<string | null>(null)
+  const [classifyModal, setClassifyModal] = useState<RecTx | null>(null)
 
   const { data: rec, isLoading } = useQuery<RecDetail>({
     queryKey: ['bank-reconciliation', id],
@@ -259,23 +260,16 @@ function ReconciliationDetail({ id, onBack }: { id: string; onBack: () => void }
                       {tx.status === 'UNMATCHED' && (
                         <div className="flex items-center gap-1">
                           <button
-                            title="Conciliar manualmente"
-                            className="p-1 text-blue-500 hover:text-blue-700"
-                            onClick={() => {
-                              const refId = prompt('ID del pago (cobro) o gasto para conciliar:')
-                              if (!refId) return
-                              const isPayment = confirm('¿Es un cobro (OK) o un gasto (Cancelar)?')
-                              matchTx.mutate(isPayment
-                                ? { txId: tx.id, matchedPaymentId: refId }
-                                : { txId: tx.id, matchedExpenseId: refId },
-                              )
-                            }}
+                            title="Clasificar y conciliar"
+                            className="flex items-center gap-1 px-2 py-1 text-xs bg-[#293c4f] text-white rounded-lg hover:bg-[#1e2d3d] transition-colors"
+                            onClick={() => setClassifyModal(tx)}
                           >
-                            <Check className="w-3.5 h-3.5" />
+                            <BookOpen className="w-3 h-3" />
+                            Clasificar
                           </button>
                           <button
                             title="Ignorar"
-                            className="p-1 text-gray-400 hover:text-gray-600"
+                            className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
                             onClick={() => setIgnoreModal(tx.id)}
                           >
                             <MinusCircle className="w-3.5 h-3.5" />
@@ -297,6 +291,17 @@ function ReconciliationDetail({ id, onBack }: { id: string; onBack: () => void }
           txId={ignoreModal}
           reconciliationId={id}
           onClose={() => setIgnoreModal(null)}
+        />
+      )}
+      {classifyModal && (
+        <ClassifyModal
+          tx={classifyModal}
+          reconciliationId={id}
+          onClose={() => setClassifyModal(null)}
+          onSaved={() => {
+            setClassifyModal(null)
+            qc.invalidateQueries({ queryKey: ['bank-reconciliation', id] })
+          }}
         />
       )}
     </div>
@@ -449,6 +454,207 @@ function ImportModal({ reconciliationId, onClose }: { reconciliationId: string; 
             <Button variant="primary" type="submit" loading={importMutation.isPending}>Importar</Button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Classify Modal ────────────────────────────────────────────
+
+function ClassifyModal({ tx, reconciliationId, onClose, onSaved }: {
+  tx: RecTx
+  reconciliationId: string
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const isCredit = tx.amount >= 0
+  const [accountCode, setAccountCode]         = useState('')
+  const [acctSearch, setAcctSearch]           = useState('')
+  const [acctOpen, setAcctOpen]               = useState(false)
+  const [matchedPaymentId, setMatchedPaymentId]   = useState('')
+  const [matchedExpenseId, setMatchedExpenseId]   = useState('')
+  const [classifiedInvoiceId, setClassifiedInvoiceId] = useState('')
+  const [saving, setSaving]                   = useState(false)
+  const [err, setErr]                         = useState('')
+
+  // Load chart of accounts
+  const { data: accounts = [] } = useQuery<{ id: string; code: string; name: string; type: string; allowsEntry: boolean }[]>({
+    queryKey: ['chart-of-accounts'],
+    queryFn: async () => {
+      const { data } = await api.get('/accounting/accounts')
+      return (data.data ?? data).filter((a: any) => a.allowsEntry)
+    },
+  })
+
+  // Load pending invoices (for credits)
+  const { data: invoices = [] } = useQuery<{ id: string; number: string; total: number; client?: { name: string } }[]>({
+    queryKey: ['invoices-pending-reconcile'],
+    enabled: isCredit,
+    queryFn: async () => {
+      const { data } = await api.get('/invoices', { params: { paymentStatus: 'PENDING', limit: 100 } })
+      return data.data ?? data
+    },
+  })
+
+  // Load payments (for credits)
+  const { data: payments = [] } = useQuery<{ id: string; amount: number; method: string; paidAt: string }[]>({
+    queryKey: ['payments-list'],
+    enabled: isCredit,
+    queryFn: async () => {
+      const { data } = await api.get('/payments', { params: { limit: 100 } })
+      return data.data ?? data
+    },
+  })
+
+  // Load expenses (for debits)
+  const { data: expenses = [] } = useQuery<{ id: string; description: string; total: number; expenseDate: string }[]>({
+    queryKey: ['expenses-list-reconcile'],
+    enabled: !isCredit,
+    queryFn: async () => {
+      const { data } = await api.get('/expenses', { params: { status: 'APPROVED', limit: 100 } })
+      return data.data ?? data
+    },
+  })
+
+  const relevantAccounts = accounts.filter(a =>
+    isCredit ? ['INCOME', 'ASSET'].includes(a.type) : ['EXPENSE', 'LIABILITY'].includes(a.type)
+  )
+  const filteredAccounts = acctSearch
+    ? relevantAccounts.filter(a => a.code.toLowerCase().includes(acctSearch.toLowerCase()) || a.name.toLowerCase().includes(acctSearch.toLowerCase()))
+    : relevantAccounts
+  const selectedAccount = relevantAccounts.find(a => a.code === accountCode)
+
+  async function handleSave() {
+    if (!accountCode) { setErr('Selecciona una cuenta contable'); return }
+    setSaving(true); setErr('')
+    try {
+      await api.patch(`/bank-reconciliation/${reconciliationId}/transactions/${tx.id}`, {
+        accountCode,
+        ...(isCredit && matchedPaymentId ? { matchedPaymentId } : {}),
+        ...(isCredit && classifiedInvoiceId ? { classifiedInvoiceId } : {}),
+        ...(!isCredit && matchedExpenseId ? { matchedExpenseId } : {}),
+      })
+      onSaved()
+    } catch (e: any) {
+      setErr(e.response?.data?.error ?? 'Error al guardar')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+        {/* Header */}
+        <div className={`px-6 py-4 ${isCredit ? 'bg-green-600' : 'bg-red-600'}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {isCredit ? <TrendingUp className="w-4 h-4 text-white" /> : <TrendingDown className="w-4 h-4 text-white" />}
+              <h2 className="text-white font-semibold text-sm">
+                {isCredit ? 'Clasificar ingreso' : 'Clasificar egreso'}
+              </h2>
+            </div>
+            <button onClick={onClose}><X className="w-5 h-5 text-white/70 hover:text-white" /></button>
+          </div>
+          <p className="text-white/80 text-xs mt-1 truncate">{tx.description}</p>
+          <p className={`text-lg font-bold mt-0.5 ${isCredit ? 'text-green-100' : 'text-red-100'}`}>
+            {isCredit ? '+' : ''}{new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(tx.amount)}
+          </p>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Account selector */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Cuenta contable *
+              <span className="ml-1 text-gray-400 font-normal">({isCredit ? 'Ingresos / Activos' : 'Gastos / Pasivos'})</span>
+            </label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setAcctOpen(o => !o)}
+                className="w-full flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-sm text-left bg-white focus:outline-none focus:ring-1 focus:ring-[#293c4f]"
+              >
+                {selectedAccount
+                  ? <span><span className="font-mono text-[#293c4f] mr-2">{selectedAccount.code}</span>{selectedAccount.name}</span>
+                  : <span className="text-gray-400">Seleccionar cuenta…</span>}
+                <span className="text-gray-300 ml-2">▾</span>
+              </button>
+              {acctOpen && (
+                <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg">
+                  <div className="p-2 border-b border-gray-100">
+                    <input autoFocus type="text" placeholder="Buscar…" value={acctSearch}
+                      onChange={e => setAcctSearch(e.target.value)}
+                      className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none" />
+                  </div>
+                  <ul className="max-h-48 overflow-y-auto py-1">
+                    {filteredAccounts.map(a => (
+                      <li key={a.id} onClick={() => { setAccountCode(a.code); setAcctOpen(false); setAcctSearch('') }}
+                        className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 flex gap-3 ${accountCode === a.code ? 'bg-[#293c4f]/5 text-[#293c4f]' : ''}`}>
+                        <span className="font-mono text-xs text-[#293c4f] w-16 shrink-0">{a.code}</span>
+                        <span className="truncate">{a.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Credit: link to invoice or payment */}
+          {isCredit && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Factura correspondiente (opcional)</label>
+                <select value={classifiedInvoiceId} onChange={e => setClassifiedInvoiceId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#293c4f]">
+                  <option value="">Sin factura asociada</option>
+                  {invoices.map(inv => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.number} — {inv.client?.name} — {new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(inv.total)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Cobro ERP correspondiente (opcional)</label>
+                <select value={matchedPaymentId} onChange={e => setMatchedPaymentId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#293c4f]">
+                  <option value="">Sin cobro asociado</option>
+                  {payments.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.method} — {new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(p.amount)} — {p.paidAt?.slice(0, 10)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          {/* Debit: link to expense */}
+          {!isCredit && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Gasto ERP correspondiente (opcional)</label>
+              <select value={matchedExpenseId} onChange={e => setMatchedExpenseId(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#293c4f]">
+                <option value="">Sin gasto asociado</option>
+                {expenses.map(exp => (
+                  <option key={exp.id} value={exp.id}>
+                    {exp.description} — {new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(exp.total)} — {exp.expenseDate?.slice(0, 10)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {err && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
+        </div>
+
+        <div className="flex justify-end gap-2 px-5 pb-5">
+          <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
+          <Button variant="primary" loading={saving} onClick={handleSave}>
+            Guardar clasificación
+          </Button>
+        </div>
       </div>
     </div>
   )

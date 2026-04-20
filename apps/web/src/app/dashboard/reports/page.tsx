@@ -113,41 +113,51 @@ function PnLTab({ period }: { period: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['report-pnl', period],
     queryFn: async () => {
-      const { data } = await api.get(`/reports/pnl/${period}`)
-      return data
+      const res = await api.get(`/reports/pnl/${period}`)
+      return res.data?.data ?? res.data
     },
   })
 
   if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />
 
-  const { revenue = 0, expenses = 0, netIncome = 0, margin = 0, byUnit = {} } = data ?? {}
+  const grossRevenue   = (data as any)?.grossRevenue   ?? 0
+  const totalExpenses  = (data as any)?.totalExpenses  ?? 0
+  const netIncome      = (data as any)?.netIncome      ?? 0
+  const collectedRev   = (data as any)?.collectedRevenue ?? 0
+  const taxRevenue     = (data as any)?.taxRevenue     ?? 0
+  const taxExpenses    = (data as any)?.taxExpenses    ?? 0
+  const margin         = grossRevenue > 0 ? (netIncome / grossRevenue) * 100 : 0
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label="Ingresos" value={formatCurrency(revenue)} accent="#16a34a" />
-        <StatCard label="Gastos" value={formatCurrency(expenses)} accent="#dc2626" />
-        <StatCard label="Beneficio neto" value={formatCurrency(netIncome)} accent="#2563eb" />
-        <StatCard label="Margen" value={`${margin.toFixed(1)}%`} accent="#293c4f" />
+        <StatCard label="Ingresos brutos" value={formatCurrency(grossRevenue)} accent="#16a34a" />
+        <StatCard label="Gastos totales"  value={formatCurrency(totalExpenses)} accent="#dc2626" />
+        <StatCard label="Beneficio neto"  value={formatCurrency(netIncome)} accent="#2563eb" />
+        <StatCard label="Margen"          value={`${margin.toFixed(1)}%`} accent="#293c4f" />
       </div>
-
-      {/* By unit */}
-      {byUnit && Object.keys(byUnit).length > 0 && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {Object.entries(byUnit).map(([unit, d]: [string, any]) => (
-            <Card key={unit}>
-              <CardHeader title={unit} subtitle={`Margen: ${d.margin?.toFixed(1)}%`} />
-              <div className="space-y-2 text-sm">
-                <Row label="Ingresos" value={formatCurrency(d.revenue ?? 0)} />
-                <Row label="Gastos" value={formatCurrency(d.expenses ?? 0)} className="text-red-600" />
-                <div className="border-t border-gray-100 pt-2 mt-2">
-                  <Row label="Neto" value={formatCurrency(d.netIncome ?? 0)} bold />
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader title="Ingresos" subtitle="Detalle del período" />
+          <div className="space-y-2 text-sm">
+            <Row label="Ingresos facturados" value={formatCurrency(grossRevenue)} />
+            <Row label="ITBIS cobrado"        value={formatCurrency(taxRevenue)} />
+            <div className="border-t border-gray-100 pt-2 mt-2">
+              <Row label="Cobrado efectivamente" value={formatCurrency(collectedRev)} bold />
+            </div>
+          </div>
+        </Card>
+        <Card>
+          <CardHeader title="Gastos" subtitle="Detalle del período" />
+          <div className="space-y-2 text-sm">
+            <Row label="Gastos totales" value={formatCurrency(totalExpenses)} className="text-red-600" />
+            <Row label="ITBIS pagado"   value={formatCurrency(taxExpenses)} />
+            <div className="border-t border-gray-100 pt-2 mt-2">
+              <Row label="Resultado neto" value={formatCurrency(netIncome)} bold />
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   )
 }
@@ -158,20 +168,29 @@ function BalanceSheetTab() {
   const { data, isLoading } = useQuery({
     queryKey: ['report-balance-sheet'],
     queryFn: async () => {
-      const { data } = await api.get('/reports/balance-sheet')
-      return data
+      const res = await api.get('/reports/balance-sheet')
+      return res.data?.data ?? res.data
     },
   })
 
   if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />
 
-  const { assets = {}, liabilities = {}, equity = {} } = data ?? {}
+  const payload = (data as any) ?? {}
+  const assetsRaw = payload.assets ?? {}
+  const assetsMap: Record<string, number> = {
+    'Efectivo / Banco':      assetsRaw.cash              ?? 0,
+    'Cuentas por cobrar':    assetsRaw.accountsReceivable ?? 0,
+  }
+  const liabilitiesMap: Record<string, number> = {}
+  const equityMap: Record<string, number> = {
+    'Patrimonio neto': typeof payload.equity === 'number' ? payload.equity : 0,
+  }
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-      <BSSection title="Activos" data={assets} color="text-green-600" />
-      <BSSection title="Pasivos" data={liabilities} color="text-red-500" />
-      <BSSection title="Patrimonio" data={equity} color="text-blue-600" />
+      <BSSection title="Activos"    data={assetsMap}      color="text-green-600" />
+      <BSSection title="Pasivos"    data={liabilitiesMap} color="text-red-500" />
+      <BSSection title="Patrimonio" data={equityMap}      color="text-blue-600" />
     </div>
   )
 }
@@ -196,14 +215,31 @@ function CashFlowTab({ period }: { period: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['report-cash-flow', period],
     queryFn: async () => {
-      const { data } = await api.get(`/reports/cash-flow/${period}`)
-      return data
+      const res = await api.get(`/reports/cash-flow/${period}`)
+      return res.data?.data ?? res.data
     },
   })
 
   if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />
 
-  const { inflow = 0, outflow = 0, net = 0, transactions = [] } = data ?? {}
+  const payload = (data as any) ?? {}
+  const inflow  = payload.totalInflows  ?? 0
+  const outflow = payload.totalOutflows ?? 0
+  const net     = payload.netCashFlow   ?? 0
+  const transactions = [
+    ...(payload.inflows  ?? []).map((p: any) => ({
+      date:        p.paidAt ? new Date(p.paidAt).toLocaleDateString('es-DO') : '—',
+      description: `Cobro (${p.method ?? '—'})`,
+      type:        'INFLOW',
+      amount:      p.amount ?? 0,
+    })),
+    ...(payload.outflows ?? []).map((e: any) => ({
+      date:        e.paidAt ? new Date(e.paidAt).toLocaleDateString('es-DO') : '—',
+      description: `Gasto ${(e.category ?? '').toLowerCase()}`,
+      type:        'OUTFLOW',
+      amount:      e.total ?? 0,
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date))
 
   return (
     <div className="space-y-4">
@@ -245,25 +281,35 @@ function Report606Tab({ period }: { period: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['report-606', period],
     queryFn: async () => {
-      const { data } = await api.get(`/reports/606/${period}`)
-      return data
+      const res = await api.get(`/reports/606/${period}`)
+      return res.data?.data ?? res.data
     },
   })
 
   if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />
 
-  const { summary = {}, records = [] } = data ?? {}
+  const payload     = (data as any) ?? {}
+  const totalAmount = payload.totalAmount ?? 0
+  const totalItbis  = payload.totalItbis  ?? 0
+  const count       = payload.count       ?? 0
+  const records     = (payload.records ?? []).map((r: any) => ({
+    rnc:    r.supplierRef?.rnc ?? r.supplier ?? '—',
+    type:   r.ncfType ?? '—',
+    ncf:    r.ncf     ?? '—',
+    amount: r.amount  ?? 0,
+    itbis:  r.taxAmount ?? 0,
+  }))
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Total compras" value={formatCurrency(summary.totalPurchases ?? 0)} accent="#293c4f" />
-        <StatCard label="ITBIS pagado" value={formatCurrency(summary.totalItbis ?? 0)} accent="#d97706" />
-        <StatCard label="Comprobantes" value={String(summary.count ?? 0)} accent="#2563eb" />
+        <StatCard label="Total compras" value={formatCurrency(totalAmount)} accent="#293c4f" />
+        <StatCard label="ITBIS pagado"  value={formatCurrency(totalItbis)} accent="#d97706" />
+        <StatCard label="Comprobantes"  value={String(count)} accent="#2563eb" />
       </div>
       <ReportTable
         headers={['RNC Proveedor', 'Tipo comprobante', 'NCF', 'Monto', 'ITBIS']}
-        rows={records.map((r: any) => [r.rnc ?? '—', r.type ?? '—', r.ncf ?? '—', formatCurrency(r.amount ?? 0), formatCurrency(r.itbis ?? 0)])}
+        rows={records.map((r: any) => [r.rnc, r.type, r.ncf, formatCurrency(r.amount), formatCurrency(r.itbis)])}
       />
     </div>
   )
@@ -275,25 +321,36 @@ function Report607Tab({ period }: { period: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['report-607', period],
     queryFn: async () => {
-      const { data } = await api.get(`/reports/607/${period}`)
-      return data
+      const res = await api.get(`/reports/607/${period}`)
+      return res.data?.data ?? res.data
     },
   })
 
   if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />
 
-  const { summary = {}, records = [] } = data ?? {}
+  const payload    = (data as any) ?? {}
+  const totalSales = payload.totalAmount ?? 0
+  const totalItbis = payload.totalItbis  ?? 0
+  const count      = payload.count       ?? 0
+  const records    = (payload.records ?? []).map((r: any) => ({
+    rnc:    r.client?.rnc ?? 'Consumidor',
+    ncf:    r.ncf         ?? '—',
+    date:   r.issueDate ? new Date(r.issueDate).toLocaleDateString('es-DO') : '—',
+    amount: r.total       ?? 0,
+    itbis:  r.taxAmount   ?? 0,
+    status: r.status      ?? '—',
+  }))
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Total ventas" value={formatCurrency(summary.totalSales ?? 0)} accent="#16a34a" />
-        <StatCard label="ITBIS cobrado" value={formatCurrency(summary.totalItbis ?? 0)} accent="#d97706" />
-        <StatCard label="Comprobantes" value={String(summary.count ?? 0)} accent="#2563eb" />
+        <StatCard label="Total ventas"  value={formatCurrency(totalSales)} accent="#16a34a" />
+        <StatCard label="ITBIS cobrado" value={formatCurrency(totalItbis)} accent="#d97706" />
+        <StatCard label="Comprobantes"  value={String(count)} accent="#2563eb" />
       </div>
       <ReportTable
         headers={['RNC Cliente', 'NCF', 'Fecha', 'Monto', 'ITBIS', 'Estado']}
-        rows={records.map((r: any) => [r.rnc ?? 'Consumidor', r.ncf ?? '—', r.date ?? '—', formatCurrency(r.amount ?? 0), formatCurrency(r.itbis ?? 0), r.status ?? '—'])}
+        rows={records.map((r: any) => [r.rnc, r.ncf, r.date, formatCurrency(r.amount), formatCurrency(r.itbis), r.status])}
       />
     </div>
   )

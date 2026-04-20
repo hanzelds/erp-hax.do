@@ -86,6 +86,7 @@ export const errorHandler = (
 
   // Prisma validation errors
   if (prismaErr?.constructor?.name === 'PrismaClientValidationError') {
+    logger.error('[PrismaValidation] ' + (err.message ?? String(err)))
     return res.status(400).json({
       success: false,
       error: 'Datos inválidos enviados a la base de datos',

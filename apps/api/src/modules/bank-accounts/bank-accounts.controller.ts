@@ -8,4 +8,5 @@ export async function get(req: Request, res: Response) { sendSuccess(res, await 
 export async function create(req: Request, res: Response) { sendCreated(res, await svc.createAccount(req.body)) }
 export async function update(req: Request, res: Response) { sendSuccess(res, await svc.updateAccount(req.params.id, req.body)) }
 export async function addTransaction(req: Request, res: Response) { sendCreated(res, await svc.addTransaction(req.params.id, req.body)) }
+export async function getTransactions(req: Request, res: Response) { sendSuccess(res, await svc.getTransactions(req.params.id, req.query)) }
 export async function summary(req: Request, res: Response) { sendSuccess(res, await svc.getAccountSummary(req.query.businessUnit as BusinessUnit)) }

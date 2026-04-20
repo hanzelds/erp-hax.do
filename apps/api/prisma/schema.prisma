@@ -144,6 +144,7 @@ model Invoice {
   total             Float            @default(0)
   amountPaid        Float            @default(0)
   amountDue         Float            @default(0)
+  paymentTerms      String?          @default("NET_30")
   notes             String?
   ncf               String?
   xml               String?
@@ -248,6 +249,7 @@ model Supplier {
   address        String?
   city           String?
   category       ExpenseCategory @default(OPERATIONS)
+  categoryCode   String?         // Account code from chart of accounts
   notes          String?
   isActive       Boolean         @default(true)
   createdAt      DateTime        @default(now())
@@ -309,6 +311,8 @@ model Expense {
   approvedAt     DateTime?
   paidAt         DateTime?
   expenseDate    DateTime        @default(now())
+  accountCode    String?         // Account code to debit (from chart of accounts)
+  paymentMethod  String?         @default("TRANSFER")
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   supplierRef    Supplier?       @relation(fields: [supplierId], references: [id])
@@ -747,11 +751,13 @@ model ReconciliationTx {
   amount           Float
   reference        String?
   status           String             @default("UNMATCHED")
-  matchedPaymentId String?
-  matchedExpenseId String?
-  notes            String?
-  createdAt        DateTime           @default(now())
-  reconciliation   BankReconciliation @relation(fields: [reconciliationId], references: [id])
+  matchedPaymentId    String?
+  matchedExpenseId    String?
+  accountCode         String?  // Chart of accounts code used for classification
+  classifiedInvoiceId String?  // Invoice linked on credit classification
+  notes               String?
+  createdAt           DateTime           @default(now())
+  reconciliation      BankReconciliation @relation(fields: [reconciliationId], references: [id])
 
   @@index([reconciliationId])
   @@index([status])
@@ -764,12 +770,16 @@ model EcfConfig {
   alanubeApiKey       String?
   alanubeEnv          String   @default("sandbox")
   alanubeApiUrl       String   @default("https://api.alanube.com.do")
-  ncfCreditoFiscal    Int      @default(1)
-  ncfConsumidor       Int      @default(1)
-  ncfNotaDebito       Int      @default(1)
-  ncfNotaCredito      Int      @default(1)
-  ncfCompras          Int      @default(1)
-  ncfRegimen          Int      @default(1)
+  ncfCreditoFiscal    Int      @default(1)  // e-CF 31
+  ncfConsumidor       Int      @default(1)  // e-CF 32
+  ncfNotaDebito       Int      @default(1)  // e-CF 33
+  ncfNotaCredito      Int      @default(1)  // e-CF 34
+  ncfCompras          Int      @default(1)  // e-CF 41
+  ncfGastosMenores    Int      @default(1)  // e-CF 43
+  ncfRegimen          Int      @default(1)  // e-CF 44
+  ncfGubernamental    Int      @default(1)  // e-CF 45
+  ncfExportaciones    Int      @default(1)  // e-CF 46
+  ncfPagosExterior    Int      @default(1)  // e-CF 47
   itbisRate           Float    @default(0.18)
   maxRetroactiveDays  Int      @default(5)
   maxRetryCount       Int      @default(5)
@@ -896,11 +906,16 @@ enum InvoiceStatus {
 }
 
 enum InvoiceType {
-  CREDITO_FISCAL
-  CONSUMO
-  NOTA_DEBITO
-  NOTA_CREDITO
-  REGIMEN_ESPECIAL
+  CREDITO_FISCAL    // e-CF 31
+  CONSUMO           // e-CF 32
+  NOTA_DEBITO       // e-CF 33
+  NOTA_CREDITO      // e-CF 34
+  COMPRAS           // e-CF 41
+  GASTOS_MENORES    // e-CF 43
+  REGIMEN_ESPECIAL  // e-CF 44
+  GUBERNAMENTAL     // e-CF 45
+  EXPORTACIONES     // e-CF 46
+  PAGOS_EXTERIOR    // e-CF 47
 }
 
 enum PaymentMethod {
@@ -1017,6 +1032,9 @@ enum AuditAction {
   SEND
   PAY
   CLOSE
+  EMIT
+  EXPORT
+  LOGIN
 }
 
 enum ApprovalStatus {

@@ -5,12 +5,16 @@ const ECF_DEFAULTS = {
   alanubeApiKey:       null as string | null,
   alanubeEnv:          'sandbox',
   alanubeApiUrl:       'https://api.alanube.com.do',
-  ncfCreditoFiscal:    1,
-  ncfConsumidor:       1,
-  ncfNotaDebito:       1,
-  ncfNotaCredito:      1,
-  ncfCompras:          1,
-  ncfRegimen:          1,
+  ncfCreditoFiscal:    1,  // e-CF 31
+  ncfConsumidor:       1,  // e-CF 32
+  ncfNotaDebito:       1,  // e-CF 33
+  ncfNotaCredito:      1,  // e-CF 34
+  ncfCompras:          1,  // e-CF 41
+  ncfGastosMenores:    1,  // e-CF 43
+  ncfRegimen:          1,  // e-CF 44
+  ncfGubernamental:    1,  // e-CF 45
+  ncfExportaciones:    1,  // e-CF 46
+  ncfPagosExterior:    1,  // e-CF 47
   itbisRate:           0.18,
   maxRetroactiveDays:  5,
   maxRetryCount:       5,

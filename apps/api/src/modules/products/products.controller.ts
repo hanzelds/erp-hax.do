@@ -28,6 +28,10 @@ export async function listCategories(req: Request, res: Response) {
 export async function createCategory(req: Request, res: Response) {
   sendCreated(res, await svc.createCategory(req.body))
 }
+export async function remove(req: Request, res: Response) {
+  await svc.deleteProduct(req.params.id)
+  sendSuccess(res, { message: 'Producto eliminado' })
+}
 export async function deleteCategory(req: Request, res: Response) {
   await svc.deleteCategory(req.params.id)
   sendSuccess(res, { message: 'Categoría eliminada' })

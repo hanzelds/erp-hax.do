@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ChevronDown, ChevronRight, RefreshCw, X } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, RefreshCw, X, Edit2 } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader, Badge, Skeleton, EmptyState } from '@/components/ui'
@@ -96,8 +96,9 @@ export default function FixedAssetsPage() {
   const [status, setStatus]               = useState('')
   const [category, setCategory]           = useState('')
   const [expanded, setExpanded]           = useState<string | null>(null)
-  const [showModal, setShowModal]         = useState(false)
+  const [showModal, setShowModal]           = useState(false)
   const [showDepPreview, setShowDepPreview] = useState(false)
+  const [editingAsset, setEditingAsset]     = useState<FixedAsset | null>(null)
 
   const { data, isLoading, refetch, isFetching } = useQuery<AssetsResponse>({
     queryKey: ['fixed-assets', { bu, status, category }],
@@ -212,7 +213,7 @@ export default function FixedAssetsPage() {
               <thead>
                 <tr className="border-b border-gray-100">
                   <th className="px-3 py-2.5 w-8" />
-                  {['Nombre', 'Categoría', 'Unidad', 'Valor Compra', 'Dep. Acumulada', 'Valor en Libros', 'Estado'].map((h) => (
+                  {['Nombre', 'Categoría', 'Unidad', 'Valor Compra', 'Dep. Acumulada', 'Valor en Libros', 'Estado', ''].map((h) => (
                     <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2.5">{h}</th>
                   ))}
                 </tr>
@@ -251,10 +252,22 @@ export default function FixedAssetsPage() {
                           {STATUS_LABELS[asset.status]}
                         </span>
                       </td>
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                        {isAdmin && asset.status !== 'RETIRED' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Editar activo"
+                            onClick={() => setEditingAsset(asset)}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                     {expanded === asset.id && (
                       <tr key={`${asset.id}-detail`} className="bg-gray-50/60">
-                        <td colSpan={8} className="px-6 py-4">
+                        <td colSpan={9} className="px-6 py-4">
                           {loadingExpanded ? (
                             <Skeleton className="h-24 w-full" />
                           ) : expandedAsset ? (
@@ -305,6 +318,12 @@ export default function FixedAssetsPage() {
       </Card>
 
       {showModal && <NewAssetModal onClose={() => setShowModal(false)} />}
+      {editingAsset && (
+        <EditAssetModal
+          asset={editingAsset}
+          onClose={() => setEditingAsset(null)}
+        />
+      )}
       {showDepPreview && (
         <DepreciationPreviewModal
           onClose={() => setShowDepPreview(false)}
@@ -541,6 +560,117 @@ function NewAssetModal({ onClose }: { onClose: () => void }) {
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
             <Button variant="primary" type="submit" loading={save.isPending}>Guardar Activo</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Edit Asset Modal ──────────────────────────────────────────
+
+function EditAssetModal({ asset, onClose }: { asset: FixedAsset; onClose: () => void }) {
+  const qc = useQueryClient()
+  const [form, setForm] = useState({
+    name:             asset.name,
+    category:         asset.category,
+    usefulLifeMonths: String(asset.usefulLifeMonths),
+    salvageValue:     String(asset.salvageValue),
+    ncfCompra:        asset.ncfCompra ?? '',
+    notes:            asset.notes ?? '',
+  })
+  const [err, setErr] = useState<string | null>(null)
+
+  const set = (key: keyof typeof form, value: string) => setForm((f) => ({ ...f, [key]: value }))
+
+  const save = useMutation({
+    mutationFn: async (body: any) => api.put(`/fixed-assets/${asset.id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fixed-assets'] })
+      qc.invalidateQueries({ queryKey: ['fixed-asset', asset.id] })
+      onClose()
+    },
+    onError: (e: any) => setErr(e?.response?.data?.error ?? 'Error al guardar'),
+  })
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setErr(null)
+    save.mutate({
+      name:             form.name.trim(),
+      category:         form.category,
+      usefulLifeMonths: parseInt(form.usefulLifeMonths),
+      salvageValue:     parseFloat(form.salvageValue) || 0,
+      ncfCompra:        form.ncfCompra.trim() || undefined,
+      notes:            form.notes.trim() || undefined,
+    })
+  }
+
+  const hasDepreciation = asset.accumulatedDepreciation > 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Editar Activo Fijo</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{asset.name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {hasDepreciation && (
+            <div className="px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-100 text-xs text-amber-700">
+              Este activo ya tiene depreciación acumulada. El valor de compra, fecha y unidad de negocio no pueden modificarse.
+            </div>
+          )}
+
+          <F label="Nombre *">
+            <input type="text" required value={form.name} onChange={(e) => set('name', e.target.value)} className={ic} />
+          </F>
+
+          <div className="grid grid-cols-2 gap-4">
+            <F label="Categoría *">
+              <select required value={form.category} onChange={(e) => set('category', e.target.value as AssetCategory)}
+                className={cn(ic, hasDepreciation && 'opacity-50 pointer-events-none')}>
+                {CATEGORY_OPTIONS.map((c) => (
+                  <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
+                ))}
+              </select>
+            </F>
+            <F label="Vida útil (meses) *">
+              <input type="number" required min="1"
+                value={form.usefulLifeMonths}
+                onChange={(e) => set('usefulLifeMonths', e.target.value)}
+                className={cn(ic, hasDepreciation && 'opacity-50 pointer-events-none')}
+                readOnly={hasDepreciation}
+              />
+            </F>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <F label="Valor residual">
+              <input type="number" min="0" step="0.01"
+                value={form.salvageValue}
+                onChange={(e) => set('salvageValue', e.target.value)}
+                className={ic}
+              />
+            </F>
+            <F label="NCF de Compra">
+              <input type="text" value={form.ncfCompra} onChange={(e) => set('ncfCompra', e.target.value)} className={ic} placeholder="B11XXXXXXXXXX" />
+            </F>
+          </div>
+
+          <F label="Notas">
+            <textarea rows={2} value={form.notes} onChange={(e) => set('notes', e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#293c4f] resize-none" />
+          </F>
+
+          {err && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-100">{err}</p>}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
+            <Button variant="primary" type="submit" loading={save.isPending}>Guardar cambios</Button>
           </div>
         </form>
       </div>

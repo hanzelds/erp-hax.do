@@ -1,0 +1,1 @@
+ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "paymentTerms" TEXT DEFAULT 'NET_30';

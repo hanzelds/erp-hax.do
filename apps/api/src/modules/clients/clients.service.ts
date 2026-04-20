@@ -1,5 +1,5 @@
 import { prisma } from '../../config/database'
-import { NotFoundError } from '../../middleware/errorHandler'
+import { NotFoundError, AppError } from '../../middleware/errorHandler'
 import { parsePagination } from '../../utils/response'
 
 export async function listClients(query: any) {
@@ -47,9 +47,21 @@ export async function updateClient(id: string, data: any) {
 }
 
 export async function deleteClient(id: string) {
-  const exists = await prisma.client.findUnique({ where: { id } })
-  if (!exists) throw new NotFoundError('Cliente')
-  return prisma.client.update({ where: { id }, data: { isActive: false } })
+  const client = await prisma.client.findUnique({
+    where: { id },
+    include: { _count: { select: { invoices: true, quotes: true } } },
+  })
+  if (!client) throw new NotFoundError('Cliente')
+
+  const related = (client._count.invoices ?? 0) + (client._count.quotes ?? 0)
+  if (related > 0) {
+    throw new AppError(
+      `No se puede eliminar: este cliente tiene ${client._count.invoices} factura(s) y ${client._count.quotes} cotización(es) asociadas.`,
+      409
+    )
+  }
+
+  return prisma.client.delete({ where: { id } })
 }
 
 export async function getClientStats() {

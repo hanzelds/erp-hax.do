@@ -3,24 +3,54 @@ import { NotFoundError, AppError } from '../../middleware/errorHandler'
 import { parsePagination } from '../../utils/response'
 import { InvoiceStatus, PaymentStatus, BusinessUnit } from '@prisma/client'
 import { invoiceEmitQueue } from '../../queues/invoice.queue'
+import { logger } from '../../config/logger'
 
 function generateInvoiceNumber(bu: string, count: number) {
   const prefix = bu === 'HAX' ? 'H' : 'K'
   return `${prefix}-${String(count + 1).padStart(6, '0')}`
 }
 
-/** Map NCF code from frontend (B01/B02/B14) → InvoiceType enum */
+/** Map e-CF type code from frontend → InvoiceType enum
+ *  Accepts both new e-CF codes (E31, 31) and legacy B-codes for backward compat
+ */
 const NCF_TO_INVOICE_TYPE: Record<string, string> = {
-  B01: 'CREDITO_FISCAL',
-  B02: 'CONSUMO',
-  B03: 'NOTA_DEBITO',
-  B04: 'NOTA_CREDITO',
-  B14: 'REGIMEN_ESPECIAL',
-  B15: 'CONSUMO', // Gubernamental → usa misma lógica que consumo
+  // New e-CF codes
+  'E31': 'CREDITO_FISCAL',
+  'E32': 'CONSUMO',
+  'E33': 'NOTA_DEBITO',
+  'E34': 'NOTA_CREDITO',
+  'E41': 'COMPRAS',
+  'E43': 'GASTOS_MENORES',
+  'E44': 'REGIMEN_ESPECIAL',
+  'E45': 'GUBERNAMENTAL',
+  'E46': 'EXPORTACIONES',
+  'E47': 'PAGOS_EXTERIOR',
+  // Short codes (without E prefix, from selects)
+  '31': 'CREDITO_FISCAL',
+  '32': 'CONSUMO',
+  '33': 'NOTA_DEBITO',
+  '34': 'NOTA_CREDITO',
+  '41': 'COMPRAS',
+  '43': 'GASTOS_MENORES',
+  '44': 'REGIMEN_ESPECIAL',
+  '45': 'GUBERNAMENTAL',
+  '46': 'EXPORTACIONES',
+  '47': 'PAGOS_EXTERIOR',
+  // Legacy B-codes (backward compat)
+  'B01': 'CREDITO_FISCAL',
+  'B02': 'CONSUMO',
+  'B03': 'NOTA_DEBITO',
+  'B04': 'NOTA_CREDITO',
+  'B11': 'COMPRAS',
+  'B14': 'REGIMEN_ESPECIAL',
+  'B15': 'GUBERNAMENTAL',
 }
 
-/** B14 (Régimen Especial) — ITBIS siempre exento */
-const ITBIS_EXEMPT_TYPES = new Set(['REGIMEN_ESPECIAL', 'B14'])
+/** Tipos con ITBIS exento: e-CF 44 (Régimen Especial), 45 (Gubernamental), 46 (Exportaciones), 47 (Pagos Exterior) */
+const ITBIS_EXEMPT_TYPES = new Set([
+  'REGIMEN_ESPECIAL', 'GUBERNAMENTAL', 'EXPORTACIONES', 'PAGOS_EXTERIOR',
+  'B14', 'B15', 'E44', 'E45', 'E46', 'E47',
+])
 
 async function autoJournalEntry(opts: {
   type: 'INVOICE' | 'PAYMENT' | 'CREDIT_NOTE'
@@ -107,6 +137,13 @@ export async function createInvoice(data: any) {
   const count = await prisma.invoice.count({ where: { businessUnit: data.businessUnit } })
   const number = generateInvoiceNumber(data.businessUnit, count)
 
+  // Normalize DateTime fields: convert YYYY-MM-DD strings to Date objects
+  // Prisma rejects date-only strings — needs full DateTime or native Date
+  if (!data.issueDate) delete data.issueDate
+  else data.issueDate = new Date(data.issueDate)
+  if (!data.dueDate)   delete data.dueDate
+  else data.dueDate   = new Date(data.dueDate)
+
   // Map ncfType (B01/B02/B14) → InvoiceType enum and set on data
   const { items: rawItems, ncfType, type: rawType, ...invoiceData } = data
   const resolvedType = NCF_TO_INVOICE_TYPE[ncfType] ?? rawType ?? 'CONSUMO'
@@ -144,6 +181,12 @@ export async function updateInvoice(id: string, data: any) {
   const invoice = await prisma.invoice.findUnique({ where: { id } })
   if (!invoice) throw new NotFoundError('Factura')
   if (invoice.status !== InvoiceStatus.DRAFT) throw new AppError('Solo se pueden editar facturas en DRAFT', 400)
+
+  // Normalize DateTime fields
+  if (!data.issueDate) delete data.issueDate
+  else data.issueDate = new Date(data.issueDate)
+  if (!data.dueDate)   delete data.dueDate
+  else data.dueDate   = new Date(data.dueDate)
 
   const { items, ...invoiceData } = data
 
@@ -243,15 +286,48 @@ export async function addPayment(invoiceId: string, data: any) {
     }),
   ])
 
-  // Auto journal entry: Dr 1102 Banco Popular / Cr 1201 CxC
+  // Auto bank deposit: TRANSFER or CHECK → credit active bank account
+  const BANK_METHODS = ['TRANSFER', 'CHECK', 'TRANSFERENCIA', 'CHEQUE']
+  if (BANK_METHODS.includes((data.method ?? '').toUpperCase())) {
+    try {
+      // Find first active bank account (prefer same BU, fallback to any)
+      const bankAccount = await prisma.bankAccount.findFirst({
+        where: { isActive: true, businessUnit: invoice.businessUnit as any },
+      }) ?? await prisma.bankAccount.findFirst({ where: { isActive: true } })
+
+      if (bankAccount) {
+        await prisma.$transaction([
+          prisma.bankTransaction.create({
+            data: {
+              bankAccountId: bankAccount.id,
+              type: 'CREDIT',
+              amount,
+              description: `Cobro factura ${invoice.number}`,
+              reference: data.reference ?? `PAY-${payment.id.slice(-6).toUpperCase()}`,
+              transactionDate: paidAt,
+              status: 'MATCHED',
+              matchedAt: new Date(),
+            },
+          }),
+          prisma.bankAccount.update({
+            where: { id: bankAccount.id },
+            data: { balance: { increment: amount } },
+          }),
+        ])
+      }
+    } catch { /* non-critical — don't fail payment */ }
+  }
+
+  // Auto journal entry: Dr Banco / Cr CxC
   const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (ecfConfig?.autoJournalEntries) {
+    const bankCode = ecfConfig.acctBank ?? '1102'
     const period = `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}`
     await autoJournalEntry({
       type: 'PAYMENT',
       businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
       description: `Pago factura ${invoice.number}`,
-      debitCode: '1102',
+      debitCode: bankCode,
       creditCode: '1201',
       amount,
       invoiceId,

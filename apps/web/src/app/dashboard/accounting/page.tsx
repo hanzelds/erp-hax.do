@@ -37,7 +37,6 @@ const ACCOUNT_TYPE_LABEL: Record<string, string> = {
 export default function AccountingPage() {
   const [tab, setTab] = useState<Tab>('journal')
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7))
-  const [bu, setBu] = useState('')
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'ADMIN'
 
@@ -47,16 +46,8 @@ export default function AccountingPage() {
         title="Contabilidad"
         subtitle="Asientos · Cuentas · Estados financieros · ITBIS"
         actions={
-          <div className="flex items-center gap-2">
-            <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700" />
-            <select value={bu} onChange={(e) => setBu(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700">
-              <option value="">Ambas BU</option>
-              <option value="HAX">HAX</option>
-              <option value="KODER">KODER</option>
-            </select>
-          </div>
+          <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700" />
         }
       />
 
@@ -70,12 +61,12 @@ export default function AccountingPage() {
         ))}
       </div>
 
-      {tab === 'journal'       && <JournalTab period={period} bu={bu} />}
+      {tab === 'journal'       && <JournalTab period={period} />}
       {tab === 'accounts'      && <AccountsTab />}
       {tab === 'trial-balance' && <TrialBalanceTab period={period} />}
       {tab === 'balance-sheet' && <BalanceSheetTab period={period} />}
-      {tab === 'pnl'           && <PnLTab period={period} bu={bu} />}
-      {tab === 'margins'       && <MarginsTab year={parseInt(period.slice(0, 4))} bu={bu} />}
+      {tab === 'pnl'           && <PnLTab period={period} />}
+      {tab === 'margins'       && <MarginsTab year={parseInt(period.slice(0, 4))} />}
       {tab === 'itbis'         && <ItbisTab />}
       {tab === 'periods'       && <PeriodsTab isAdmin={isAdmin} />}
     </div>
@@ -84,15 +75,15 @@ export default function AccountingPage() {
 
 // ── Journal ───────────────────────────────────────────────────
 
-function JournalTab({ period, bu }: { period: string; bu: string }) {
+function JournalTab({ period }: { period: string }) {
   const { data, isLoading } = useQuery<any>({
-    queryKey: ['journal', period, bu],
+    queryKey: ['journal', period],
     queryFn: async () => {
-      const { data } = await api.get('/accounting/journal', { params: { period, businessUnit: bu || undefined, limit: 100 } })
+      const { data } = await api.get('/accounting/journal', { params: { period, limit: 200 } })
       return data.data ?? data
     },
   })
-  const entries = data?.data ?? []
+  const entries: any[] = Array.isArray(data) ? data : (data?.data ?? [])
   if (isLoading) return <Skeletons />
   if (!entries.length) return <EmptyState icon={<BookOpen className="w-5 h-5" />} title="Sin asientos" description="No hay asientos para este período." />
   return (
@@ -250,10 +241,10 @@ function BalanceSheetTab({ period }: { period: string }) {
 
 // ── P&L ───────────────────────────────────────────────────────
 
-function PnLTab({ period, bu }: { period: string; bu: string }) {
+function PnLTab({ period }: { period: string }) {
   const { data, isLoading } = useQuery<any>({
-    queryKey: ['pnl', period, bu],
-    queryFn: async () => { const { data } = await api.get('/accounting/pnl', { params: { period, businessUnit: bu || undefined } }); return data.data ?? data },
+    queryKey: ['pnl', period],
+    queryFn: async () => { const { data } = await api.get('/accounting/pnl', { params: { period } }); return data.data ?? data },
   })
   if (isLoading) return <Skeletons />
   if (!data) return null
@@ -294,10 +285,10 @@ function PnLTab({ period, bu }: { period: string; bu: string }) {
 
 // ── Margins ───────────────────────────────────────────────────
 
-function MarginsTab({ year, bu }: { year: number; bu: string }) {
+function MarginsTab({ year }: { year: number }) {
   const { data, isLoading } = useQuery<any>({
-    queryKey: ['margins', year, bu],
-    queryFn: async () => { const { data } = await api.get('/accounting/margins', { params: { year, businessUnit: bu || undefined } }); return data.data ?? data },
+    queryKey: ['margins', year],
+    queryFn: async () => { const { data } = await api.get('/accounting/margins', { params: { year } }); return data.data ?? data },
   })
   if (isLoading) return <Skeletons />
   if (!data) return null

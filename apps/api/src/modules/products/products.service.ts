@@ -59,6 +59,12 @@ export async function toggleProduct(id: string) {
   return prisma.product.update({ where: { id }, data: { isActive: !product.isActive } })
 }
 
+export async function deleteProduct(id: string) {
+  const product = await prisma.product.findUnique({ where: { id } })
+  if (!product) throw new NotFoundError('Producto')
+  return prisma.product.delete({ where: { id } })
+}
+
 // Categories
 export async function listCategories() {
   return prisma.productCategory.findMany({

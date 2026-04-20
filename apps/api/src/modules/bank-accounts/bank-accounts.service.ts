@@ -66,6 +66,27 @@ export async function addTransaction(accountId: string, data: any) {
   return tx
 }
 
+export async function getTransactions(accountId: string, query: any) {
+  const account = await prisma.bankAccount.findUnique({ where: { id: accountId } })
+  if (!account) throw new NotFoundError('Cuenta bancaria')
+
+  const { page, limit, skip } = parsePagination(query)
+  const where: any = { bankAccountId: accountId }
+  if (query.type) where.type = query.type
+  if (query.status) where.status = query.status
+
+  const [data, total] = await Promise.all([
+    prisma.bankTransaction.findMany({
+      where,
+      orderBy: { transactionDate: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.bankTransaction.count({ where }),
+  ])
+  return { data, total, page, limit, account }
+}
+
 export async function getAccountSummary(businessUnit?: BusinessUnit) {
   const where: any = businessUnit ? { businessUnit } : {}
   const accounts = await prisma.bankAccount.findMany({

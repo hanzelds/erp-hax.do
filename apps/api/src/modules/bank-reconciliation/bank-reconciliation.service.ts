@@ -120,20 +120,61 @@ export async function importTransactions(
 
 export async function matchTransaction(
   txId: string,
-  opts: { matchedPaymentId?: string; matchedExpenseId?: string },
+  opts: {
+    matchedPaymentId?: string
+    matchedExpenseId?: string
+    accountCode?: string
+    classifiedInvoiceId?: string
+  },
 ) {
   const tx = await prisma.reconciliationTx.findUnique({ where: { id: txId } })
   if (!tx) throw new NotFoundError('Transacción')
   if (tx.status === 'IGNORED') throw new AppError('La transacción está ignorada', 400)
 
-  return prisma.reconciliationTx.update({
+  const updated = await prisma.reconciliationTx.update({
     where: { id: txId },
     data: {
-      matchedPaymentId: opts.matchedPaymentId,
-      matchedExpenseId: opts.matchedExpenseId,
+      matchedPaymentId:      opts.matchedPaymentId      ?? tx.matchedPaymentId,
+      matchedExpenseId:      opts.matchedExpenseId      ?? tx.matchedExpenseId,
+      accountCode:           opts.accountCode           ?? (tx as any).accountCode,
+      classifiedInvoiceId:   opts.classifiedInvoiceId   ?? (tx as any).classifiedInvoiceId,
       status: 'MATCHED_MANUAL',
     },
   })
+
+  // Auto journal entry when accountCode is provided
+  if (opts.accountCode) {
+    try {
+      const rec = await prisma.bankReconciliation.findUnique({ where: { id: tx.reconciliationId } })
+      if (rec) {
+        const txDate = new Date(tx.txDate)
+        const period = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`
+        const [debitCode, creditCode] = tx.amount >= 0
+          ? ['1102', opts.accountCode]   // Credit → Dr Banco / Cr Income account
+          : [opts.accountCode, '1102']   // Debit  → Dr Expense account / Cr Banco
+
+        const [debit, credit] = await Promise.all([
+          prisma.account.findUnique({ where: { code: debitCode } }),
+          prisma.account.findUnique({ where: { code: creditCode } }),
+        ])
+        if (debit && credit) {
+          await prisma.journalEntry.create({
+            data: {
+              type: tx.amount >= 0 ? 'PAYMENT' : 'INVOICE',
+              businessUnit: (rec as any).bankAccount?.businessUnit ?? 'HAX',
+              description: `Conciliación bancaria: ${tx.description}`,
+              debitAccountId: debit.id,
+              creditAccountId: credit.id,
+              amount: Math.abs(tx.amount),
+              period,
+            },
+          })
+        }
+      }
+    } catch { /* non-critical */ }
+  }
+
+  return updated
 }
 
 export async function ignoreTransaction(txId: string, notes: string) {

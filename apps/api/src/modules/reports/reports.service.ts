@@ -137,7 +137,7 @@ export async function getPnL(period: string, businessUnit?: BusinessUnit) {
 
   const [revenue, expenses, collected] = await Promise.all([
     prisma.invoice.aggregate({
-      where: { ...buWhere, issueDate: { gte: start, lte: end }, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, issueDate: { gte: start, lte: end }, status: { not: InvoiceStatus.CANCELLED }, type: { not: 'PROFORMA' as any } },
       _sum: { total: true, taxAmount: true },
     }),
     prisma.expense.aggregate({
@@ -252,7 +252,13 @@ export async function get607(period: string, businessUnit?: BusinessUnit) {
   const buWhere: any = businessUnit ? { businessUnit } : {}
 
   const invoices = await prisma.invoice.findMany({
-    where: { ...buWhere, issueDate: { gte: start, lte: end }, status: { not: InvoiceStatus.CANCELLED }, ncf: { not: null } },
+    where: {
+      ...buWhere,
+      issueDate: { gte: start, lte: end },
+      status:    { not: InvoiceStatus.CANCELLED },
+      ncf:       { not: null },
+      type:      { not: 'PROFORMA' as any },  // Proformas are non-fiscal
+    },
     include: { client: { select: { name: true, rnc: true } } },
     orderBy: { issueDate: 'asc' },
   })

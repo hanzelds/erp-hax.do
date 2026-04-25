@@ -53,6 +53,7 @@ const TYPE_LABELS: Record<string, string> = {
   NOTA_DEBITO:      'Nota de Débito',
   NOTA_CREDITO:     'Nota de Crédito',
   REGIMEN_ESPECIAL: 'Régimen Especial (B14)',
+  PROFORMA:         'Proforma',
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -81,9 +82,11 @@ export default function InvoiceDetailPage() {
   const user     = useAuthStore((s) => s.user)
   const isAdmin  = user?.role === 'ADMIN'
 
-  const [payModal, setPayModal]       = useState(false)
-  const [emitModal, setEmitModal]     = useState(false)
-  const [payForm, setPayForm]         = useState({ amount: 0, method: 'TRANSFER', reference: '' })
+  const [payModal, setPayModal]         = useState(false)
+  const [emitModal, setEmitModal]       = useState(false)
+  const [convertModal, setConvertModal] = useState(false)
+  const [convertNcf, setConvertNcf]     = useState('E31')
+  const [payForm, setPayForm]           = useState({ amount: 0, method: 'TRANSFER', reference: '' })
 
   const { data: invoice, isLoading } = useQuery<InvoiceDetail>({
     queryKey: ['invoice', id],
@@ -131,6 +134,16 @@ export default function InvoiceDetailPage() {
     },
   })
 
+  const convertProforma = useMutation({
+    mutationFn: async () => api.post(`/invoices/${id}/convert-proforma`, { ncfType: convertNcf }),
+    onSuccess: (res) => {
+      const newId = res.data?.data?.id ?? res.data?.id
+      setConvertModal(false)
+      if (newId) router.push(`/dashboard/invoices/${newId}`)
+      else qc.invalidateQueries({ queryKey: ['invoices'] })
+    },
+  })
+
   if (isLoading) return (
     <div className="space-y-4">
       <Skeleton className="h-10 w-48 rounded-lg" />
@@ -140,12 +153,15 @@ export default function InvoiceDetailPage() {
 
   if (!invoice) return <p className="text-gray-500 text-sm">Factura no encontrada.</p>
 
-  const isPending = invoice.status === 'SENDING' || invoice.status === 'IN_PROCESS'
-  const canEmit   = invoice.status === 'DRAFT'
-  const canRetry  = invoice.status === 'REJECTED' && isAdmin
-  const canPay    = invoice.status === 'APPROVED' && invoice.amountDue > 0
-  const canCancel = invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && !isPending
-  const canCreditNote = (invoice.status === 'APPROVED' || invoice.status === 'PAID') && invoice.type !== 'NOTA_CREDITO'
+  const isProforma = invoice.type === 'PROFORMA'
+  const isPending  = invoice.status === 'SENDING' || invoice.status === 'IN_PROCESS'
+  const canEmit    = invoice.status === 'DRAFT' && !isProforma
+  const canApproveProforma = isProforma && invoice.status === 'DRAFT'
+  const canConvertProforma = isProforma && (invoice.status === 'DRAFT' || invoice.status === 'APPROVED')
+  const canRetry   = invoice.status === 'REJECTED' && isAdmin && !isProforma
+  const canPay     = invoice.status === 'APPROVED' && invoice.amountDue > 0 && !isProforma
+  const canCancel  = invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && !isPending
+  const canCreditNote = (invoice.status === 'APPROVED' || invoice.status === 'PAID') && invoice.type !== 'NOTA_CREDITO' && !isProforma
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -224,6 +240,17 @@ export default function InvoiceDetailPage() {
             </div>
           </Card>
 
+          {/* Proforma notice */}
+          {isProforma && (
+            <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3 text-xs text-purple-700 flex items-start gap-2">
+              <span className="text-purple-400 text-base leading-none">ℹ</span>
+              <div>
+                <p className="font-semibold mb-0.5">Proforma — documento no fiscal</p>
+                <p className="text-purple-600">Este documento no genera NCF, no incluye ITBIS y no reporta a DGII. Para convertirlo en una factura fiscal, usa el botón <strong>Convertir a factura</strong>.</p>
+              </div>
+            </div>
+          )}
+
           {/* Credit note notice */}
           {invoice.originalInvoiceId && (
             <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 text-xs text-orange-700">
@@ -269,11 +296,13 @@ export default function InvoiceDetailPage() {
                     <td className="px-3 py-2.5 text-xs text-gray-600">{item.quantity}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-600">{formatCurrency(item.unitPrice)}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-600">
-                      {invoice.type === 'REGIMEN_ESPECIAL'
-                        ? <span className="text-amber-600 font-medium">Exento</span>
-                        : item.taxAmount === 0
-                          ? <span className="text-gray-400">Exento</span>
-                          : formatCurrency(item.taxAmount)}
+                      {invoice.type === 'PROFORMA'
+                        ? <span className="text-purple-500 font-medium">N/A</span>
+                        : invoice.type === 'REGIMEN_ESPECIAL'
+                          ? <span className="text-amber-600 font-medium">Exento</span>
+                          : item.taxAmount === 0
+                            ? <span className="text-gray-400">Exento</span>
+                            : formatCurrency(item.taxAmount)}
                     </td>
                     <td className="px-3 py-2.5 text-xs font-semibold text-gray-800">{formatCurrency(item.total)}</td>
                   </tr>
@@ -284,9 +313,11 @@ export default function InvoiceDetailPage() {
               <div className="flex justify-between text-xs text-gray-500"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span></div>
               <div className="flex justify-between text-xs text-gray-500">
                 <span>ITBIS</span>
-                {invoice.type === 'REGIMEN_ESPECIAL'
-                  ? <span className="text-amber-600 font-medium">Exento (B14)</span>
-                  : <span>{formatCurrency(invoice.taxAmount)}</span>}
+                {invoice.type === 'PROFORMA'
+                  ? <span className="text-purple-500 font-medium">No aplica</span>
+                  : invoice.type === 'REGIMEN_ESPECIAL'
+                    ? <span className="text-amber-600 font-medium">Exento (B14)</span>
+                    : <span>{formatCurrency(invoice.taxAmount)}</span>}
               </div>
               <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-100"><span>Total</span><span>{formatCurrency(invoice.total)}</span></div>
             </div>
@@ -372,6 +403,25 @@ export default function InvoiceDetailPage() {
             </div>
 
             <div className="mt-4 space-y-2">
+              {canApproveProforma && (
+                <Button
+                  variant="primary" size="sm" className="w-full"
+                  icon={<Send className="w-3.5 h-3.5" />}
+                  loading={emit.isPending}
+                  onClick={() => emit.mutate()}
+                >
+                  Aprobar proforma
+                </Button>
+              )}
+              {canConvertProforma && (
+                <Button
+                  variant="secondary" size="sm" className="w-full"
+                  icon={<FileText className="w-3.5 h-3.5" />}
+                  onClick={() => setConvertModal(true)}
+                >
+                  Convertir a factura
+                </Button>
+              )}
               {canEmit && (
                 <Button
                   variant="primary" size="sm" className="w-full"
@@ -516,6 +566,41 @@ export default function InvoiceDetailPage() {
               <Button variant="secondary" size="sm" onClick={() => setPayModal(false)}>Cancelar</Button>
               <Button variant="primary" size="sm" loading={addPayment.isPending} onClick={() => addPayment.mutate(payForm)}>
                 Confirmar cobro
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Convert proforma modal */}
+      {convertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-900">Convertir proforma a factura</h2>
+              <button onClick={() => setConvertModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Selecciona el tipo de comprobante fiscal. Se creará una nueva factura en estado DRAFT con los mismos ítems.</p>
+            <F label="Tipo e-CF destino">
+              <select value={convertNcf} onChange={(e) => setConvertNcf(e.target.value)} className={ic}>
+                <option value="E31">31 — Crédito Fiscal</option>
+                <option value="E32">32 — Consumidor Final</option>
+                <option value="E33">33 — Nota de Débito</option>
+                <option value="E44">44 — Régimen Especial (exento)</option>
+                <option value="E45">45 — Gubernamental (exento)</option>
+                <option value="E46">46 — Exportaciones (exento)</option>
+                <option value="E47">47 — Pagos al Exterior (exento)</option>
+              </select>
+            </F>
+            {convertProforma.isError && (
+              <p className="text-xs text-red-600 mt-3">
+                {(convertProforma.error as any)?.response?.data?.error ?? 'Error al convertir'}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 mt-5">
+              <Button variant="secondary" size="sm" onClick={() => setConvertModal(false)}>Cancelar</Button>
+              <Button variant="primary" size="sm" loading={convertProforma.isPending} onClick={() => convertProforma.mutate()}>
+                Convertir
               </Button>
             </div>
           </div>

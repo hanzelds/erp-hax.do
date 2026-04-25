@@ -58,6 +58,7 @@ const TYPE_OPTIONS = [
   { value: 'CREDITO_FISCAL', label: 'Crédito Fiscal (B01)' },
   { value: 'CONSUMO', label: 'Consumidor Final (B02)' },
   { value: 'NOTA_CREDITO', label: 'Nota de Crédito (B04)' },
+  { value: 'PROFORMA', label: 'Proforma' },
 ]
 
 export default function InvoicesPage() {

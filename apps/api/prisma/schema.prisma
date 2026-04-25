@@ -946,6 +946,7 @@ enum InvoiceType {
   GUBERNAMENTAL     // e-CF 45
   EXPORTACIONES     // e-CF 46
   PAGOS_EXTERIOR    // e-CF 47
+  PROFORMA          // Non-fiscal quotation/proforma — no ITBIS, not in 607
 }
 
 enum PaymentMethod {

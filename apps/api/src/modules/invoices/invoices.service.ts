@@ -54,8 +54,6 @@ const ITBIS_EXEMPT_TYPES = new Set([
   'B14', 'B15', 'E44', 'E45', 'E46', 'E47',
 ])
 
-/** Non-fiscal types: skip journal entries, 607, P&L revenue */
-const NON_FISCAL_TYPES = new Set(['PROFORMA'])
 
 async function autoJournalEntry(opts: {
   type: 'INVOICE' | 'PAYMENT' | 'CREDIT_NOTE'
@@ -358,12 +356,36 @@ export async function emitInvoice(id: string) {
     throw new AppError(`No se puede emitir una factura en estado ${invoice.status}`, 400)
   }
 
-  // ── PROFORMA: approve directly, no Alanube, no journal entries ──
+  // ── PROFORMA: approve directly (no Alanube/NCF) + create journal entries ──
   if (invoice.type === 'PROFORMA') {
-    return prisma.invoice.update({
+    const approvedAt = new Date()
+    const updated = await prisma.invoice.update({
       where: { id },
-      data: { status: InvoiceStatus.APPROVED, approvedAt: new Date() },
+      data: { status: InvoiceStatus.APPROVED, approvedAt },
     })
+
+    // Journal entries: Dr CxC (subtotal) / Cr Ingreso — same as a normal invoice
+    // No ITBIS entry since taxAmount = 0 on proformas
+    const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+    if (ecfConfig?.autoJournalEntries && invoice.subtotal > 0) {
+      const period = `${approvedAt.getFullYear()}-${String(approvedAt.getMonth() + 1).padStart(2, '0')}`
+      const incomeAccount = invoice.businessUnit === 'HAX'
+        ? (ecfConfig.acctIncomeHax   || '4101')
+        : (ecfConfig.acctIncomeKoder || '4102')
+      const acctReceivables = ecfConfig.acctReceivables || '1201'
+      await autoJournalEntry({
+        type: 'INVOICE',
+        businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+        description: `Proforma aprobada ${invoice.number} - subtotal`,
+        debitCode:  acctReceivables,
+        creditCode: incomeAccount,
+        amount: invoice.subtotal,
+        invoiceId: id,
+        period,
+      })
+    }
+
+    return updated
   }
 
   // Validate items

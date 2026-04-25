@@ -31,7 +31,7 @@ export const navigation: NavSection[] = [
     items: [
       { label: 'Facturación',  href: '/dashboard/invoices',  icon: FileText,      module: 'invoices',  description: 'Facturas electrónicas' },
       { label: 'Cotizaciones', href: '/dashboard/quotes',    icon: ClipboardList, module: 'quotes',    description: 'Propuestas y cotizaciones' },
-      { label: 'Cobros',       href: '/dashboard/payments',  icon: CreditCard,    module: 'payments',  description: 'Pagos y cobros' },
+      { label: 'Pagos recibidos', href: '/dashboard/payments', icon: CreditCard,    module: 'payments',  description: 'Pagos y cobros' },
       { label: 'Clientes',     href: '/dashboard/clients',   icon: Users,         module: 'clients',   description: 'Gestión de clientes' },
       { label: 'Productos',    href: '/dashboard/products',  icon: Package,       module: 'products',  description: 'Catálogo de productos' },
     ],
@@ -47,10 +47,10 @@ export const navigation: NavSection[] = [
     title: 'Finanzas',
     items: [
       { label: 'Cuentas Bancarias', href: '/dashboard/bank-accounts', icon: Landmark, module: 'bank-accounts', description: 'Cuentas, transacciones y conciliación' },
-      { label: 'Contabilidad',      href: '/dashboard/accounting',          icon: BookOpen,  module: 'accounting',          description: 'Asientos y cuentas' },
-      { label: 'Reportes',          href: '/dashboard/reports',             icon: BarChart3, module: 'reports',             description: '606 · 607 · P&L' },
-      { label: 'Presupuestos',      href: '/dashboard/budgets',             icon: PiggyBank, module: 'budgets',             description: 'Ejecución presupuestaria' },
-      { label: 'Activos Fijos',     href: '/dashboard/fixed-assets',        icon: Layers,    module: 'fixed-assets',        description: 'Depreciación de activos' },
+      { label: 'Contabilidad',      href: '/dashboard/accounting',   icon: BookOpen,  module: 'accounting',    description: 'Asientos y cuentas' },
+      { label: 'Activos Fijos',     href: '/dashboard/fixed-assets', icon: Layers,    module: 'fixed-assets',  description: 'Depreciación de activos' },
+      { label: 'Reportes',          href: '/dashboard/reports',      icon: BarChart3, module: 'reports',       description: '606 · 607 · P&L' },
+      { label: 'Presupuestos',      href: '/dashboard/budgets',      icon: PiggyBank, module: 'budgets',       description: 'Ejecución presupuestaria' },
     ],
   },
   {

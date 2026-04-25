@@ -144,14 +144,16 @@ export async function markPaid(id: string) {
   if (!expense) throw new NotFoundError('Gasto')
   if (expense.status !== ExpenseStatus.APPROVED) throw new AppError('Solo se pueden pagar gastos APPROVED', 400)
 
-  const updated = await prisma.expense.update({ where: { id }, data: { status: ExpenseStatus.PAID, paidAt: new Date() } })
+  const paidAt  = new Date()
+  const updated = await prisma.expense.update({ where: { id }, data: { status: ExpenseStatus.PAID, paidAt } })
+
+  const date   = paidAt
+  const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
   // Auto journal entry: Dr acctPayablesSuppliers / Cr acctBank
   const config = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (config?.autoJournalEntries) {
-    const codes  = await getExpenseAcctCodes()
-    const date   = expense.paidAt ?? new Date()
-    const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    const codes = await getExpenseAcctCodes()
     await autoJournalEntry({
       type: 'PAYMENT',
       businessUnit: expense.businessUnit as 'HAX' | 'KODER',
@@ -162,6 +164,39 @@ export async function markPaid(id: string) {
       expenseId: id,
       period,
     })
+  }
+
+  // Create BankTransaction DEBIT when payment is via bank (TRANSFER, CHECK, DEBIT_CARD)
+  const bankPayMethods = ['TRANSFER', 'CHECK', 'DEBIT_CARD']
+  if (expense.paymentMethod && bankPayMethods.includes(expense.paymentMethod)) {
+    try {
+      const mainAccount = await prisma.bankAccount.findFirst({
+        where: { isActive: true, businessUnit: expense.businessUnit as any },
+        orderBy: { createdAt: 'asc' },
+      })
+      if (mainAccount) {
+        const newBalance = mainAccount.balance - expense.total
+        await prisma.bankAccount.update({
+          where: { id: mainAccount.id },
+          data:  { balance: newBalance },
+        })
+        await prisma.bankTransaction.create({
+          data: {
+            bankAccountId:   mainAccount.id,
+            type:            'DEBIT',
+            amount:          expense.total,
+            balance:         newBalance,
+            description:     `Gasto: ${expense.description}`,
+            reference:       expense.ncf ?? undefined,
+            transactionDate: paidAt,
+            status:          'UNMATCHED',
+          },
+        })
+      }
+    } catch (e: any) {
+      // Non-fatal: log but don't fail the payment
+      console.error(`[Expenses] Bank debit error for expense ${id}:`, e.message)
+    }
   }
 
   return updated

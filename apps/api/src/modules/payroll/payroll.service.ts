@@ -4,6 +4,7 @@ import { parsePagination } from '../../utils/response'
 import { BusinessUnit, EmployeeType, PayrollAdditionType } from '@prisma/client'
 import { logger } from '../../config/logger'
 import { generateAllPayrollSlips } from '../../services/payroll-pdf.service'
+import { sendEmail } from '../../services/email.service'
 
 // ── TSS / ISR defaults (overridden by DB config at runtime) ──
 const AFP_EMPLOYEE_DEFAULT   = 0.0287
@@ -201,14 +202,15 @@ export async function calculatePayroll(businessUnit: string, period: string) {
   const items = employees.map((emp) => {
     const empAdditions = savedAdditions.get(emp.id) ?? []
     const additionsTotal = empAdditions.reduce((s, a) => s + a.amount, 0)
-    const gross  = emp.baseSalary + additionsTotal
-    const afpEmp = gross * rates.AFP_EMPLOYEE
-    const sfsEmp = gross * rates.SFS_EMPLOYEE
-    const isr    = calcMonthlyISR(gross)
-    const net    = gross - afpEmp - sfsEmp - isr
-    const afpEr  = gross * rates.AFP_EMPLOYER
-    const sfsEr  = gross * rates.SFS_EMPLOYER
-    const riesgo = gross * rates.SFS_RIESGO
+    const gross   = emp.baseSalary + additionsTotal
+    const tssBase = emp.baseSalary   // AFP/SFS apply only to base salary (not commissions/overtime/incentives)
+    const afpEmp  = tssBase * rates.AFP_EMPLOYEE
+    const sfsEmp  = tssBase * rates.SFS_EMPLOYEE
+    const isr     = calcMonthlyISR(gross)   // ISR on full gross income
+    const net     = gross - afpEmp - sfsEmp - isr
+    const afpEr   = tssBase * rates.AFP_EMPLOYER
+    const sfsEr   = tssBase * rates.SFS_EMPLOYER
+    const riesgo  = tssBase * rates.SFS_RIESGO
 
     return {
       employeeId:       emp.id,
@@ -320,7 +322,16 @@ export async function approvePayroll(id: string) {
 }
 
 export async function processPayment(id: string) {
-  const payroll = await prisma.payroll.findUnique({ where: { id } })
+  const payroll = await prisma.payroll.findUnique({
+    where: { id },
+    include: {
+      items: {
+        include: {
+          employee: { select: { id: true, name: true, email: true } },
+        },
+      },
+    },
+  })
   if (!payroll) throw new NotFoundError('Nómina')
   if (payroll.status !== 'APPROVED') throw new AppError('Solo se pueden pagar nóminas aprobadas', 400)
 
@@ -343,10 +354,68 @@ export async function processPayment(id: string) {
     })
   }
 
-  // Auto-generate pay slips (fire-and-forget)
-  generateAllPayrollSlips(id).catch((e: any) =>
-    logger.error(`[Payroll] PDF slip generation error for payroll ${id}:`, e.message)
-  )
+  // Create BankTransaction DEBIT on main account for this business unit
+  ;(async () => {
+    try {
+      const mainAccount = await prisma.bankAccount.findFirst({
+        where: { isActive: true, businessUnit: payroll.businessUnit as any },
+        orderBy: { createdAt: 'asc' },
+      })
+      if (mainAccount) {
+        const newBalance = mainAccount.balance - payroll.totalNet
+        await prisma.bankAccount.update({
+          where: { id: mainAccount.id },
+          data:  { balance: newBalance },
+        })
+        await prisma.bankTransaction.create({
+          data: {
+            bankAccountId:   mainAccount.id,
+            type:            'DEBIT',
+            amount:          payroll.totalNet,
+            balance:         newBalance,
+            description:     `Pago nómina ${payroll.period}`,
+            transactionDate: new Date(),
+            status:          'UNMATCHED',
+          },
+        })
+      }
+    } catch (e: any) {
+      logger.error(`[Payroll] Bank debit error for payroll ${id}:`, e.message)
+    }
+  })()
+
+  // Auto-generate pay slips and email to each employee (fire-and-forget)
+  ;(async () => {
+    try {
+      await generateAllPayrollSlips(id)
+      // After PDF generation, send email notifications to each employee
+      for (const item of payroll.items) {
+        if (!item.employee.email) continue
+        const period = payroll.period
+        sendEmail({
+          to:      item.employee.email,
+          subject: `Comprobante de pago nómina ${period} — ${process.env.COMPANY_NAME ?? 'ERP'}`,
+          html: `
+            <div style="font-family:sans-serif;max-width:500px;margin:0 auto;">
+              <h2 style="color:#293c4f;">Comprobante de Pago de Nómina</h2>
+              <p>Estimado/a <strong>${item.employee.name}</strong>,</p>
+              <p>Se ha procesado el pago correspondiente al período <strong>${period}</strong>.</p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+                <tr><td style="padding:6px 0;color:#666;">Salario bruto:</td><td style="text-align:right;font-weight:bold;">RD$ ${item.grossSalary.toFixed(2)}</td></tr>
+                <tr><td style="padding:6px 0;color:#666;">AFP empleado:</td><td style="text-align:right;">RD$ ${item.afpEmployee.toFixed(2)}</td></tr>
+                <tr><td style="padding:6px 0;color:#666;">SFS empleado:</td><td style="text-align:right;">RD$ ${item.sfsEmployee.toFixed(2)}</td></tr>
+                <tr><td style="padding:6px 0;color:#666;">ISR retenido:</td><td style="text-align:right;">RD$ ${item.isr.toFixed(2)}</td></tr>
+                <tr style="border-top:2px solid #293c4f;"><td style="padding:8px 0;font-weight:bold;color:#293c4f;">Salario neto:</td><td style="text-align:right;font-weight:bold;color:#293c4f;font-size:18px;">RD$ ${item.netSalary.toFixed(2)}</td></tr>
+              </table>
+              <p style="color:#888;font-size:12px;">Este es un correo automático. Por favor no responder.</p>
+            </div>
+          `,
+        }).catch((e: any) => logger.error(`[Payroll] Email error for ${item.employee.email}:`, e.message))
+      }
+    } catch (e: any) {
+      logger.error(`[Payroll] Payslip/email error for payroll ${id}:`, e.message)
+    }
+  })()
 
   return updated
 }
@@ -411,14 +480,15 @@ async function recalcItem(payrollItemId: string) {
 
   const rates          = await getTssRates()
   const additionsTotal = item.additions.reduce((s, a) => s + a.amount, 0)
-  const gross  = item.employee.baseSalary + additionsTotal
-  const afpEmp = gross * rates.AFP_EMPLOYEE
-  const sfsEmp = gross * rates.SFS_EMPLOYEE
-  const isr    = calcMonthlyISR(gross)
-  const net    = gross - afpEmp - sfsEmp - isr
-  const afpEr  = gross * rates.AFP_EMPLOYER
-  const sfsEr  = gross * rates.SFS_EMPLOYER
-  const riesgo = gross * rates.SFS_RIESGO
+  const gross   = item.employee.baseSalary + additionsTotal
+  const tssBase = item.employee.baseSalary  // AFP/SFS only on base salary
+  const afpEmp  = tssBase * rates.AFP_EMPLOYEE
+  const sfsEmp  = tssBase * rates.SFS_EMPLOYEE
+  const isr     = calcMonthlyISR(gross)     // ISR on full gross
+  const net     = gross - afpEmp - sfsEmp - isr
+  const afpEr   = tssBase * rates.AFP_EMPLOYER
+  const sfsEr   = tssBase * rates.SFS_EMPLOYER
+  const riesgo  = tssBase * rates.SFS_RIESGO
 
   await prisma.payrollItem.update({
     where: { id: payrollItemId },

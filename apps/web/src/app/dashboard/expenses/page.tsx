@@ -15,7 +15,8 @@ import NewContactPage from '@/components/NewContactPage'
 // ── Types ─────────────────────────────────────────────────────────
 type ExpenseStatus  = 'DRAFT' | 'APPROVED' | 'PAID' | 'CANCELLED'
 type BusinessUnit   = 'HAX' | 'KODER'
-type PayMethod      = 'CASH' | 'TRANSFER' | 'CHECK' | 'CREDIT_CARD'
+type PayMethod      = 'CASH' | 'TRANSFER' | 'CHECK' | 'CREDIT_CARD' | 'DEBIT_CARD'
+type NcfType        = '' | 'B11' | 'B13'
 
 interface Supplier  { id: string; name: string; rnc?: string }
 interface Account   { id: string; code: string; name: string; type: string; allowsEntry: boolean }
@@ -39,19 +40,29 @@ const STATUS_COLORS: Record<ExpenseStatus, string> = {
   CANCELLED: 'bg-red-50 text-red-600',
 }
 const PAY_LABELS: Record<PayMethod, string> = {
-  CASH: 'Efectivo', TRANSFER: 'Transferencia bancaria',
-  CHECK: 'Cheque', CREDIT_CARD: 'Tarjeta de crédito',
+  CASH:        'Efectivo',
+  TRANSFER:    'Transferencia',
+  CHECK:       'Cheque',
+  CREDIT_CARD: 'T. Crédito',
+  DEBIT_CARD:  'T. Débito',
 }
 const PAY_ICONS: Record<PayMethod, React.ReactNode> = {
-  CASH:        <Banknote className="w-3.5 h-3.5" />,
+  CASH:        <Banknote  className="w-3.5 h-3.5" />,
   TRANSFER:    <Building2 className="w-3.5 h-3.5" />,
-  CHECK:       <FileText className="w-3.5 h-3.5" />,
+  CHECK:       <FileText  className="w-3.5 h-3.5" />,
   CREDIT_CARD: <CreditCard className="w-3.5 h-3.5" />,
+  DEBIT_CARD:  <CreditCard className="w-3.5 h-3.5" />,
+}
+
+const NCF_TYPE_LABELS: Record<NcfType, string> = {
+  '':    'Comprobante regular',
+  'B13': 'Gastos menores (B13)',
+  'B11': 'Proveedor informal (B11)',
 }
 
 const EMPTY: any = {
   description: '', amount: '', taxAmount: '', accountCode: '5201',
-  paymentMethod: 'TRANSFER' as PayMethod, ncf: '',
+  paymentMethod: 'TRANSFER' as PayMethod, ncf: '', ncfType: '' as NcfType,
   businessUnit: 'HAX' as BusinessUnit,
   expenseDate: new Date().toISOString().slice(0, 10),
   supplierId: '', notes: '',
@@ -154,6 +165,7 @@ export default function ExpensesPage() {
         accountCode:   body.accountCode || null,
         paymentMethod: body.paymentMethod || 'TRANSFER',
         ncf:           body.ncf || null,
+        ncfType:       body.ncfType || null,
         businessUnit:  body.businessUnit,
         expenseDate:   body.expenseDate || undefined,
         supplierId:    body.supplierId || undefined,
@@ -199,11 +211,12 @@ export default function ExpensesPage() {
   const openEdit = (e: Expense) => {
     setForm({
       description:   e.description,
-      amount:        e.amount,
-      taxAmount:     e.taxAmount,
+      amount:        String(e.amount),
+      taxAmount:     String(e.taxAmount),
       accountCode:   e.accountCode ?? '5201',
       paymentMethod: (e.paymentMethod as PayMethod) ?? 'TRANSFER',
       ncf:           e.ncf ?? '',
+      ncfType:       (e as any).ncfType ?? '',
       businessUnit:  e.businessUnit,
       expenseDate:   e.expenseDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
       supplierId:    e.supplierRef?.id ?? '',
@@ -420,10 +433,22 @@ export default function ExpensesPage() {
                   </div>
                 </F>
 
-                <F label="NCF (comprobante fiscal)">
+                <F label="Tipo de comprobante">
+                  <select
+                    value={form.ncfType}
+                    onChange={e => setForm((p: any) => ({ ...p, ncfType: e.target.value }))}
+                    className={ic}
+                  >
+                    {(Object.entries(NCF_TYPE_LABELS) as [NcfType, string][]).map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
+                </F>
+
+                <F label="NCF (número comprobante)">
                   <input
                     type="text"
-                    placeholder="E310000000001"
+                    placeholder={form.ncfType === 'B13' ? 'B1300000000' : form.ncfType === 'B11' ? 'B1100000000' : 'E310000000001'}
                     value={form.ncf}
                     onChange={e => setForm((p: any) => ({ ...p, ncf: e.target.value }))}
                     className={ic + ' font-mono'}

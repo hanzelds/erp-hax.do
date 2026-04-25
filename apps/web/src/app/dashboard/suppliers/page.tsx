@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Plus, Search, Edit2, Truck, ArrowLeft, ChevronDown, X, Loader2,
+  Plus, Search, Edit2, Trash2, Truck, ArrowLeft, ChevronDown, X, Loader2,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, cn } from '@/lib/utils'
@@ -42,6 +42,7 @@ export default function SuppliersPage() {
   const [search, setSearch]               = useState('')
   const [showNewContact, setShowNewContact] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
+  const [deletingId, setDeletingId]       = useState<string | null>(null)
 
   const { data: suppliers = [], isLoading } = useQuery<Supplier[]>({
     queryKey: ['suppliers', search],
@@ -55,6 +56,11 @@ export default function SuppliersPage() {
     qc.invalidateQueries({ queryKey: ['suppliers'] })
     qc.invalidateQueries({ queryKey: ['suppliers-list'] })
   }
+
+  const deleteSupplier = useMutation({
+    mutationFn: (id: string) => api.delete(`/suppliers/${id}`),
+    onSuccess: () => { setDeletingId(null); invalidate() },
+  })
 
   // ── Full-page new contact view ─────────────────────────────
   if (showNewContact) {
@@ -154,9 +160,15 @@ export default function SuppliersPage() {
                   <td className="px-3 py-3 text-xs text-gray-500">{s._count?.expenses ?? 0}</td>
                   <td className="px-3 py-3 text-xs font-semibold text-gray-800">{formatCurrency(s.totalSpent ?? 0)}</td>
                   <td className="px-3 py-3">
-                    <Button variant="ghost" size="sm" onClick={() => setEditingSupplier(s)}>
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-0.5">
+                      <Button variant="ghost" size="sm" onClick={() => setEditingSupplier(s)}>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setDeletingId(s.id)}
+                        className="text-red-400 hover:text-red-600 hover:bg-red-50">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -164,6 +176,31 @@ export default function SuppliersPage() {
           </table>
         )}
       </Card>
+      {/* Delete confirmation dialog */}
+      {deletingId && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40"
+          onClick={() => setDeletingId(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6"
+            onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-gray-900 mb-2">¿Eliminar proveedor?</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Esta acción no se puede deshacer. El proveedor será eliminado permanentemente.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setDeletingId(null)}>Cancelar</Button>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={deleteSupplier.isPending}
+                onClick={() => deleteSupplier.mutate(deletingId)}
+                className="bg-red-600 hover:bg-red-700 border-red-600"
+              >
+                Eliminar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

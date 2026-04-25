@@ -117,7 +117,8 @@ export default function NewInvoicePage() {
     },
   })
 
-  const isExemptType = ['E44', 'E45', 'E46', 'E47'].includes(form.ncfType)
+  const isProforma   = form.ncfType === 'PROFORMA'
+  const isExemptType = ['E44', 'E45', 'E46', 'E47', 'PROFORMA'].includes(form.ncfType)
 
   // Exempt types (44 Régimen Especial, 45 Gubernamental, 46 Exportaciones, 47 Pagos Exterior) force ITBIS exento
   const lines     = items.map(i => calcLine(isExemptType ? { ...i, isExempt: true, taxRate: 0 } : i))
@@ -217,20 +218,30 @@ export default function NewInvoicePage() {
                   <option value="KODER">KODER</option>
                 </select>
               </F>
-              <F label="Tipo e-CF">
+              <F label="Tipo de documento">
                 <select value={form.ncfType} onChange={(e) => setForm({ ...form, ncfType: e.target.value })} className={ic}>
-                  <option value="E31">31 — Factura Crédito Fiscal</option>
-                  <option value="E32">32 — Factura Consumo</option>
-                  <option value="E33">33 — Nota de Débito</option>
-                  <option value="E34">34 — Nota de Crédito</option>
-                  <option value="E41">41 — Comprobante de Compras</option>
-                  <option value="E43">43 — Gastos Menores</option>
-                  <option value="E44">44 — Regímenes Especiales (ITBIS exento)</option>
-                  <option value="E45">45 — Gubernamental (ITBIS exento)</option>
-                  <option value="E46">46 — Exportaciones (ITBIS exento)</option>
-                  <option value="E47">47 — Pagos al Exterior (ITBIS exento)</option>
+                  <optgroup label="Fiscal (e-CF DGII)">
+                    <option value="E31">31 — Factura Crédito Fiscal</option>
+                    <option value="E32">32 — Factura Consumo</option>
+                    <option value="E33">33 — Nota de Débito</option>
+                    <option value="E34">34 — Nota de Crédito</option>
+                    <option value="E41">41 — Comprobante de Compras</option>
+                    <option value="E43">43 — Gastos Menores</option>
+                    <option value="E44">44 — Regímenes Especiales (ITBIS exento)</option>
+                    <option value="E45">45 — Gubernamental (ITBIS exento)</option>
+                    <option value="E46">46 — Exportaciones (ITBIS exento)</option>
+                    <option value="E47">47 — Pagos al Exterior (ITBIS exento)</option>
+                  </optgroup>
+                  <optgroup label="No fiscal">
+                    <option value="PROFORMA">Proforma — Cotización sin efecto fiscal</option>
+                  </optgroup>
                 </select>
-                {isExemptType && (
+                {form.ncfType === 'PROFORMA' && (
+                  <p className="text-xs text-purple-600 mt-1 flex items-center gap-1">
+                    <span>ℹ</span> Proforma: sin ITBIS · no reporta a DGII · no genera asientos contables
+                  </p>
+                )}
+                {isExemptType && form.ncfType !== 'PROFORMA' && (
                   <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                     <span>⚠</span> Tipo {form.ncfType.replace('E','')} — ITBIS exento en todos los ítems
                   </p>
@@ -456,11 +467,18 @@ export default function NewInvoicePage() {
               <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
               <div className="flex justify-between text-gray-500">
                 <span>ITBIS</span>
-                {isExemptType
-                  ? <span className="text-amber-600 font-medium">Exento</span>
-                  : <span>{formatCurrency(taxAmount)}</span>}
+                {isProforma
+                  ? <span className="text-purple-600 font-medium">No aplica</span>
+                  : isExemptType
+                    ? <span className="text-amber-600 font-medium">Exento</span>
+                    : <span>{formatCurrency(taxAmount)}</span>}
               </div>
-              {isExemptType && (
+              {isProforma && (
+                <div className="text-xs text-purple-600 bg-purple-50 rounded-lg px-2 py-1.5">
+                  Proforma — no tiene efecto fiscal, no reporta impuestos.
+                </div>
+              )}
+              {isExemptType && !isProforma && (
                 <div className="text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1.5">
                   e-CF {form.ncfType.replace('E','')} — ITBIS no aplica en este tipo de comprobante.
                 </div>

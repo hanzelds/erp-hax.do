@@ -7,6 +7,7 @@ router.use(authenticate)
 
 router.get('/stats', ctrl.stats)
 router.get('/', ctrl.list)
+router.get('/:id/pdf', ctrl.pdf)
 router.get('/:id', ctrl.get)
 router.post('/', ctrl.create)
 router.put('/:id', ctrl.update)

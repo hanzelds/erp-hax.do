@@ -6,76 +6,31 @@
 
 @layer base {
   :root {
-    /* HAX Brand #293c4f como color primario */
-    --background: 0 0% 98%;
-    --foreground: 215 28% 17%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 215 28% 17%;
-
-    --primary: 210 32% 23%;         /* #293c4f */
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 210 20% 96%;
-    --secondary-foreground: 215 28% 17%;
-
-    --muted: 210 16% 94%;
-    --muted-foreground: 215 16% 47%;
-
-    --accent: 210 20% 93%;
-    --accent-foreground: 215 28% 17%;
-
-    --destructive: 0 72% 51%;
+    --background:           0 0% 98%;
+    --foreground:           222 47% 11%;
+    --card:                 0 0% 100%;
+    --card-foreground:      222 47% 11%;
+    --primary:              210 32% 23%;
+    --primary-foreground:   0 0% 100%;
+    --secondary:            210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted:                210 40% 96%;
+    --muted-foreground:     215 16% 47%;
+    --accent:               210 40% 96%;
+    --accent-foreground:    222 47% 11%;
+    --destructive:          0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-
-    --border: 215 16% 88%;
-    --input: 215 16% 88%;
-    --ring: 210 32% 23%;
-
-    --radius: 0.5rem;
-
-    /* Sidebar */
-    --sidebar-bg: #293c4f;
-    --sidebar-bg-hover: #344d63;
-    --sidebar-text: rgba(255,255,255,0.85);
-    --sidebar-text-active: #ffffff;
-    --sidebar-border: rgba(255,255,255,0.08);
-  }
-
-  .dark {
-    --background: 215 28% 8%;
-    --foreground: 210 20% 92%;
-
-    --card: 215 28% 11%;
-    --card-foreground: 210 20% 92%;
-
-    --primary: 210 32% 60%;
-    --primary-foreground: 215 28% 8%;
-
-    --secondary: 215 20% 14%;
-    --secondary-foreground: 210 20% 92%;
-
-    --muted: 215 20% 16%;
-    --muted-foreground: 215 16% 55%;
-
-    --accent: 215 20% 16%;
-    --accent-foreground: 210 20% 92%;
-
-    --destructive: 0 62% 45%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 215 20% 18%;
-    --input: 215 20% 18%;
-    --ring: 210 32% 60%;
+    --border:               214 32% 91%;
+    --input:                214 32% 91%;
+    --ring:                 210 32% 23%;
+    --radius:               0.5rem;
   }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-gray-50 text-gray-900;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   h1 { @apply text-2xl font-semibold tracking-tight; }
@@ -88,39 +43,33 @@
     animation: fade-in 0.2s ease-out;
   }
 
-  /* Scrollbar */
-  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
-  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full;
+  .scrollbar-thin::-webkit-scrollbar       { width: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track  { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb  {
+    background: rgba(0,0,0,0.08);
+    border-radius: 9999px;
   }
 }
 
 /* Status badges */
-.badge-approved  { @apply bg-green-100  text-green-800  text-xs font-medium px-2.5 py-0.5 rounded-full; }
-.badge-rejected  { @apply bg-red-100    text-red-800    text-xs font-medium px-2.5 py-0.5 rounded-full; }
-.badge-draft     { @apply bg-gray-100   text-gray-700   text-xs font-medium px-2.5 py-0.5 rounded-full; }
-.badge-sending   { @apply bg-blue-100   text-blue-700   text-xs font-medium px-2.5 py-0.5 rounded-full; }
-.badge-paid      { @apply bg-emerald-100 text-emerald-800 text-xs font-medium px-2.5 py-0.5 rounded-full; }
-.badge-cancelled { @apply bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded-full; }
-.badge-pending   { @apply bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full; }
+.badge-approved  { @apply bg-emerald-100 text-emerald-700  text-xs font-medium px-2.5 py-0.5 rounded-full; }
+.badge-rejected  { @apply bg-red-100     text-red-600      text-xs font-medium px-2.5 py-0.5 rounded-full; }
+.badge-draft     { @apply bg-gray-100    text-gray-500     text-xs font-medium px-2.5 py-0.5 rounded-full; }
+.badge-sending   { @apply bg-blue-100    text-blue-700     text-xs font-medium px-2.5 py-0.5 rounded-full; }
+.badge-paid      { @apply bg-emerald-100 text-emerald-700  text-xs font-medium px-2.5 py-0.5 rounded-full; }
+.badge-cancelled { @apply bg-amber-100   text-amber-700    text-xs font-medium px-2.5 py-0.5 rounded-full; }
+.badge-pending   { @apply bg-yellow-100  text-yellow-700   text-xs font-medium px-2.5 py-0.5 rounded-full; }
 
-/* ── Fade in animation ─────────────────────────────────────── */
+/* ── Fade in ───────────────────────────────────────────────── */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+.animate-fade-in { animation: fade-in 0.22s ease-out both; }
 
-.animate-fade-in {
-  animation: fade-in 0.22s ease-out both;
-}
-
-/* ── Bounce for loading dots ───────────────────────────────── */
+/* ── Bounce dots ───────────────────────────────────────────── */
 @keyframes bounce-dot {
   0%, 80%, 100% { transform: translateY(0); }
   40%           { transform: translateY(-6px); }
 }
-
-.animate-bounce {
-  animation: bounce-dot 1.2s ease-in-out infinite;
-}
+.animate-bounce { animation: bounce-dot 1.2s ease-in-out infinite; }

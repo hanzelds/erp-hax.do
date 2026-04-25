@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building2, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react'
 import { useAuthStore } from '@/lib/auth-store'
 import { cn } from '@/lib/utils'
 
@@ -18,125 +18,147 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-
     try {
       await login(email, password)
       router.replace('/dashboard')
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.error ??
-        err?.message ??
-        'Error al iniciar sesión'
-      setError(msg)
+      setError(err?.response?.data?.error ?? err?.message ?? 'Credenciales incorrectas')
     }
   }
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: '#f0f2f5' }}>
+    <div className="min-h-screen flex bg-[#0d1117]">
 
-      {/* ── Left panel — branding ─────────────────────── */}
-      <div
-        className="hidden lg:flex flex-col justify-between w-2/5 p-12"
-        style={{ backgroundColor: '#293c4f' }}
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
-          >
-            <Building2 className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <p className="text-white font-semibold text-base leading-tight">ERP Hax</p>
-            <p className="text-white/50 text-xs">Sistema de gestión</p>
-          </div>
-        </div>
+      {/* ── Left — decorative panel ───────────────────── */}
+      <div className="hidden lg:flex flex-col w-[52%] relative overflow-hidden">
 
-        {/* Quote */}
-        <div>
-          <blockquote className="text-white/80 text-2xl font-light leading-relaxed mb-6">
-            "Control total de tu negocio,<br />
-            en un solo lugar."
-          </blockquote>
-          <div className="flex flex-col gap-2.5">
-            {[
-              'Facturación electrónica DGII',
-              'Contabilidad automatizada',
-              'Reportes 606 · 607 · P&L',
-              'Nómina con TSS y AFP',
-            ].map((feat) => (
-              <div key={feat} className="flex items-center gap-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/50" />
-                <span className="text-white/65 text-sm">{feat}</span>
+        {/* Background gradient mesh */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1a2533] via-[#0d1117] to-[#0d1117]" />
+        <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[#293c4f]/40 rounded-full blur-[120px] -translate-x-1/3 -translate-y-1/3" />
+        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-[#1e3a5f]/30 rounded-full blur-[100px] translate-x-1/4 translate-y-1/4" />
+
+        {/* Grid lines overlay */}
+        <div className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage: `linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)`,
+            backgroundSize: '48px 48px',
+          }}
+        />
+
+        <div className="relative z-10 flex flex-col h-full p-14 justify-between">
+
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center backdrop-blur-sm">
+              <HaxIcon />
+            </div>
+            <div>
+              <p className="text-white font-semibold tracking-tight">ERP Hax</p>
+              <p className="text-white/30 text-xs">Sistema de gestión</p>
+            </div>
+          </div>
+
+          {/* Main content */}
+          <div className="space-y-10">
+            <div className="space-y-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/50 text-xs font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                República Dominicana · DGII Certificado
               </div>
-            ))}
-          </div>
-        </div>
+              <h1 className="text-4xl font-bold text-white leading-tight tracking-tight">
+                Control total<br />
+                <span className="text-white/40">de tu negocio.</span>
+              </h1>
+              <p className="text-white/40 text-base leading-relaxed max-w-xs">
+                Facturación electrónica, contabilidad y nómina integrados en una sola plataforma.
+              </p>
+            </div>
 
-        {/* Company info */}
-        <div className="border-t border-white/10 pt-6">
-          <p className="text-white/40 text-xs">HAX ESTUDIO CREATIVO EIRL</p>
-          <p className="text-white/30 text-xs">RNC: 133290251</p>
+            {/* Feature list */}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Facturación e‑CF', sub: 'Tipos B01–B16' },
+                { label: 'Reportes DGII', sub: '606 · 607 · P&L' },
+                { label: 'Contabilidad', sub: 'Asientos automáticos' },
+                { label: 'Nómina', sub: 'TSS · AFP · SFS' },
+              ].map((f) => (
+                <div key={f.label}
+                  className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors">
+                  <p className="text-white/80 text-sm font-medium">{f.label}</p>
+                  <p className="text-white/30 text-xs mt-0.5">{f.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-white/25 text-xs font-medium tracking-wide uppercase">HAX Estudio Creativo</p>
+              <p className="text-white/15 text-xs mt-0.5">RNC 133290251</p>
+            </div>
+            <p className="text-white/15 text-xs">© 2026</p>
+          </div>
         </div>
       </div>
 
-      {/* ── Right panel — form ────────────────────────── */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-sm">
+      {/* ── Right — form panel ────────────────────────── */}
+      <div className="flex-1 flex items-center justify-center p-8 relative">
+
+        {/* Subtle top accent */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+        <div className="w-full max-w-[360px]">
 
           {/* Mobile logo */}
-          <div className="flex items-center gap-2.5 mb-8 lg:hidden">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: '#293c4f' }}
-            >
-              <Building2 className="w-4 h-4 text-white" />
+          <div className="flex items-center gap-2.5 mb-10 lg:hidden">
+            <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
+              <HaxIcon />
             </div>
-            <span className="font-semibold text-gray-900">ERP Hax</span>
+            <span className="font-semibold text-white tracking-tight">ERP Hax</span>
           </div>
 
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">
-            Iniciar sesión
-          </h2>
-          <p className="text-gray-500 text-sm mb-8">
-            Accede a tu panel de control
-          </p>
+          {/* Heading */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-white tracking-tight">Bienvenido</h2>
+            <p className="text-white/35 text-sm mt-1">Ingresa tus credenciales para continuar</p>
+          </div>
 
-          {/* Error banner */}
+          {/* Error */}
           {error && (
-            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-lg p-3.5 mb-5">
-              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-red-700 text-sm">{error}</p>
+            <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mb-6">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+              <p className="text-red-400 text-sm">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
 
             {/* Email */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-white/40 uppercase tracking-wider">
                 Correo electrónico
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="hanzel@hax.com.do"
+                placeholder="usuario@hax.com.do"
                 required
                 autoComplete="email"
                 className={cn(
-                  'w-full px-3.5 py-2.5 rounded-lg border text-sm text-gray-900',
-                  'placeholder:text-gray-400 outline-none transition-all',
-                  'border-gray-200 bg-white',
-                  'focus:border-[#293c4f] focus:ring-2 focus:ring-[#293c4f]/10'
+                  'w-full px-4 py-3 rounded-xl text-sm text-white',
+                  'bg-white/[0.05] border border-white/[0.08]',
+                  'placeholder:text-white/20 outline-none',
+                  'transition-all duration-150',
+                  'focus:bg-white/[0.08] focus:border-white/20 focus:ring-0',
                 )}
               />
             </div>
 
             {/* Password */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-white/40 uppercase tracking-wider">
                 Contraseña
               </label>
               <div className="relative">
@@ -144,25 +166,23 @@ export default function LoginPage() {
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="••••••••••"
                   required
                   autoComplete="current-password"
                   className={cn(
-                    'w-full px-3.5 py-2.5 pr-10 rounded-lg border text-sm text-gray-900',
-                    'placeholder:text-gray-400 outline-none transition-all',
-                    'border-gray-200 bg-white',
-                    'focus:border-[#293c4f] focus:ring-2 focus:ring-[#293c4f]/10'
+                    'w-full px-4 py-3 pr-11 rounded-xl text-sm text-white',
+                    'bg-white/[0.05] border border-white/[0.08]',
+                    'placeholder:text-white/20 outline-none',
+                    'transition-all duration-150',
+                    'focus:bg-white/[0.08] focus:border-white/20 focus:ring-0',
                   )}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors"
                 >
-                  {showPass
-                    ? <EyeOff className="w-4 h-4" />
-                    : <Eye    className="w-4 h-4" />
-                  }
+                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -172,37 +192,55 @@ export default function LoginPage() {
               type="submit"
               disabled={isLoading}
               className={cn(
-                'w-full py-2.5 rounded-lg text-sm font-semibold text-white',
-                'transition-all duration-150 mt-1',
+                'w-full mt-2 py-3 rounded-xl text-sm font-semibold',
                 'flex items-center justify-center gap-2',
+                'bg-white text-[#0d1117] transition-all duration-150',
                 isLoading
-                  ? 'opacity-70 cursor-not-allowed'
-                  : 'hover:opacity-90 active:scale-[0.99]'
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'hover:bg-white/90 active:scale-[0.99]',
               )}
-              style={{ backgroundColor: '#293c4f' }}
             >
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Ingresando...
+                  Ingresando…
                 </>
               ) : (
-                'Ingresar'
+                <>
+                  Ingresar
+                  <ArrowRight className="w-4 h-4" />
+                </>
               )}
             </button>
           </form>
 
-          <p className="text-center text-xs text-gray-400 mt-8">
-            ¿Problemas de acceso? Contacta a{' '}
-            <a
-              href="mailto:hanzel@hax.com.do"
-              className="underline hover:text-gray-600 transition-colors"
-            >
+          {/* Footer note */}
+          <p className="text-center text-xs text-white/20 mt-8">
+            ¿Problemas de acceso?{' '}
+            <a href="mailto:hanzel@hax.com.do"
+              className="text-white/40 hover:text-white/60 transition-colors underline underline-offset-2">
               hanzel@hax.com.do
+            </a>
+          </p>
+
+          {/* Koder footer */}
+          <p className="text-center text-xs text-white/15 mt-6">
+            Diseñado con mucho amor y código por{' '}
+            <a href="https://koder.com.do" target="_blank" rel="noopener noreferrer"
+              className="text-white/30 hover:text-white/60 transition-colors font-medium">
+              Koder
             </a>
           </p>
         </div>
       </div>
     </div>
+  )
+}
+
+function HaxIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M3 3h5v5H3zM10 3h5v5h-5zM3 10h5v5H3zM10 10h5v5h-5z" fill="white" fillOpacity="0.8" rx="1" />
+    </svg>
   )
 }

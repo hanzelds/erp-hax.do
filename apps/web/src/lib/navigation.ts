@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, Users, Receipt, CreditCard, BarChart3,
   BookOpen, UserCheck, Settings, Truck, Package, Landmark,
-  ShoppingCart, RefreshCcw, Monitor, PiggyBank, Layers, ClipboardList,
+  ShoppingCart, Monitor, PiggyBank, Layers, ClipboardList,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -46,8 +46,7 @@ export const navigation: NavSection[] = [
   {
     title: 'Finanzas',
     items: [
-      { label: 'Cuentas Bancarias', href: '/dashboard/bank-accounts',      icon: Landmark,  module: 'bank-accounts',       description: 'Cuentas y transacciones' },
-      { label: 'Conciliación',      href: '/dashboard/bank-reconciliation', icon: RefreshCcw,module: 'bank-reconciliation', description: 'Conciliación bancaria' },
+      { label: 'Cuentas Bancarias', href: '/dashboard/bank-accounts', icon: Landmark, module: 'bank-accounts', description: 'Cuentas, transacciones y conciliación' },
       { label: 'Contabilidad',      href: '/dashboard/accounting',          icon: BookOpen,  module: 'accounting',          description: 'Asientos y cuentas' },
       { label: 'Reportes',          href: '/dashboard/reports',             icon: BarChart3, module: 'reports',             description: '606 · 607 · P&L' },
       { label: 'Presupuestos',      href: '/dashboard/budgets',             icon: PiggyBank, module: 'budgets',             description: 'Ejecución presupuestaria' },

@@ -1,7 +1,7 @@
 import { prisma } from '../../config/database'
 import { NotFoundError, AppError } from '../../middleware/errorHandler'
 import { parsePagination } from '../../utils/response'
-import { BusinessUnit, EmployeeType } from '@prisma/client'
+import { BusinessUnit, EmployeeType, PayrollAdditionType } from '@prisma/client'
 import { logger } from '../../config/logger'
 import { generateAllPayrollSlips } from '../../services/payroll-pdf.service'
 
@@ -160,7 +160,10 @@ export async function getPayroll(id: string) {
     where: { id },
     include: {
       items: {
-        include: { employee: { select: { id: true, name: true, type: true, position: true } } },
+        include: {
+          employee: { select: { id: true, name: true, type: true, position: true } },
+          additions: { orderBy: { createdAt: 'asc' } },
+        },
         orderBy: { employee: { name: 'asc' } },
       },
     },
@@ -173,9 +176,18 @@ export async function calculatePayroll(businessUnit: string, period: string) {
   // Check if already exists
   const existing = await prisma.payroll.findUnique({
     where: { businessUnit_period: { businessUnit: businessUnit as any, period } },
+    include: { items: { include: { additions: true } } },
   })
   if (existing && existing.status !== 'CALCULATED') {
     throw new AppError('Ya existe una nómina aprobada o pagada para este período', 400)
+  }
+
+  // Preserve existing additions keyed by employeeId
+  const savedAdditions = new Map<string, { type: string; description: string | null; amount: number; hours: number | null; rate: number | null }[]>()
+  if (existing) {
+    for (const item of existing.items) {
+      if (item.additions.length > 0) savedAdditions.set(item.employeeId, item.additions)
+    }
   }
 
   // Get active employees for this BU
@@ -187,53 +199,52 @@ export async function calculatePayroll(businessUnit: string, period: string) {
   const rates = await getTssRates()
 
   const items = employees.map((emp) => {
-    const gross  = emp.baseSalary
+    const empAdditions = savedAdditions.get(emp.id) ?? []
+    const additionsTotal = empAdditions.reduce((s, a) => s + a.amount, 0)
+    const gross  = emp.baseSalary + additionsTotal
     const afpEmp = gross * rates.AFP_EMPLOYEE
     const sfsEmp = gross * rates.SFS_EMPLOYEE
     const isr    = calcMonthlyISR(gross)
     const net    = gross - afpEmp - sfsEmp - isr
-
     const afpEr  = gross * rates.AFP_EMPLOYER
     const sfsEr  = gross * rates.SFS_EMPLOYER
     const riesgo = gross * rates.SFS_RIESGO
 
     return {
-      employeeId:      emp.id,
-      grossSalary:     gross,
-      afpEmployee:     afpEmp,
-      sfsEmployee:     sfsEmp,
-      isr:             isr,
-      otherDeductions: 0,
-      netSalary:       net,
-      afpEmployer:     afpEr,
-      sfsEmployer:     sfsEr,
+      employeeId:       emp.id,
+      grossSalary:      gross,
+      afpEmployee:      afpEmp,
+      sfsEmployee:      sfsEmp,
+      isr,
+      otherDeductions:  0,
+      netSalary:        net,
+      afpEmployer:      afpEr,
+      sfsEmployer:      sfsEr,
       sfsRiesgoLaboral: riesgo,
+      additions: {
+        create: empAdditions.map(a => ({
+          type:        a.type,
+          description: a.description,
+          amount:      a.amount,
+          hours:       a.hours,
+          rate:        a.rate,
+        })),
+      },
     }
   })
 
-  const totalGross       = items.reduce((s, i) => s + i.grossSalary, 0)
-  const totalAfpEmployee = items.reduce((s, i) => s + i.afpEmployee, 0)
-  const totalAfpEmployer = items.reduce((s, i) => s + i.afpEmployer, 0)
-  const totalSfsEmployee = items.reduce((s, i) => s + i.sfsEmployee, 0)
-  const totalSfsEmployer = items.reduce((s, i) => s + i.sfsEmployer, 0)
-  const totalIsr         = items.reduce((s, i) => s + i.isr, 0)
-  const totalNet         = items.reduce((s, i) => s + i.netSalary, 0)
-  const totalEmployerCost = totalGross + totalAfpEmployer + totalSfsEmployer
+  const totals = computePayrollTotals(items)
 
   if (existing) {
-    // Re-calculate: delete old items and update
     await prisma.payrollItem.deleteMany({ where: { payrollId: existing.id } })
     await prisma.payroll.update({
       where: { id: existing.id },
-      data: {
-        totalGross, totalAfpEmployee, totalAfpEmployer,
-        totalSfsEmployee, totalSfsEmployer, totalIsr,
-        totalOtherDeductions: 0, totalNet, totalEmployerCost,
-        status: 'CALCULATED',
-        items: { create: items },
-      },
+      data: { ...totals, totalOtherDeductions: 0, status: 'CALCULATED', items: { create: items as any } },
     })
-    return prisma.payroll.findUnique({ where: { id: existing.id }, include: { items: true } })
+    return prisma.payroll.findUnique({
+      where: { id: existing.id },
+      include: { items: { include: { additions: true } } },
+    })
   }
 
   return prisma.payroll.create({
@@ -241,15 +252,24 @@ export async function calculatePayroll(businessUnit: string, period: string) {
       businessUnit: businessUnit as any,
       period,
       status: 'CALCULATED',
-      totalGross,
-      totalAfpEmployee, totalAfpEmployer,
-      totalSfsEmployee, totalSfsEmployer,
-      totalIsr, totalOtherDeductions: 0,
-      totalNet, totalEmployerCost,
-      items: { create: items },
+      ...totals,
+      totalOtherDeductions: 0,
+      items: { create: items as any },
     },
-    include: { items: true },
+    include: { items: { include: { additions: true } } },
   })
+}
+
+function computePayrollTotals(items: { grossSalary: number; afpEmployee: number; afpEmployer: number; sfsEmployee: number; sfsEmployer: number; isr: number; netSalary: number }[]) {
+  const totalGross        = items.reduce((s, i) => s + i.grossSalary, 0)
+  const totalAfpEmployee  = items.reduce((s, i) => s + i.afpEmployee, 0)
+  const totalAfpEmployer  = items.reduce((s, i) => s + i.afpEmployer, 0)
+  const totalSfsEmployee  = items.reduce((s, i) => s + i.sfsEmployee, 0)
+  const totalSfsEmployer  = items.reduce((s, i) => s + i.sfsEmployer, 0)
+  const totalIsr          = items.reduce((s, i) => s + i.isr, 0)
+  const totalNet          = items.reduce((s, i) => s + i.netSalary, 0)
+  const totalEmployerCost = totalGross + totalAfpEmployer + totalSfsEmployer
+  return { totalGross, totalAfpEmployee, totalAfpEmployer, totalSfsEmployee, totalSfsEmployer, totalIsr, totalNet, totalEmployerCost }
 }
 
 export async function approvePayroll(id: string) {
@@ -374,6 +394,97 @@ export async function payIsr(id: string) {
   }
 
   return { paid: true, amount: payroll.totalIsr }
+}
+
+// ── Payroll Additions ─────────────────────────────────────────
+
+/** Recalculate a single PayrollItem after additions change, then sync Payroll totals */
+async function recalcItem(payrollItemId: string) {
+  const item = await prisma.payrollItem.findUnique({
+    where: { id: payrollItemId },
+    include: { additions: true, employee: true, payroll: true },
+  })
+  if (!item) throw new NotFoundError('Item de nómina')
+  if (item.payroll.status !== 'CALCULATED') {
+    throw new AppError('No se pueden modificar conceptos de una nómina aprobada o pagada', 400)
+  }
+
+  const rates          = await getTssRates()
+  const additionsTotal = item.additions.reduce((s, a) => s + a.amount, 0)
+  const gross  = item.employee.baseSalary + additionsTotal
+  const afpEmp = gross * rates.AFP_EMPLOYEE
+  const sfsEmp = gross * rates.SFS_EMPLOYEE
+  const isr    = calcMonthlyISR(gross)
+  const net    = gross - afpEmp - sfsEmp - isr
+  const afpEr  = gross * rates.AFP_EMPLOYER
+  const sfsEr  = gross * rates.SFS_EMPLOYER
+  const riesgo = gross * rates.SFS_RIESGO
+
+  await prisma.payrollItem.update({
+    where: { id: payrollItemId },
+    data: { grossSalary: gross, afpEmployee: afpEmp, sfsEmployee: sfsEmp, isr, netSalary: net, afpEmployer: afpEr, sfsEmployer: sfsEr, sfsRiesgoLaboral: riesgo },
+  })
+
+  // Recompute payroll totals from all items
+  const allItems = await prisma.payrollItem.findMany({ where: { payrollId: item.payrollId } })
+  const totals   = computePayrollTotals(allItems)
+  await prisma.payroll.update({ where: { id: item.payrollId }, data: totals })
+}
+
+export async function addAddition(payrollItemId: string, data: {
+  type: PayrollAdditionType; description?: string; amount: number; hours?: number; rate?: number
+}) {
+  // Verify item exists and payroll is editable (recalcItem will also check)
+  const item = await prisma.payrollItem.findUnique({
+    where: { id: payrollItemId },
+    include: { payroll: { select: { status: true } } },
+  })
+  if (!item) throw new NotFoundError('Item de nómina')
+  if (item.payroll.status !== 'CALCULATED') {
+    throw new AppError('No se pueden agregar conceptos a una nómina aprobada o pagada', 400)
+  }
+
+  const addition = await prisma.payrollAddition.create({
+    data: {
+      payrollItemId,
+      type:        data.type,
+      description: data.description,
+      amount:      data.amount,
+      hours:       data.hours,
+      rate:        data.rate,
+    },
+  })
+  await recalcItem(payrollItemId)
+  return addition
+}
+
+export async function updateAddition(additionId: string, data: {
+  type?: PayrollAdditionType; description?: string; amount?: number; hours?: number; rate?: number
+}) {
+  const addition = await prisma.payrollAddition.findUnique({ where: { id: additionId } })
+  if (!addition) throw new NotFoundError('Concepto')
+
+  const updated = await prisma.payrollAddition.update({
+    where: { id: additionId },
+    data: {
+      ...(data.type        !== undefined && { type: data.type }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.amount      !== undefined && { amount: data.amount }),
+      ...(data.hours       !== undefined && { hours: data.hours }),
+      ...(data.rate        !== undefined && { rate: data.rate }),
+    },
+  })
+  await recalcItem(addition.payrollItemId)
+  return updated
+}
+
+export async function removeAddition(additionId: string) {
+  const addition = await prisma.payrollAddition.findUnique({ where: { id: additionId } })
+  if (!addition) throw new NotFoundError('Concepto')
+  const payrollItemId = addition.payrollItemId
+  await prisma.payrollAddition.delete({ where: { id: additionId } })
+  await recalcItem(payrollItemId)
+  return { deleted: true }
 }
 
 export async function getPayrollStats(businessUnit?: BusinessUnit) {

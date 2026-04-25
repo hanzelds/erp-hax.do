@@ -26,4 +26,9 @@ router.post('/:id/pay',      requireAdmin, auditLog('payroll'), ctrl.processPaym
 router.post('/:id/pay-tss',  requireAdmin, auditLog('payroll'), ctrl.payTss)
 router.post('/:id/pay-isr',  requireAdmin, auditLog('payroll'), ctrl.payIsr)
 
+// Additions (variable pay per payroll item)
+router.post('/items/:payrollItemId/additions',              requireAdmin, ctrl.addAddition)
+router.patch('/items/:payrollItemId/additions/:additionId', requireAdmin, ctrl.updateAddition)
+router.delete('/items/:payrollItemId/additions/:additionId', requireAdmin, ctrl.removeAddition)
+
 export default router

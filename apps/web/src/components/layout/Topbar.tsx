@@ -33,17 +33,17 @@ function getBreadcrumb(pathname: string) {
 }
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
-  error:   <AlertCircle   className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />,
-  warning: <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />,
-  info:    <Info          className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />,
-  success: <CheckCircle2  className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />,
+  error:   <AlertCircle   className="w-3.5 h-3.5 text-red-500    shrink-0 mt-0.5" />,
+  warning: <AlertTriangle className="w-3.5 h-3.5 text-amber-500  shrink-0 mt-0.5" />,
+  info:    <Info          className="w-3.5 h-3.5 text-blue-500   shrink-0 mt-0.5" />,
+  success: <CheckCircle2  className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />,
 }
 
 const TYPE_DOT: Record<string, string> = {
   error:   'bg-red-500',
-  warning: 'bg-amber-400',
+  warning: 'bg-amber-500',
   info:    'bg-blue-500',
-  success: 'bg-green-500',
+  success: 'bg-emerald-500',
 }
 
 export function Topbar({ sidebarCollapsed }: TopbarProps) {
@@ -53,8 +53,8 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
   const crumb    = getBreadcrumb(pathname)
   const today    = formatDate(new Date())
 
-  const [open, setOpen]         = useState(false)
-  const [readAt, setReadAt]     = useState<number>(() => {
+  const [open, setOpen]     = useState(false)
+  const [readAt, setReadAt] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       return parseInt(localStorage.getItem('notif_read_at') ?? '0', 10)
     }
@@ -62,7 +62,6 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
   })
   const panelRef = useRef<HTMLDivElement>(null)
 
-  // Fetch notifications
   const { data: notifications = [], isLoading: notifLoading } = useQuery<Notification[]>({
     queryKey: ['notifications'],
     queryFn: async () => {
@@ -82,13 +81,10 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
     if (typeof window !== 'undefined') localStorage.setItem('notif_read_at', String(now))
   }
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return
     function onClickOutside(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
@@ -117,10 +113,10 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
 
         {/* ── Breadcrumb ──────────────────────────────── */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="text-gray-400 text-sm hidden sm:block">ERP Hax</span>
-          <ChevronRight className="w-3.5 h-3.5 text-gray-300 hidden sm:block" />
+          <span className="text-gray-300 text-sm hidden sm:block">ERP Hax</span>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-200 hidden sm:block" />
           <div>
-            <h1 className="text-gray-900 font-semibold text-sm leading-tight">
+            <h1 className="text-gray-700 font-semibold text-sm leading-tight">
               {crumb.label}
             </h1>
             {crumb.description && (
@@ -132,28 +128,26 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
         </div>
 
         {/* ── Search ──────────────────────────────────── */}
-        <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 w-64 group focus-within:border-gray-300 focus-within:bg-white transition-all">
-          <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+        <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 w-64 transition-all focus-within:bg-white focus-within:border-gray-200">
+          <Search className="w-3.5 h-3.5 text-gray-300 shrink-0" />
           <input
             type="text"
             placeholder="Buscar..."
-            className="bg-transparent text-sm text-gray-700 placeholder:text-gray-400 outline-none w-full"
+            className="bg-transparent text-sm text-gray-600 placeholder:text-gray-300 outline-none w-full"
           />
-          <kbd className="hidden lg:inline text-gray-300 text-xs font-mono border border-gray-200 rounded px-1 py-0.5 shrink-0">
+          <kbd className="hidden lg:inline text-gray-300 text-xs font-mono border border-gray-100 rounded px-1 py-0.5 shrink-0">
             ⌘K
           </kbd>
         </div>
 
         {/* ── Date ─────────────────────────────────────── */}
-        <span className="hidden lg:block text-xs text-gray-400 shrink-0">
-          {today}
-        </span>
+        <span className="hidden lg:block text-xs text-gray-300 shrink-0">{today}</span>
 
         {/* ── Notifications ────────────────────────────── */}
         <div className="relative" ref={panelRef}>
           <button
             onClick={handleOpen}
-            className="relative w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+            className="relative w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && (
@@ -163,25 +157,19 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
             )}
           </button>
 
-          {/* Dropdown panel */}
           {open && (
-            <div className="absolute right-0 top-10 w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-                <h3 className="text-sm font-semibold text-gray-900">Notificaciones</h3>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
+            <div className="absolute right-0 top-11 w-80 bg-white rounded-xl border border-gray-100 overflow-hidden z-50 shadow-xl">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-700">Notificaciones</h3>
+                <button onClick={() => setOpen(false)} className="text-gray-300 hover:text-gray-500 transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* List */}
               <div className="max-h-96 overflow-y-auto divide-y divide-gray-50">
                 {notifLoading ? (
                   <div className="py-8 flex items-center justify-center">
-                    <div className="w-5 h-5 rounded-full border-2 border-gray-200 border-t-[#293c4f] animate-spin" />
+                    <div className="w-5 h-5 rounded-full border-2 border-gray-100 border-t-gray-400 animate-spin" />
                   </div>
                 ) : notifications.length === 0 ? (
                   <div className="py-10 text-center">
@@ -203,7 +191,7 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
                         {TYPE_ICON[n.type]}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
-                            <p className="text-xs font-medium text-gray-800 leading-tight">{n.title}</p>
+                            <p className="text-xs font-medium text-gray-700 leading-tight">{n.title}</p>
                             {isUnread && <span className={cn('w-1.5 h-1.5 rounded-full shrink-0 mt-1', TYPE_DOT[n.type])} />}
                           </div>
                           <p className="text-xs text-gray-400 mt-0.5 leading-snug truncate">{n.message}</p>
@@ -216,14 +204,10 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
                 )}
               </div>
 
-              {/* Footer */}
               {notifications.length > 0 && (
-                <div className="px-4 py-2.5 border-t border-gray-50 flex items-center justify-between">
-                  <span className="text-xs text-gray-400">{notifications.length} notificaciones</span>
-                  <button
-                    onClick={markAllRead}
-                    className="text-xs text-[#293c4f] font-medium hover:underline"
-                  >
+                <div className="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between">
+                  <span className="text-xs text-gray-300">{notifications.length} notificaciones</span>
+                  <button onClick={markAllRead} className="text-xs text-gray-500 font-medium hover:text-gray-700 transition-colors">
                     Marcar todas como leídas
                   </button>
                 </div>
@@ -233,15 +217,13 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
         </div>
 
         {/* ── User avatar ──────────────────────────────── */}
-        <div className="flex items-center gap-2.5 pl-1 border-l border-gray-100">
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0"
-            style={{ backgroundColor: '#293c4f' }}
-          >
+        <div className="flex items-center gap-2.5 pl-3 border-l border-gray-100">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0"
+            style={{ backgroundColor: '#293c4f' }}>
             {user?.name?.charAt(0).toUpperCase() ?? 'U'}
           </div>
           <div className="hidden lg:block min-w-0">
-            <p className="text-gray-800 text-sm font-medium leading-tight truncate max-w-28">
+            <p className="text-gray-700 text-sm font-medium leading-tight truncate max-w-28">
               {user?.name?.split(' ')[0] ?? 'Usuario'}
             </p>
             <p className="text-gray-400 text-xs">

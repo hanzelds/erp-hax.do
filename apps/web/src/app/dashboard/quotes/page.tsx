@@ -2,10 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Send, Check, X, FileText, ArrowRight, UserPlus, ArrowLeft, Trash2, ChevronDown, Settings } from 'lucide-react'
+import { Plus, Send, Check, X, FileText, ArrowRight, UserPlus, ArrowLeft, Trash2, ChevronDown, Settings, Download } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
-import { formatCurrency, formatDate, cn } from '@/lib/utils'
+import { formatCurrency, formatDate, cn, openPdf } from '@/lib/utils'
 import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
 import NewContactPage from '@/components/NewContactPage'
 
@@ -639,14 +639,18 @@ function QuoteDetailModal({ id, onClose, onConvert }: { id: string; onClose: () 
             <p className="text-base font-bold text-[#293c4f]">Total: {formatCurrency(quote.total)}</p>
           </div>
           {quote.notes && <p className="text-xs text-gray-500 border-t border-gray-100 pt-3">{quote.notes}</p>}
-          {quote.status === 'ACCEPTED' && (
-            <div className="pt-2">
+          <div className="space-y-2 border-t border-gray-100 pt-3">
+            <Button variant="secondary" size="sm" className="w-full" icon={<Download className="w-3.5 h-3.5" />}
+              onClick={() => openPdf(`/quotes/${quote.id}/pdf`, `cotizacion-${quote.number}.pdf`)}>
+              Descargar PDF
+            </Button>
+            {quote.status === 'ACCEPTED' && (
               <Button variant="primary" className="w-full" icon={<ArrowRight className="w-3.5 h-3.5" />}
                 onClick={() => { onClose(); onConvert(id) }}>
                 Convertir a factura
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

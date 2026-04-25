@@ -2,15 +2,16 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ChevronDown, ChevronRight, Check, DollarSign, X, UserMinus, Users, FileDown } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, Check, DollarSign, X, UserMinus, Users, FileDown, Pencil, Trash2, PlusCircle } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, cn, openPdf } from '@/lib/utils'
-import { PageHeader, Button, Card, CardHeader, Skeleton, EmptyState, Badge } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
-type Tab = 'payrolls' | 'employees'
+type Tab           = 'payrolls' | 'employees'
 type PayrollStatus = 'CALCULATED' | 'APPROVED' | 'PAID'
 type EmployeeType  = 'SALARIED' | 'CONTRACTOR'
+type AdditionType  = 'COMMISSION' | 'OVERTIME' | 'INCENTIVE' | 'BONUS' | 'VACATION_PAY' | 'OTHER'
 
 interface Employee {
   id: string; name: string; email: string; position?: string
@@ -18,11 +19,17 @@ interface Employee {
   baseSalary: number; isActive: boolean; hiredAt: string
 }
 
+interface PayrollAddition {
+  id: string; type: AdditionType; description?: string
+  amount: number; hours?: number; rate?: number
+}
+
 interface PayrollItem {
   id: string; employeeId: string; grossSalary: number
   afpEmployee: number; sfsEmployee: number; isr: number
   netSalary: number; afpEmployer: number; sfsEmployer: number
   employee: { id: string; name: string; type: string; position?: string }
+  additions: PayrollAddition[]
 }
 
 interface Payroll {
@@ -31,6 +38,23 @@ interface Payroll {
   totalIsr: number; totalAfpEmployee: number; totalSfsEmployee: number
   totalEmployerCost: number; approvedAt?: string; paidAt?: string
   _count?: { items: number }; items?: PayrollItem[]
+}
+
+const ADDITION_LABELS: Record<AdditionType, string> = {
+  COMMISSION:   'Comisión',
+  OVERTIME:     'Horas extras',
+  INCENTIVE:    'Incentivo',
+  BONUS:        'Bono',
+  VACATION_PAY: 'Vacaciones',
+  OTHER:        'Otro concepto',
+}
+const ADDITION_COLORS: Record<AdditionType, string> = {
+  COMMISSION:   'bg-purple-100 text-purple-700',
+  OVERTIME:     'bg-orange-100 text-orange-700',
+  INCENTIVE:    'bg-blue-100 text-blue-700',
+  BONUS:        'bg-emerald-100 text-emerald-700',
+  VACATION_PAY: 'bg-teal-100 text-teal-700',
+  OTHER:        'bg-gray-100 text-gray-600',
 }
 
 const STATUS_COLORS: Record<PayrollStatus, string> = {
@@ -46,15 +70,13 @@ const ic = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:out
 function F({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>{children}</div>
 }
-
 function currentPeriod() { return new Date().toISOString().slice(0, 7) }
 
 export default function PayrollPage() {
   const [tab, setTab] = useState<Tab>('payrolls')
-
   return (
     <div className="space-y-5">
-      <PageHeader title="Nómina" subtitle="Empleados · Cálculos · TSS · ISR" />
+      <PageHeader title="Nómina" subtitle="Empleados · Cálculos · TSS · ISR · Conceptos variables" />
       <div className="flex gap-1 border-b border-gray-100">
         {([{ key: 'payrolls', label: 'Nóminas' }, { key: 'employees', label: 'Empleados' }] as { key: Tab; label: string }[]).map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)}
@@ -78,36 +100,52 @@ function PayrollsTab() {
   const isAdmin = user?.role === 'ADMIN'
   const [expanded, setExpanded] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [additionModal, setAdditionModal] = useState<{
+    payrollItemId: string; employeeId: string; employeeName: string
+    editingAddition?: PayrollAddition
+  } | null>(null)
 
   const { data, isLoading } = useQuery<{ data: Payroll[] }>({
     queryKey: ['payrolls'],
     queryFn: async () => { const { data } = await api.get('/payroll', { params: { limit: 50 } }); return data.data ?? data },
   })
 
-  const { data: detail } = useQuery<Payroll>({
+  const { data: detail, refetch: refetchDetail } = useQuery<Payroll>({
     queryKey: ['payroll', expanded],
     queryFn: async () => { const { data } = await api.get(`/payroll/${expanded}`); return data.data ?? data },
     enabled: !!expanded,
   })
 
   const approve = useMutation({
-    mutationFn: async (id: string) => api.post(`/payroll/${id}/approve`),
+    mutationFn: (id: string) => api.post(`/payroll/${id}/approve`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payrolls'] }),
   })
   const pay = useMutation({
-    mutationFn: async (id: string) => api.post(`/payroll/${id}/pay`),
+    mutationFn: (id: string) => api.post(`/payroll/${id}/pay`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payrolls'] }),
   })
   const payTss = useMutation({
-    mutationFn: async (id: string) => api.post(`/payroll/${id}/pay-tss`),
+    mutationFn: (id: string) => api.post(`/payroll/${id}/pay-tss`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payrolls'] }),
   })
   const payIsr = useMutation({
-    mutationFn: async (id: string) => api.post(`/payroll/${id}/pay-isr`),
+    mutationFn: (id: string) => api.post(`/payroll/${id}/pay-isr`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payrolls'] }),
+  })
+  const removeAddition = useMutation({
+    mutationFn: ({ payrollItemId, additionId }: { payrollItemId: string; additionId: string }) =>
+      api.delete(`/payroll/items/${payrollItemId}/additions/${additionId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payroll', expanded] })
+      qc.invalidateQueries({ queryKey: ['payrolls'] })
+    },
   })
 
   const payrolls = data?.data ?? (Array.isArray(data) ? data : [])
+
+  // Find the current expanded payroll status
+  const expandedPayroll = payrolls.find(p => p.id === expanded)
+  const canEditAdditions = isAdmin && expandedPayroll?.status === 'CALCULATED'
 
   return (
     <div className="space-y-4">
@@ -164,12 +202,10 @@ function PayrollsTab() {
                         </Button>
                       )}
                       {isAdmin && p.status === 'APPROVED' && (
-                        <div className="flex gap-1">
-                          <Button variant="primary" size="sm" loading={pay.isPending}
-                            onClick={() => confirm('¿Registrar pago de nómina?') && pay.mutate(p.id)}>
-                            Pagar
-                          </Button>
-                        </div>
+                        <Button variant="primary" size="sm" loading={pay.isPending}
+                          onClick={() => confirm('¿Registrar pago de nómina?') && pay.mutate(p.id)}>
+                          Pagar
+                        </Button>
                       )}
                       {isAdmin && p.status === 'PAID' && (
                         <div className="flex gap-1">
@@ -185,38 +221,103 @@ function PayrollsTab() {
                       )}
                     </td>
                   </tr>
+
+                  {/* ── Expanded employee detail ── */}
                   {expanded === p.id && detail && (
-                    <tr key={`${p.id}-detail`} className="bg-gray-50/60">
-                      <td colSpan={9} className="px-6 py-4">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="border-b border-gray-200">
-                              {['Empleado', 'Salario Bruto', 'AFP', 'SFS', 'ISR', 'Neto', 'Comprobante'].map((h) => (
-                                <th key={h} className="text-left font-medium text-gray-500 px-2 py-1.5">{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {detail.items?.map((item) => (
-                              <tr key={item.id} className="border-b border-gray-100">
-                                <td className="px-2 py-2 font-medium text-gray-700">{item.employee.name}</td>
-                                <td className="px-2 py-2 text-gray-600">{formatCurrency(item.grossSalary)}</td>
-                                <td className="px-2 py-2 text-gray-500">{formatCurrency(item.afpEmployee)}</td>
-                                <td className="px-2 py-2 text-gray-500">{formatCurrency(item.sfsEmployee)}</td>
-                                <td className="px-2 py-2 text-red-500">{formatCurrency(item.isr)}</td>
-                                <td className="px-2 py-2 font-semibold text-[#293c4f]">{formatCurrency(item.netSalary)}</td>
-                                <td className="px-2 py-2">
-                                  <button
-                                    className="flex items-center gap-1 text-[#293c4f] hover:text-blue-700 text-xs underline underline-offset-2"
-                                    onClick={() => openPdf(`/payroll/${p.id}/slip/${item.employee.id}`, `nomina-${item.employee.name.replace(/\s+/g,'-')}.pdf`)}
-                                  >
-                                    <FileDown className="w-3 h-3" /> PDF
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                    <tr key={`${p.id}-detail`}>
+                      <td colSpan={9} className="bg-gray-50/50 px-6 py-4">
+
+                        {/* Employee rows */}
+                        <div className="space-y-3">
+                          {detail.items?.map((item) => {
+                            const additionsTotal = item.additions.reduce((s, a) => s + a.amount, 0)
+                            return (
+                              <div key={item.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                                {/* Employee header row */}
+                                <div className="grid grid-cols-7 gap-2 px-4 py-3 border-b border-gray-50">
+                                  <div className="col-span-2">
+                                    <p className="text-xs font-semibold text-gray-800">{item.employee.name}</p>
+                                    <p className="text-[10px] text-gray-400">{item.employee.position ?? item.employee.type}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-gray-400">Salario bruto</p>
+                                    <p className="text-xs font-medium text-gray-700">{formatCurrency(item.grossSalary)}</p>
+                                    {additionsTotal > 0 && (
+                                      <p className="text-[10px] text-purple-600">+{formatCurrency(additionsTotal)} variables</p>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-gray-400">AFP + SFS</p>
+                                    <p className="text-xs text-gray-600">{formatCurrency(item.afpEmployee + item.sfsEmployee)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-gray-400">ISR</p>
+                                    <p className="text-xs text-red-500">{formatCurrency(item.isr)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-gray-400">Neto</p>
+                                    <p className="text-xs font-bold text-[#293c4f]">{formatCurrency(item.netSalary)}</p>
+                                  </div>
+                                  <div className="flex items-center justify-end gap-2">
+                                    {canEditAdditions && (
+                                      <button
+                                        title="Agregar concepto"
+                                        onClick={() => setAdditionModal({ payrollItemId: item.id, employeeId: item.employeeId, employeeName: item.employee.name })}
+                                        className="flex items-center gap-1 text-xs text-[#293c4f] hover:opacity-70 font-medium"
+                                      >
+                                        <PlusCircle className="w-3.5 h-3.5" /> Concepto
+                                      </button>
+                                    )}
+                                    <button
+                                      className="flex items-center gap-1 text-[#293c4f] hover:text-blue-700 text-xs"
+                                      onClick={() => openPdf(`/payroll/${p.id}/slip/${item.employee.id}`, `nomina-${item.employee.name.replace(/\s+/g, '-')}.pdf`)}
+                                    >
+                                      <FileDown className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Additions */}
+                                {item.additions.length > 0 && (
+                                  <div className="px-4 py-2 flex flex-wrap gap-2">
+                                    {item.additions.map((a) => (
+                                      <div key={a.id}
+                                        className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border', ADDITION_COLORS[a.type])}>
+                                        <span>{ADDITION_LABELS[a.type]}</span>
+                                        {a.description && <span className="text-opacity-70">· {a.description}</span>}
+                                        {a.hours && <span className="opacity-60">({a.hours}h)</span>}
+                                        <span className="font-bold">{formatCurrency(a.amount)}</span>
+                                        {canEditAdditions && (
+                                          <>
+                                            <button
+                                              onClick={() => setAdditionModal({ payrollItemId: item.id, employeeId: item.employeeId, employeeName: item.employee.name, editingAddition: a })}
+                                              className="ml-1 opacity-50 hover:opacity-100"
+                                            >
+                                              <Pencil className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                              onClick={() => confirm('¿Eliminar concepto?') && removeAddition.mutate({ payrollItemId: item.id, additionId: a.id })}
+                                              className="opacity-50 hover:opacity-100 hover:text-red-500"
+                                            >
+                                              <Trash2 className="w-3 h-3" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Payroll summary footer */}
+                        <div className="mt-3 flex items-center justify-end gap-6 text-xs text-gray-500 border-t border-gray-200 pt-3">
+                          <span>Bruto total: <strong className="text-gray-700">{formatCurrency(detail.totalGross)}</strong></span>
+                          <span>ISR total: <strong className="text-red-500">{formatCurrency(detail.totalIsr)}</strong></span>
+                          <span>Neto total: <strong className="text-[#293c4f] text-sm">{formatCurrency(detail.totalNet)}</strong></span>
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -228,6 +329,135 @@ function PayrollsTab() {
       </Card>
 
       {showModal && <CalculateModal onClose={() => setShowModal(false)} />}
+
+      {additionModal && (
+        <AdditionModal
+          payrollItemId={additionModal.payrollItemId}
+          employeeName={additionModal.employeeName}
+          editingAddition={additionModal.editingAddition}
+          onClose={() => setAdditionModal(null)}
+          onSaved={() => {
+            setAdditionModal(null)
+            qc.invalidateQueries({ queryKey: ['payroll', expanded] })
+            qc.invalidateQueries({ queryKey: ['payrolls'] })
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Addition Modal ────────────────────────────────────────────
+
+function AdditionModal({
+  payrollItemId, employeeName, editingAddition, onClose, onSaved,
+}: {
+  payrollItemId: string
+  employeeName: string
+  editingAddition?: PayrollAddition
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const isEdit = !!editingAddition
+  const [type, setType]               = useState<AdditionType>(editingAddition?.type ?? 'COMMISSION')
+  const [description, setDescription] = useState(editingAddition?.description ?? '')
+  const [amount, setAmount]           = useState(editingAddition?.amount?.toString() ?? '')
+  const [hours, setHours]             = useState(editingAddition?.hours?.toString() ?? '')
+  const [rate, setRate]               = useState(editingAddition?.rate?.toString() ?? '')
+  const [err, setErr]                 = useState<string | null>(null)
+
+  // Auto-compute amount from hours × rate for overtime
+  const computedAmount = type === 'OVERTIME' && hours && rate
+    ? (parseFloat(hours) * parseFloat(rate)).toFixed(2)
+    : null
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const finalAmount = type === 'OVERTIME' && computedAmount
+        ? parseFloat(computedAmount)
+        : parseFloat(amount)
+
+      const body = {
+        type,
+        description: description || undefined,
+        amount: finalAmount,
+        hours:  type === 'OVERTIME' && hours ? parseFloat(hours) : undefined,
+        rate:   type === 'OVERTIME' && rate  ? parseFloat(rate)  : undefined,
+      }
+
+      if (isEdit) {
+        return api.patch(`/payroll/items/${payrollItemId}/additions/${editingAddition!.id}`, body)
+      }
+      return api.post(`/payroll/items/${payrollItemId}/additions`, body)
+    },
+    onSuccess: onSaved,
+    onError: (e: any) => setErr(e?.response?.data?.error ?? 'Error al guardar'),
+  })
+
+  const isOvertimeValid = type === 'OVERTIME' ? !!(hours && rate) : !!amount
+  const isValid = isOvertimeValid
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">{isEdit ? 'Editar concepto' : 'Agregar concepto'}</h2>
+            <p className="text-xs text-gray-400">{employeeName}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+        </div>
+
+        <form onSubmit={(e) => { e.preventDefault(); setErr(null); save.mutate() }} className="p-6 space-y-4">
+          <F label="Tipo de concepto *">
+            <select value={type} onChange={(e) => { setType(e.target.value as AdditionType); setAmount(''); setHours(''); setRate('') }} className={ic}>
+              {(Object.keys(ADDITION_LABELS) as AdditionType[]).map(t => (
+                <option key={t} value={t}>{ADDITION_LABELS[t]}</option>
+              ))}
+            </select>
+          </F>
+
+          <F label="Descripción">
+            <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
+              className={ic} placeholder="Detalle opcional" />
+          </F>
+
+          {type === 'OVERTIME' ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Horas extras *">
+                  <input type="number" min="0" step="0.5" value={hours} onChange={(e) => setHours(e.target.value)}
+                    className={ic} placeholder="8" />
+                </F>
+                <F label="Tarifa por hora *">
+                  <input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)}
+                    className={ic} placeholder="500.00" />
+                </F>
+              </div>
+              {computedAmount && (
+                <div className="bg-orange-50 border border-orange-100 rounded-lg px-3 py-2 flex items-center justify-between">
+                  <span className="text-xs text-orange-700">Total calculado</span>
+                  <span className="text-sm font-bold text-orange-700">RD$ {parseFloat(computedAmount).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <F label="Monto (RD$) *">
+              <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)}
+                className={ic} placeholder="0.00" />
+            </F>
+          )}
+
+          {err && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
+            <Button variant="primary" type="submit" loading={save.isPending} disabled={!isValid}>
+              {isEdit ? 'Guardar cambios' : 'Agregar'}
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
@@ -250,7 +480,7 @@ function EmployeesTab() {
   })
 
   const terminate = useMutation({
-    mutationFn: async (id: string) => api.post(`/payroll/employees/${id}/terminate`),
+    mutationFn: (id: string) => api.post(`/payroll/employees/${id}/terminate`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   })
 
@@ -308,11 +538,8 @@ function EmployeesTab() {
                   </td>
                   <td className="px-3 py-3">
                     {isAdmin && emp.isActive && (
-                      <button
-                        title="Dar de baja"
-                        className="text-gray-400 hover:text-red-500"
-                        onClick={() => confirm(`¿Dar de baja a ${emp.name}?`) && terminate.mutate(emp.id)}
-                      >
+                      <button title="Dar de baja" className="text-gray-400 hover:text-red-500"
+                        onClick={() => confirm(`¿Dar de baja a ${emp.name}?`) && terminate.mutate(emp.id)}>
                         <UserMinus className="w-4 h-4" />
                       </button>
                     )}
@@ -333,11 +560,11 @@ function EmployeesTab() {
 
 function CalculateModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
-  const [bu, setBu] = useState('HAX')
+  const [bu, setBu]         = useState('HAX')
   const [period, setPeriod] = useState(currentPeriod())
 
   const calc = useMutation({
-    mutationFn: async () => api.post('/payroll/calculate', { businessUnit: bu, period }),
+    mutationFn: () => api.post('/payroll/calculate', { businessUnit: bu, period }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['payrolls'] }); onClose() },
   })
 
@@ -384,11 +611,11 @@ function NewEmployeeModal({ onClose }: { onClose: () => void }) {
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }))
 
   const save = useMutation({
-    mutationFn: async () => api.post('/payroll/employees', {
+    mutationFn: () => api.post('/payroll/employees', {
       ...form,
       baseSalary: parseFloat(form.baseSalary),
       cedula: form.cedula || undefined,
-      phone: form.phone || undefined,
+      phone:  form.phone  || undefined,
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['employees'] }); onClose() },
   })

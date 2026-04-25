@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { sendSuccess, sendCreated, sendPaginated } from '../../utils/response'
 import * as svc from './quotes.service'
+import { getQuotePdfBytes } from '../../services/quote-pdf.service'
 import { BusinessUnit } from '@prisma/client'
 
 export async function list(req: Request, res: Response) {
@@ -30,4 +31,10 @@ export async function convert(req: Request, res: Response) {
 }
 export async function stats(req: Request, res: Response) {
   sendSuccess(res, await svc.getQuoteStats(req.query.businessUnit as BusinessUnit | undefined))
+}
+export async function pdf(req: Request, res: Response) {
+  const { bytes, filename } = await getQuotePdfBytes(req.params.id)
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
+  res.send(Buffer.from(bytes))
 }

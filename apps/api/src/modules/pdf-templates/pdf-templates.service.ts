@@ -103,6 +103,33 @@ export async function previewTemplate(id: string): Promise<Uint8Array> {
 function getSampleData(type: PdfTemplateType): object {
   const company = { name: 'HAX ESTUDIO CREATIVO EIRL', rnc: '133-290251', address: 'Santo Domingo, RD' }
 
+  if (type === 'QUOTE') {
+    return {
+      company,
+      quote: {
+        number: 'COT-H-00001',
+        status: 'BORRADOR',
+        createdAt: new Date().toISOString(),
+        validUntil: new Date(Date.now() + 30 * 86400000).toISOString(),
+        subtotal: 10000,
+        taxAmount: 1800,
+        total: 11800,
+        businessUnit: 'HAX',
+        notes: 'Gracias por solicitar nuestra cotización.',
+        terms: 'Válida por 30 días. Precios sujetos a cambio sin previo aviso.',
+      },
+      client: { name: 'Empresa Ejemplo SRL', rnc: '1-31-12345-6', email: 'info@ejemplo.com', phone: '809-555-0100' },
+      items: [
+        { description: 'Diseño de identidad visual', quantity: 1, unitPrice: 5000, taxRate: 0.18, taxAmount: 900, total: 5900, isExempt: false },
+        { description: 'Desarrollo web — landing page', quantity: 1, unitPrice: 5000, taxRate: 0.18, taxAmount: 900, total: 5900, isExempt: false },
+      ],
+      isAccepted: false,
+      isRejected: false,
+      isConverted: false,
+      generatedAt: new Date().toLocaleDateString('es-DO'),
+    }
+  }
+
   if (type === 'INVOICE' || type === 'CREDIT_NOTE') {
     return {
       company,

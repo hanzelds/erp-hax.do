@@ -72,3 +72,17 @@ export async function payrollSlipPdf(req: Request, res: Response) {
   res.setHeader('Content-Disposition', `inline; filename="nomina-${id}-${employeeId}.pdf"`)
   res.send(Buffer.from(bytes))
 }
+
+// ── Additions ──────────────────────────────────────────────────
+
+export async function addAddition(req: Request, res: Response) {
+  sendCreated(res, await svc.addAddition(req.params.payrollItemId, req.body))
+}
+
+export async function updateAddition(req: Request, res: Response) {
+  sendSuccess(res, await svc.updateAddition(req.params.additionId, req.body))
+}
+
+export async function removeAddition(req: Request, res: Response) {
+  sendSuccess(res, await svc.removeAddition(req.params.additionId))
+}

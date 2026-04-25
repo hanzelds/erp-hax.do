@@ -426,20 +426,21 @@ export default function InvoiceDetailPage() {
 
           {/* PDF + XML download */}
           <Card padding="sm">
-            <div className="px-1 py-2 flex items-center justify-between">
+            <div className="px-1 py-2 space-y-3">
               <div>
-                <p className="text-xs font-semibold text-gray-800">Documentos</p>
-                <p className="text-xs text-gray-400">PDF para el cliente · XML fiscal</p>
+                <p className="text-xs font-semibold text-white/90">Documentos</p>
+                <p className="text-xs text-white/35 mt-0.5">PDF para el cliente · XML fiscal</p>
               </div>
-              <div className="flex items-center gap-2">
-                {(invoice as any).pdfStatus === 'GENERATING' && (
-                  <span className="text-xs text-amber-600 flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3 animate-spin" /> Generando…
-                  </span>
-                )}
+              {(invoice as any).pdfStatus === 'GENERATING' && (
+                <span className="text-xs text-amber-400 flex items-center gap-1.5">
+                  <RefreshCw className="w-3 h-3 animate-spin" /> Generando PDF…
+                </span>
+              )}
+              <div className="flex flex-col gap-2">
                 {(invoice as any).pdfStatus === 'ERROR' && isAdmin && (
                   <Button
-                    variant="secondary" size="sm"
+                    variant="secondary" size="sm" className="w-full"
+                    icon={<RefreshCw className="w-3.5 h-3.5" />}
                     onClick={() => regeneratePdf.mutate()}
                     loading={regeneratePdf.isPending}
                   >
@@ -447,14 +448,16 @@ export default function InvoiceDetailPage() {
                   </Button>
                 )}
                 <Button
-                  variant="secondary" size="sm"
+                  variant="secondary" size="sm" className="w-full"
+                  icon={<FileText className="w-3.5 h-3.5" />}
                   onClick={() => openPdf(`/invoices/${invoice.id}/pdf`, `factura-${invoice.number}.pdf`)}
                 >
                   Descargar PDF
                 </Button>
                 {invoice.xml && (
                   <Button
-                    variant="secondary" size="sm"
+                    variant="secondary" size="sm" className="w-full"
+                    icon={<FileText className="w-3.5 h-3.5" />}
                     onClick={() => {
                       const blob = new Blob([invoice.xml!], { type: 'application/xml' })
                       const url = URL.createObjectURL(blob)

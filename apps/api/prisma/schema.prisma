@@ -94,6 +94,9 @@ model Quote {
   sentAt             DateTime?
   acceptedAt         DateTime?
   rejectedAt         DateTime?
+  pdfPath            String?
+  pdfGeneratedAt     DateTime?
+  pdfStatus          PdfStatus       @default(NONE)
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
   invoice            Invoice?        @relation("QuoteInvoice")
@@ -541,29 +544,45 @@ model Payroll {
 }
 
 model PayrollItem {
-  id               String    @id @default(cuid())
+  id               String             @id @default(cuid())
   payrollId        String
   employeeId       String
   grossSalary      Float
-  afpEmployee      Float     @default(0)
-  sfsEmployee      Float     @default(0)
-  isr              Float     @default(0)
-  otherDeductions  Float     @default(0)
+  afpEmployee      Float              @default(0)
+  sfsEmployee      Float              @default(0)
+  isr              Float              @default(0)
+  otherDeductions  Float              @default(0)
   netSalary        Float
-  afpEmployer      Float     @default(0)
-  sfsEmployer      Float     @default(0)
-  sfsRiesgoLaboral Float     @default(0)
-  emailSent        Boolean   @default(false)
+  afpEmployer      Float              @default(0)
+  sfsEmployer      Float              @default(0)
+  sfsRiesgoLaboral Float              @default(0)
+  emailSent        Boolean            @default(false)
   emailSentAt      DateTime?
   pdfPath          String?
   pdfGeneratedAt   DateTime?
-  pdfStatus        PdfStatus @default(NONE)
-  employee         Employee  @relation(fields: [employeeId], references: [id])
-  payroll          Payroll   @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  pdfStatus        PdfStatus          @default(NONE)
+  employee         Employee           @relation(fields: [employeeId], references: [id])
+  payroll          Payroll            @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  additions        PayrollAddition[]
 
   @@unique([payrollId, employeeId])
   @@index([payrollId])
   @@map("payroll_items")
+}
+
+model PayrollAddition {
+  id            String              @id @default(cuid())
+  payrollItemId String
+  type          PayrollAdditionType
+  description   String?
+  amount        Float
+  hours         Float?
+  rate          Float?
+  createdAt     DateTime            @default(now())
+  payrollItem   PayrollItem         @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
+
+  @@index([payrollItemId])
+  @@map("payroll_additions")
 }
 
 model FiscalReport {
@@ -876,9 +895,19 @@ enum PdfStatus {
   ERROR
 }
 
+enum PayrollAdditionType {
+  COMMISSION
+  OVERTIME
+  INCENTIVE
+  BONUS
+  VACATION_PAY
+  OTHER
+}
+
 enum PdfTemplateType {
   INVOICE
   CREDIT_NOTE
+  QUOTE
   PAYROLL_SLIP
   REPORT_PNL
   REPORT_BALANCE

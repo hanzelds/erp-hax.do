@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Search, Filter, Download, RefreshCw } from 'lucide-react'
+import { Plus, Search, Filter, RefreshCw } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import {
@@ -68,7 +68,6 @@ export default function InvoicesPage() {
   const [from, setFrom]       = useState('')
   const [to, setTo]           = useState('')
   const [page, setPage]       = useState(1)
-  const [exporting, setExporting] = useState(false)
 
   const { data, isLoading, isFetching, refetch } = useQuery<InvoicesResponse>({
     queryKey: ['invoices', { search, status, bu, type, from, to, page }],
@@ -92,29 +91,6 @@ export default function InvoicesPage() {
   const invoices   = data?.data ?? []
   const pagination = data?.pagination
 
-  async function handleExport607() {
-    setExporting(true)
-    try {
-      const period = new Date().toISOString().slice(0, 7) // YYYY-MM
-      const response = await api.get('/reports/607/export', {
-        params: { period },
-        responseType: 'blob',
-      })
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `607-${period}.txt`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      window.URL.revokeObjectURL(url)
-    } catch (err) {
-      console.error('Export 607 failed', err)
-    } finally {
-      setExporting(false)
-    }
-  }
-
   return (
     <div className="space-y-5">
       <PageHeader
@@ -124,9 +100,6 @@ export default function InvoicesPage() {
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={() => refetch()} disabled={isFetching}>
               Actualizar
-            </Button>
-            <Button variant="secondary" size="sm" icon={<Download className="w-3.5 h-3.5" />} onClick={handleExport607} disabled={exporting}>
-              {exporting ? 'Exportando…' : 'Exportar 607'}
             </Button>
             <Button asChild variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />}>
               <Link href="/dashboard/invoices/new">Nueva factura</Link>

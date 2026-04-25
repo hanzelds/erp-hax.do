@@ -316,6 +316,7 @@ model Expense {
   expenseDate    DateTime        @default(now())
   accountCode    String?         // Account code to debit (from chart of accounts)
   paymentMethod  String?         @default("TRANSFER")
+  ncfType        String?         // B13=gastos menores, B11=proveedor informal, etc.
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   supplierRef    Supplier?       @relation(fields: [supplierId], references: [id])

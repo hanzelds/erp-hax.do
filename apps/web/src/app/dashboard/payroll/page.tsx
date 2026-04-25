@@ -560,8 +560,12 @@ function EmployeesTab() {
 
 function CalculateModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
-  const [bu, setBu]         = useState('HAX')
-  const [period, setPeriod] = useState(currentPeriod())
+  const [bu, setBu]           = useState('HAX')
+  const [month, setMonth]     = useState(currentPeriod())
+  const [quincena, setQuincena] = useState<'Q1' | 'Q2'>('Q1')
+
+  // Period format: "YYYY-MM-Q1" or "YYYY-MM-Q2"
+  const period = `${month}-${quincena}`
 
   const calc = useMutation({
     mutationFn: () => api.post('/payroll/calculate', { businessUnit: bu, period }),
@@ -582,9 +586,29 @@ function CalculateModal({ onClose }: { onClose: () => void }) {
               <option value="KODER">KODER</option>
             </select>
           </F>
-          <F label="Período *">
-            <input type="month" required value={period} onChange={(e) => setPeriod(e.target.value)} className={ic} />
+          <F label="Mes *">
+            <input type="month" required value={month} onChange={(e) => setMonth(e.target.value)} className={ic} />
           </F>
+          <F label="Quincena *">
+            <div className="flex gap-3">
+              {(['Q1', 'Q2'] as const).map(q => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => setQuincena(q)}
+                  className={cn(
+                    'flex-1 py-2 rounded-lg border text-sm font-medium transition-colors',
+                    quincena === q
+                      ? 'border-[#293c4f] bg-[#293c4f]/5 text-[#293c4f]'
+                      : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                  )}
+                >
+                  {q === 'Q1' ? '1ra quincena (1–15)' : '2da quincena (16–fin)'}
+                </button>
+              ))}
+            </div>
+          </F>
+          <p className="text-xs text-gray-400">Período: <span className="font-mono font-medium text-gray-600">{period}</span></p>
           {calc.isError && (
             <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">
               {(calc.error as any)?.response?.data?.error ?? 'Error al calcular nómina'}

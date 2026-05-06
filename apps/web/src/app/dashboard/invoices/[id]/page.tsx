@@ -7,7 +7,7 @@ import { ArrowLeft, DollarSign, X, XCircle, Send, RefreshCw, FileText, Copy } fr
 import Link from 'next/link'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn, openPdf } from '@/lib/utils'
-import { Button, Card, CardHeader, InvoiceStatusBadge, Skeleton } from '@/components/ui'
+import { Button, Card, CardHeader, InvoiceStatusBadge, Skeleton, Select } from '@/components/ui'
 import { EmissionModal } from '@/components/invoices/EmissionModal'
 import { useAuthStore } from '@/lib/auth-store'
 
@@ -549,12 +549,12 @@ export default function InvoiceDetailPage() {
                   className={ic} />
               </F>
               <F label="Método de pago">
-                <select value={payForm.method} onChange={(e) => setPayForm({ ...payForm, method: e.target.value })} className={ic}>
+                <Select value={payForm.method} onChange={(e) => setPayForm({ ...payForm, method: e.target.value })} className={ic}>
                   <option value="TRANSFER">Transferencia</option>
                   <option value="CASH">Efectivo</option>
                   <option value="CHECK">Cheque</option>
                   <option value="CARD">Tarjeta</option>
-                </select>
+                </Select>
               </F>
               <F label="Referencia">
                 <input type="text" value={payForm.reference}
@@ -582,7 +582,7 @@ export default function InvoiceDetailPage() {
             </div>
             <p className="text-xs text-gray-500 mb-4">Selecciona el tipo de comprobante fiscal. Se creará una nueva factura en estado DRAFT con los mismos ítems.</p>
             <F label="Tipo e-CF destino">
-              <select value={convertNcf} onChange={(e) => setConvertNcf(e.target.value)} className={ic}>
+              <Select value={convertNcf} onChange={(e) => setConvertNcf(e.target.value)} className={ic}>
                 <option value="E31">31 — Crédito Fiscal</option>
                 <option value="E32">32 — Consumidor Final</option>
                 <option value="E33">33 — Nota de Débito</option>
@@ -590,7 +590,7 @@ export default function InvoiceDetailPage() {
                 <option value="E45">45 — Gubernamental (exento)</option>
                 <option value="E46">46 — Exportaciones (exento)</option>
                 <option value="E47">47 — Pagos al Exterior (exento)</option>
-              </select>
+              </Select>
             </F>
             {convertProforma.isError && (
               <p className="text-xs text-red-600 mt-3">

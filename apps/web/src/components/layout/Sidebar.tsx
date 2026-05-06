@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { navigation } from '@/lib/navigation'
 import { useAuthStore } from '@/lib/auth-store'
+import { HaxLogo, HaxMark } from '@/components/ui/HaxLogo'
 
 interface SidebarProps {
   collapsed: boolean
@@ -32,23 +33,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
       >
         {!collapsed && (
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-              style={{ backgroundColor: '#293c4f' }}>
-              <HaxIcon />
-            </div>
-            <div className="min-w-0">
-              <p className="text-gray-800 font-semibold text-sm leading-tight truncate">ERP Hax</p>
-              <p className="text-gray-400 text-xs truncate">HAX ESTUDIO CREATIVO</p>
-            </div>
-          </div>
+          <Link href="/dashboard" className="flex items-center min-w-0 flex-1">
+            <HaxLogo color="#293c4f" className="h-7 w-auto" />
+          </Link>
         )}
 
         {collapsed && (
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: '#293c4f' }}>
-            <HaxIcon />
-          </div>
+          <Link href="/dashboard" title="ERP Hax" className="flex items-center justify-center">
+            <HaxMark color="#293c4f" className="h-8 w-auto" />
+          </Link>
         )}
 
         {!collapsed && (
@@ -167,13 +160,3 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   )
 }
 
-function HaxIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <rect x="1" y="1" width="5" height="5" rx="1" fill="white" fillOpacity="0.85" />
-      <rect x="8" y="1" width="5" height="5" rx="1" fill="white" fillOpacity="0.85" />
-      <rect x="1" y="8" width="5" height="5" rx="1" fill="white" fillOpacity="0.85" />
-      <rect x="8" y="8" width="5" height="5" rx="1" fill="white" fillOpacity="0.85" />
-    </svg>
-  )
-}

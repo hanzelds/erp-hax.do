@@ -38,3 +38,12 @@ export async function getEmail(req: Request, res: Response) {
 export async function updateEmail(req: Request, res: Response) {
   sendSuccess(res, await svc.updateEmailConfig(req.body))
 }
+export async function resetData(req: Request, res: Response) {
+  const { modules } = req.body as { modules?: string[] }
+  if (!Array.isArray(modules) || modules.length === 0) {
+    res.status(400).json({ error: 'Debes seleccionar al menos un módulo' })
+    return
+  }
+  const results = await svc.resetModules(modules)
+  sendSuccess(res, { results, message: 'Reset completado' })
+}

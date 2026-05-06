@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { BookOpen, Lock, TrendingDown, TrendingUp } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState, useConfirm } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
 type Tab = 'journal' | 'accounts' | 'trial-balance' | 'balance-sheet' | 'pnl' | 'margins' | 'itbis' | 'periods'
@@ -423,6 +423,7 @@ function ItbisTab() {
 // ── Fiscal Periods ────────────────────────────────────────────
 
 function PeriodsTab({ isAdmin }: { isAdmin: boolean }) {
+  const confirm = useConfirm()
   const qc = useQueryClient()
   const { data = [], isLoading } = useQuery<any[]>({
     queryKey: ['fiscal-periods'],
@@ -460,7 +461,7 @@ function PeriodsTab({ isAdmin }: { isAdmin: boolean }) {
               <td className="px-3 py-3">
                 {isAdmin && p.status === 'OPEN' && (
                   <Button variant="secondary" size="sm" icon={<Lock className="w-3 h-3" />} loading={closePeriod.isPending}
-                    onClick={() => confirm(`¿Cerrar período ${p.period}?`) && closePeriod.mutate(p.period)}>
+                    onClick={async () => { if (await confirm({ title: `¿Cerrar período ${p.period}?`, variant: 'danger', confirmLabel: 'Cerrar' })) closePeriod.mutate(p.period) }}>
                     Cerrar
                   </Button>
                 )}

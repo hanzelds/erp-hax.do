@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState, Select, DatePicker } from '@/components/ui'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Payment {
@@ -109,18 +109,19 @@ function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () =
     enabled: showClientDrop,
   })
 
-  // Pending invoices for selected client
+  // Pending invoices for selected client — APPROVED by DGII + payment pending/partial
   const { data: pendingInvoices = [], isLoading: loadingInvoices } = useQuery<PendingInvoice[]>({
     queryKey: ['pending-invoices', form.clientId],
     queryFn: async () => {
       const { data } = await api.get('/invoices', {
-        params: { clientId: form.clientId, paymentStatus: 'PENDING,PARTIAL', limit: 50 },
+        params: {
+          clientId:      form.clientId,
+          status:        'APPROVED',
+          paymentStatus: 'PENDING,PARTIAL',
+          limit:         100,
+        },
       })
-      // filter client-side too, API may not support comma-separated values
-      const all = data.data ?? data
-      return all.filter((i: PendingInvoice) =>
-        i.paymentStatus === 'PENDING' || i.paymentStatus === 'PARTIAL'
-      )
+      return data.data ?? data
     },
     enabled: !!form.clientId && incomeType === 'invoice',
   })
@@ -274,11 +275,10 @@ function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () =
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">
                   Fecha de pago <span className="text-red-400">*</span>
                 </label>
-                <input
-                  type="date"
+                <DatePicker
                   value={form.paidAt}
-                  onChange={(e) => set('paidAt', e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#293c4f]/20 focus:border-[#293c4f]"
+                  onChange={(v) => set('paidAt', v)}
+                  className="w-full"
                 />
               </div>
 
@@ -287,18 +287,15 @@ function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () =
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">
                   Forma de pago <span className="text-red-400">*</span>
                 </label>
-                <div className="relative">
-                  <select
-                    value={form.method}
-                    onChange={(e) => set('method', e.target.value as PaymentMethod)}
-                    className="w-full appearance-none border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#293c4f]/20 focus:border-[#293c4f] bg-white pr-8"
-                  >
-                    {METHOD_OPTIONS.map((m) => (
-                      <option key={m} value={m}>{METHOD_LABEL[m]}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                </div>
+                <Select
+                  value={form.method}
+                  onChange={(e) => set('method', e.target.value as PaymentMethod)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#293c4f]/20 focus:border-[#293c4f] bg-white"
+                >
+                  {METHOD_OPTIONS.map((m) => (
+                    <option key={m} value={m}>{METHOD_LABEL[m]}</option>
+                  ))}
+                </Select>
               </div>
             </div>
 

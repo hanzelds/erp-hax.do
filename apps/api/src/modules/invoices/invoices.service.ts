@@ -90,8 +90,16 @@ async function autoJournalEntry(opts: {
 export async function listInvoices(query: any) {
   const { page, limit, skip } = parsePagination(query)
   const where: any = {}
-  if (query.status) where.status = query.status
-  if (query.paymentStatus) where.paymentStatus = query.paymentStatus
+  // status: single value or comma-separated (e.g. "APPROVED,PAID")
+  if (query.status) {
+    const statuses = String(query.status).split(',').map((s: string) => s.trim()).filter(Boolean)
+    where.status = statuses.length === 1 ? statuses[0] : { in: statuses }
+  }
+  // paymentStatus: single value or comma-separated (e.g. "PENDING,PARTIAL")
+  if (query.paymentStatus) {
+    const ps = String(query.paymentStatus).split(',').map((s: string) => s.trim()).filter(Boolean)
+    where.paymentStatus = ps.length === 1 ? ps[0] : { in: ps }
+  }
   if (query.businessUnit) where.businessUnit = query.businessUnit
   if (query.clientId) where.clientId = query.clientId
   if (query.search) {

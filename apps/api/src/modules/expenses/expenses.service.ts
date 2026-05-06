@@ -2,6 +2,28 @@ import { prisma } from '../../config/database'
 import { NotFoundError, AppError } from '../../middleware/errorHandler'
 import { parsePagination } from '../../utils/response'
 import { ExpenseStatus, BusinessUnit } from '@prisma/client'
+import { buildNcf, getSeqField, emitEcf } from '../../services/alanube.service'
+import { logger } from '../../config/logger'
+
+// Maps expense ncfType code → e-CF type key
+const NCF_TYPE_TO_ECF: Record<string, string> = {
+  B11: 'COMPRAS',        // e-CF 41 — Comprobante de Compras (proveedor informal)
+  B13: 'GASTOS_MENORES', // e-CF 43 — Gastos Menores
+}
+
+/**
+ * Reserve the next sequence number for an expense e-CF type and return the NCF string.
+ * Atomically increments the counter in EcfConfig.
+ */
+async function reserveExpenseNcf(ecfType: string): Promise<string> {
+  const seqField = getSeqField(ecfType)
+  const config = await prisma.ecfConfig.upsert({
+    where:  { id: 'main' },
+    update: { [seqField]: { increment: 1 } },
+    create: { id: 'main', [seqField]: 2 }, // start at 2 because initial default is 1
+  })
+  return buildNcf(ecfType, (config as any)[seqField])
+}
 
 /** Load account codes from DB config at runtime */
 async function getExpenseAcctCodes() {
@@ -96,7 +118,55 @@ export async function createExpense(data: any) {
   // Normalize expenseDate: convert YYYY-MM-DD string to Date object
   if (!data.expenseDate) delete data.expenseDate
   else data.expenseDate = new Date(data.expenseDate)
-  return prisma.expense.create({ data: { ...data, total } })
+
+  // ── Auto e-CF for informal supplier (B11) and gastos menores (B13) ──
+  // If no NCF provided and the ncfType requires one, generate it via Alanube
+  const ecfType = data.ncfType ? NCF_TYPE_TO_ECF[data.ncfType] : null
+  if (ecfType && !data.ncf) {
+    try {
+      data.ncf = await reserveExpenseNcf(ecfType)
+      logger.info(`[Expenses] Reserved e-CF ${data.ncf} (${ecfType}) for informal expense`)
+    } catch (err: any) {
+      logger.error(`[Expenses] Could not reserve NCF for ${ecfType}: ${err.message}`)
+    }
+  }
+
+  const expense = await prisma.expense.create({ data: { ...data, total } })
+
+  // ── Emit to Alanube asynchronously (non-blocking) ──
+  if (expense.ncf && ecfType) {
+    const supplierRef = data.supplierId
+      ? await prisma.supplier.findUnique({ where: { id: data.supplierId }, select: { name: true, rnc: true } }).catch(() => null)
+      : null
+    const issueDate = (data.expenseDate instanceof Date ? data.expenseDate : new Date()).toISOString().slice(0, 10)
+
+    emitEcf({
+      invoiceId:  expense.id,
+      ncf:        expense.ncf,
+      businessUnit: expense.businessUnit as any,
+      type:       ecfType,
+      issueDate,
+      clientName: supplierRef?.name ?? expense.supplier ?? 'Proveedor Informal',
+      clientRnc:  supplierRef?.rnc  ?? null,
+      subtotal:   expense.amount,
+      taxAmount:  expense.taxAmount,
+      total:      expense.total,
+      items: [{
+        description: expense.description,
+        quantity:    1,
+        unitPrice:   expense.amount,
+        taxRate:     expense.taxAmount > 0 ? 0.18 : 0,
+        taxAmount:   expense.taxAmount,
+        total:       expense.total,
+      }],
+    }).then(result => {
+      logger.info(`[Expenses] e-CF emitted for ${expense.id}: status=${result.status} ncf=${result.ncf}`)
+    }).catch(err => {
+      logger.error(`[Expenses] e-CF emit error for ${expense.id}: ${err.message}`)
+    })
+  }
+
+  return expense
 }
 
 export async function updateExpense(id: string, data: any) {

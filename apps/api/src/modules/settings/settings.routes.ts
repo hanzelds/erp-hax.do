@@ -17,5 +17,6 @@ router.get('/accounts',      ctrl.getAccounts)
 router.put('/accounts',      requireAdmin, ctrl.updateAccounts)
 router.get('/email',         ctrl.getEmail)
 router.put('/email',         requireAdmin, ctrl.updateEmail)
+router.post('/reset',        requireAdmin, ctrl.resetData)
 
 export default router

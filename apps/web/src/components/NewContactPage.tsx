@@ -5,7 +5,7 @@ import { useMutation } from '@tanstack/react-query'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import api from '@/lib/api'
 import { useRncLookup } from '@/hooks/useRncLookup'
-import { Button, Card, PageHeader } from '@/components/ui'
+import { Button, Card, PageHeader, Select } from '@/components/ui'
 
 // ── Dominican Republic provinces ─────────────────────────────
 const DR_PROVINCES = [
@@ -150,15 +150,12 @@ export default function NewContactPage({ mode, onCreated, onBack }: Props) {
 
           {/* Tipo identificación */}
           <Field label="Tipo de identificación">
-            <div className="relative">
-              <select value={idType}
-                onChange={(e) => { setIdType(e.target.value); setNumero(''); setFoundStatus(null) }}
-                className={sel}>
-                <option value="">Seleccionar</option>
-                {ID_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <Chevron />
-            </div>
+            <Select value={idType}
+              onChange={(e) => { setIdType(e.target.value); setNumero(''); setFoundStatus(null) }}
+              className={sel}>
+              <option value="">Seleccionar</option>
+              {ID_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </Select>
           </Field>
 
           {/* Número */}
@@ -228,13 +225,10 @@ export default function NewContactPage({ mode, onCreated, onBack }: Props) {
           {/* Municipio + Dirección */}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Municipio / Provincia">
-              <div className="relative">
-                <select value={provincia} onChange={(e) => setProvincia(e.target.value)} className={sel}>
-                  <option value="">Seleccionar</option>
-                  {DR_PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-                <Chevron />
-              </div>
+              <Select value={provincia} onChange={(e) => setProvincia(e.target.value)} className={sel}>
+                <option value="">Seleccionar</option>
+                {DR_PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
+              </Select>
             </Field>
             <Field label="Dirección">
               <input type="text" value={direccion} onChange={(e) => setDireccion(e.target.value)}

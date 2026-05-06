@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react'
 import { useAuthStore } from '@/lib/auth-store'
 import { cn } from '@/lib/utils'
+import { HaxLogo } from '@/components/ui/HaxLogo'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -48,14 +49,8 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col h-full p-14 justify-between">
 
           {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center backdrop-blur-sm">
-              <HaxIcon />
-            </div>
-            <div>
-              <p className="text-white font-semibold tracking-tight">ERP Hax</p>
-              <p className="text-white/30 text-xs">Sistema de gestión</p>
-            </div>
+          <div>
+            <HaxLogo color="white" className="h-8 w-auto opacity-90" />
           </div>
 
           {/* Main content */}
@@ -111,11 +106,8 @@ export default function LoginPage() {
         <div className="w-full max-w-[360px]">
 
           {/* Mobile logo */}
-          <div className="flex items-center gap-2.5 mb-10 lg:hidden">
-            <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
-              <HaxIcon />
-            </div>
-            <span className="font-semibold text-white tracking-tight">ERP Hax</span>
+          <div className="mb-10 lg:hidden">
+            <HaxLogo color="white" className="h-7 w-auto opacity-90" />
           </div>
 
           {/* Heading */}
@@ -237,10 +229,3 @@ export default function LoginPage() {
   )
 }
 
-function HaxIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-      <path d="M3 3h5v5H3zM10 3h5v5h-5zM3 10h5v5H3zM10 10h5v5h-5z" fill="white" fillOpacity="0.8" rx="1" />
-    </svg>
-  )
-}

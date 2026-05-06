@@ -199,14 +199,20 @@ export async function calculatePayroll(businessUnit: string, period: string) {
 
   const rates = await getTssRates()
 
+  // Quincena periods (YYYY-MM-Q1 / YYYY-MM-Q2) pay 50% of the monthly salary
+  const isQuincena   = period.endsWith('-Q1') || period.endsWith('-Q2')
+  const salaryFactor = isQuincena ? 0.5 : 1
+
   const items = employees.map((emp) => {
     const empAdditions = savedAdditions.get(emp.id) ?? []
+    // Additions are already quincena-specific amounts — no factor applied
     const additionsTotal = empAdditions.reduce((s, a) => s + a.amount, 0)
-    const gross   = emp.baseSalary + additionsTotal
-    const tssBase = emp.baseSalary   // AFP/SFS apply only to base salary (not commissions/overtime/incentives)
+    const gross   = emp.baseSalary * salaryFactor + additionsTotal
+    const tssBase = emp.baseSalary * salaryFactor  // AFP/SFS apply only to base salary (not commissions/overtime/incentives)
     const afpEmp  = tssBase * rates.AFP_EMPLOYEE
     const sfsEmp  = tssBase * rates.SFS_EMPLOYEE
-    const isr     = calcMonthlyISR(gross)   // ISR on full gross income
+    // ISR: calculate on full monthly gross, then apply salaryFactor (avoids bracket compression)
+    const isr     = calcMonthlyISR(emp.baseSalary + additionsTotal / salaryFactor) * salaryFactor
     const net     = gross - afpEmp - sfsEmp - isr
     const afpEr   = tssBase * rates.AFP_EMPLOYER
     const sfsEr   = tssBase * rates.SFS_EMPLOYER

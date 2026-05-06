@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, ChevronDown, ChevronRight, Check, DollarSign, X, UserMinus, Users, FileDown, Pencil, Trash2, PlusCircle } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, cn, openPdf } from '@/lib/utils'
-import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState, Select, useConfirm } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
 type Tab           = 'payrolls' | 'employees'
@@ -95,6 +95,7 @@ export default function PayrollPage() {
 // ── Payrolls Tab ──────────────────────────────────────────────
 
 function PayrollsTab() {
+  const confirm = useConfirm()
   const qc = useQueryClient()
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'ADMIN'
@@ -197,24 +198,24 @@ function PayrollsTab() {
                     <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       {isAdmin && p.status === 'CALCULATED' && (
                         <Button variant="secondary" size="sm" loading={approve.isPending}
-                          onClick={() => confirm('¿Aprobar nómina?') && approve.mutate(p.id)}>
+                          onClick={async () => { if (await confirm({ title: '¿Aprobar nómina?', confirmLabel: 'Aprobar' })) approve.mutate(p.id) }}>
                           Aprobar
                         </Button>
                       )}
                       {isAdmin && p.status === 'APPROVED' && (
                         <Button variant="primary" size="sm" loading={pay.isPending}
-                          onClick={() => confirm('¿Registrar pago de nómina?') && pay.mutate(p.id)}>
+                          onClick={async () => { if (await confirm({ title: '¿Registrar pago de nómina?', confirmLabel: 'Registrar' })) pay.mutate(p.id) }}>
                           Pagar
                         </Button>
                       )}
                       {isAdmin && p.status === 'PAID' && (
                         <div className="flex gap-1">
                           <Button variant="secondary" size="sm" loading={payTss.isPending}
-                            onClick={() => confirm('¿Registrar pago TSS?') && payTss.mutate(p.id)}>
+                            onClick={async () => { if (await confirm({ title: '¿Registrar pago TSS?', confirmLabel: 'Registrar' })) payTss.mutate(p.id) }}>
                             TSS
                           </Button>
                           <Button variant="secondary" size="sm" loading={payIsr.isPending}
-                            onClick={() => confirm('¿Registrar pago ISR?') && payIsr.mutate(p.id)}>
+                            onClick={async () => { if (await confirm({ title: '¿Registrar pago ISR?', confirmLabel: 'Registrar' })) payIsr.mutate(p.id) }}>
                             ISR
                           </Button>
                         </div>
@@ -296,7 +297,7 @@ function PayrollsTab() {
                                               <Pencil className="w-3 h-3" />
                                             </button>
                                             <button
-                                              onClick={() => confirm('¿Eliminar concepto?') && removeAddition.mutate({ payrollItemId: item.id, additionId: a.id })}
+                                              onClick={async () => { if (await confirm({ title: '¿Eliminar concepto?', variant: 'danger', confirmLabel: 'Eliminar' })) removeAddition.mutate({ payrollItemId: item.id, additionId: a.id }) }}
                                               className="opacity-50 hover:opacity-100 hover:text-red-500"
                                             >
                                               <Trash2 className="w-3 h-3" />
@@ -410,11 +411,11 @@ function AdditionModal({
 
         <form onSubmit={(e) => { e.preventDefault(); setErr(null); save.mutate() }} className="p-6 space-y-4">
           <F label="Tipo de concepto *">
-            <select value={type} onChange={(e) => { setType(e.target.value as AdditionType); setAmount(''); setHours(''); setRate('') }} className={ic}>
+            <Select value={type} onChange={(e) => { setType(e.target.value as AdditionType); setAmount(''); setHours(''); setRate('') }} className={ic}>
               {(Object.keys(ADDITION_LABELS) as AdditionType[]).map(t => (
                 <option key={t} value={t}>{ADDITION_LABELS[t]}</option>
               ))}
-            </select>
+            </Select>
           </F>
 
           <F label="Descripción">
@@ -465,6 +466,7 @@ function AdditionModal({
 // ── Employees Tab ─────────────────────────────────────────────
 
 function EmployeesTab() {
+  const confirm = useConfirm()
   const qc = useQueryClient()
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'ADMIN'
@@ -489,12 +491,12 @@ function EmployeesTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <select value={bu} onChange={(e) => setBu(e.target.value)}
+        <Select value={bu} onChange={(e) => setBu(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700">
           <option value="">Ambas BU</option>
           <option value="HAX">HAX</option>
           <option value="KODER">KODER</option>
-        </select>
+        </Select>
         {isAdmin && (
           <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
             Nuevo empleado
@@ -539,7 +541,7 @@ function EmployeesTab() {
                   <td className="px-3 py-3">
                     {isAdmin && emp.isActive && (
                       <button title="Dar de baja" className="text-gray-400 hover:text-red-500"
-                        onClick={() => confirm(`¿Dar de baja a ${emp.name}?`) && terminate.mutate(emp.id)}>
+                        onClick={async () => { if (await confirm({ title: `¿Dar de baja a ${emp.name}?`, variant: 'danger', confirmLabel: 'Dar de baja' })) terminate.mutate(emp.id) }}>
                         <UserMinus className="w-4 h-4" />
                       </button>
                     )}
@@ -581,10 +583,10 @@ function CalculateModal({ onClose }: { onClose: () => void }) {
         </div>
         <form onSubmit={(e) => { e.preventDefault(); calc.mutate() }} className="p-6 space-y-4">
           <F label="Unidad de Negocio *">
-            <select required value={bu} onChange={(e) => setBu(e.target.value)} className={ic}>
+            <Select required value={bu} onChange={(e) => setBu(e.target.value)} className={ic}>
               <option value="HAX">HAX</option>
               <option value="KODER">KODER</option>
-            </select>
+            </Select>
           </F>
           <F label="Mes *">
             <input type="month" required value={month} onChange={(e) => setMonth(e.target.value)} className={ic} />
@@ -673,16 +675,16 @@ function NewEmployeeModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <F label="Tipo *">
-              <select required value={form.type} onChange={(e) => set('type', e.target.value)} className={ic}>
+              <Select required value={form.type} onChange={(e) => set('type', e.target.value)} className={ic}>
                 <option value="SALARIED">Asalariado</option>
                 <option value="CONTRACTOR">Contratista</option>
-              </select>
+              </Select>
             </F>
             <F label="Unidad *">
-              <select required value={form.businessUnit} onChange={(e) => set('businessUnit', e.target.value)} className={ic}>
+              <Select required value={form.businessUnit} onChange={(e) => set('businessUnit', e.target.value)} className={ic}>
                 <option value="HAX">HAX</option>
                 <option value="KODER">KODER</option>
-              </select>
+              </Select>
             </F>
           </div>
           <F label="Salario base mensual (RD$) *">

@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, X, TrendingUp } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState, Select } from '@/components/ui'
 
 type LeadStatus = 'LEAD' | 'QUALIFIED' | 'PROPOSAL' | 'NEGOTIATION' | 'WON' | 'LOST'
 
@@ -190,15 +190,15 @@ export default function CrmPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <F label="Estado">
-                  <select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })} className={ic}>
+                  <Select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })} className={ic}>
                     {STAGES.map((s) => <option key={s.status} value={s.status}>{s.label}</option>)}
-                  </select>
+                  </Select>
                 </F>
                 <F label="Unidad">
-                  <select value={editing.businessUnit} onChange={(e) => setEditing({ ...editing, businessUnit: e.target.value })} className={ic}>
+                  <Select value={editing.businessUnit} onChange={(e) => setEditing({ ...editing, businessUnit: e.target.value })} className={ic}>
                     <option value="HAX">HAX</option>
                     <option value="KODER">KODER</option>
-                  </select>
+                  </Select>
                 </F>
               </div>
             </div>

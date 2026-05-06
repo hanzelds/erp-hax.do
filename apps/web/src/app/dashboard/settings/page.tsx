@@ -2,14 +2,14 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Eye, EyeOff, CheckCircle2, AlertCircle, FileText, Upload, Trash2, Play, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Copy } from 'lucide-react'
+import { Eye, EyeOff, CheckCircle2, AlertCircle, FileText, Upload, Trash2, Play, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Copy, ShieldAlert, AlertTriangle } from 'lucide-react'
 import { openPdf } from '@/lib/utils'
 import api from '@/lib/api'
 import { formatDate, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, CardHeader } from '@/components/ui'
+import { PageHeader, Button, Card, CardHeader, Select, useConfirm } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
-const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Presupuestos', 'Activos Fijos', 'Nómina', 'Cuentas Contables', 'Correo', 'Plantillas PDF'] as const
+const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Presupuestos', 'Activos Fijos', 'Nómina', 'Cuentas Contables', 'Correo', 'Plantillas PDF', 'Datos'] as const
 type Tab = typeof TABS[number]
 
 export default function SettingsPage() {
@@ -45,6 +45,7 @@ export default function SettingsPage() {
       {tab === 'Cuentas Contables'    && <AccountsTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Correo'               && <EmailTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Plantillas PDF'       && <PdfTemplatesTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Datos'                && <DangerZoneTab isAdmin={user?.role === 'ADMIN'} />}
     </div>
   )
 }
@@ -358,10 +359,10 @@ function UserFormPanel({ mode, user, onClose, onSaved }: {
             </F>
           )}
           <F label="Rol">
-            <select className={ic} value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+            <Select className={ic} value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
               <option value="ACCOUNTANT">Contabilidad</option>
               <option value="ADMIN">Administrador</option>
-            </select>
+            </Select>
           </F>
         </div>
         {err && <p className="text-xs text-red-500">{err}</p>}
@@ -662,10 +663,10 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
             </F>
 
             <F label="Ambiente">
-              <select value={form.alanubeEnv} onChange={(e) => set('alanubeEnv', e.target.value)} className={ic} disabled={readOnly}>
+              <Select value={form.alanubeEnv} onChange={(e) => set('alanubeEnv', e.target.value)} className={ic} disabled={readOnly}>
                 <option value="sandbox">Sandbox (pruebas)</option>
                 <option value="production">Producción (DGII real)</option>
-              </select>
+              </Select>
             </F>
 
             <F label="URL de la API de Alanube">
@@ -863,7 +864,7 @@ function GeneralTab({ isAdmin }: { isAdmin: boolean }) {
           <p className="text-xs text-gray-400 mt-1">Días desde la emisión hasta el vencimiento por defecto</p>
         </F>
         <F label="Método de pago por defecto">
-          <select
+          <Select
             value={form.defaultPaymentMethod}
             onChange={(e) => set('defaultPaymentMethod', e.target.value)}
             className={ic} disabled={readOnly}
@@ -872,7 +873,7 @@ function GeneralTab({ isAdmin }: { isAdmin: boolean }) {
             <option value="CASH">Efectivo</option>
             <option value="CHECK">Cheque</option>
             <option value="CARD">Tarjeta</option>
-          </select>
+          </Select>
           <p className="text-xs text-gray-400 mt-1">Método de pago pre-seleccionado al crear cobros</p>
         </F>
       </div>
@@ -1644,6 +1645,7 @@ const VARS: Record<string, { name: string; example: string }[]> = {
 interface PdfTemplate { id: string; type: string; name: string; description?: string; isActive: boolean; createdAt: string }
 
 function PdfTemplatesTab({ isAdmin }: { isAdmin: boolean }) {
+  const confirm = useConfirm()
   const qc = useQueryClient()
   const [selectedType, setSelectedType] = useState('INVOICE')
   const [showEditor, setShowEditor]     = useState(false)
@@ -1766,7 +1768,7 @@ function PdfTemplatesTab({ isAdmin }: { isAdmin: boolean }) {
           <div className="flex items-center gap-2 shrink-0">
             {activeTemplate && isAdmin && (
               <Button variant="secondary" size="sm"
-                onClick={() => confirm('¿Desactivar y volver a la plantilla integrada?') && deactivate.mutate(selectedType)}>
+                onClick={async () => { if (await confirm({ title: '¿Desactivar y volver a la plantilla integrada?', confirmLabel: 'Desactivar' })) deactivate.mutate(selectedType) }}>
                 Usar integrada
               </Button>
             )}
@@ -1824,7 +1826,7 @@ function PdfTemplatesTab({ isAdmin }: { isAdmin: boolean }) {
                       )}
                       {!t.isActive && (
                         <button title="Eliminar" className="p-1.5 text-gray-400 hover:text-red-500 rounded"
-                          onClick={() => confirm(`¿Eliminar "${t.name}"?`) && remove.mutate(t.id)}>
+                          onClick={async () => { if (await confirm({ title: `¿Eliminar "${t.name}"?`, variant: 'danger', confirmLabel: 'Eliminar' })) remove.mutate(t.id) }}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
@@ -1933,6 +1935,245 @@ function PdfTemplatesTab({ isAdmin }: { isAdmin: boolean }) {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ── Danger Zone — Data Reset ─────────────────────────────────
+const RESET_MODULES = [
+  { key: 'invoices',         label: 'Facturas',              desc: 'Facturas, ítems, comprobantes Alanube y pagos vinculados' },
+  { key: 'quotes',           label: 'Cotizaciones',          desc: 'Todas las cotizaciones e ítems' },
+  { key: 'expenses',         label: 'Gastos',                desc: 'Todos los registros de gastos' },
+  { key: 'payments',         label: 'Pagos recibidos',       desc: 'Todos los pagos registrados' },
+  { key: 'payroll',          label: 'Nómina',                desc: 'Todos los periodos y entradas de nómina' },
+  { key: 'products',         label: 'Productos / Servicios', desc: 'Catálogo completo de productos' },
+  { key: 'clients',          label: 'Clientes',              desc: 'Todos los contactos tipo cliente' },
+  { key: 'suppliers',        label: 'Proveedores',           desc: 'Todos los proveedores' },
+  { key: 'accounting',       label: 'Contabilidad',          desc: 'Todos los asientos del diario general' },
+  { key: 'banks',            label: 'Bancos',                desc: 'Movimientos bancarios y conciliaciones' },
+  { key: 'reports',          label: 'Reportes fiscales',     desc: 'Reportes DGII generados' },
+  { key: 'budgets',          label: 'Presupuestos',          desc: 'Todos los presupuestos e ítems' },
+  { key: 'fixedAssets',      label: 'Activos fijos',         desc: 'Todos los activos registrados' },
+]
+
+function DangerZoneTab({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient()
+  const [selected, setSelected] = useState<string[]>([])
+  const [confirm, setConfirm]   = useState('')
+  const [phase, setPhase]       = useState<'idle' | 'confirm' | 'done'>('idle')
+  const [results, setResults]   = useState<Record<string, string> | null>(null)
+  const [loading, setLoading]   = useState(false)
+  const [err, setErr]           = useState<string | null>(null)
+
+  const CONFIRM_WORD = 'BORRAR'
+
+  function toggle(key: string) {
+    setSelected(s => s.includes(key) ? s.filter(k => k !== key) : [...s, key])
+  }
+
+  function selectAll() { setSelected(RESET_MODULES.map(m => m.key)) }
+  function clearAll()  { setSelected([]) }
+
+  async function handleReset() {
+    if (confirm !== CONFIRM_WORD) return
+    setLoading(true); setErr(null)
+    try {
+      const { data } = await api.post('/settings/reset', { modules: selected })
+      setResults(data.data?.results ?? {})
+      setPhase('done')
+      // Invalidate all queries so UI refreshes
+      qc.invalidateQueries()
+    } catch (e: any) {
+      setErr(e?.response?.data?.error ?? 'Error al ejecutar el reset')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!isAdmin) {
+    return (
+      <Card padding="sm">
+        <div className="px-6 py-8 text-center">
+          <ShieldAlert className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-400">Solo los administradores pueden acceder a esta sección.</p>
+        </div>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-start gap-3 px-1">
+        <div className="p-2 rounded-xl bg-red-50 border border-red-100">
+          <AlertTriangle className="w-5 h-5 text-red-500" />
+        </div>
+        <div>
+          <p className="text-base font-bold text-gray-900">Zona de peligro</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Las operaciones de esta sección son <span className="font-semibold text-red-600">irreversibles</span>.
+            Los datos eliminados no pueden recuperarse. Úsala solo en entornos de prueba o con un respaldo previo.
+          </p>
+        </div>
+      </div>
+
+      {phase === 'done' && results ? (
+        /* ── Results ── */
+        <Card padding="sm">
+          <div className="px-6 py-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              <p className="font-semibold text-gray-800">Reset completado</p>
+            </div>
+            <div className="space-y-1">
+              {Object.entries(results).map(([mod, status]) => {
+                const label = RESET_MODULES.find(m => m.key === mod)?.label ?? mod
+                const ok = status === 'ok'
+                return (
+                  <div key={mod} className={cn(
+                    'flex items-center justify-between px-3 py-2 rounded-lg text-sm',
+                    ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'
+                  )}>
+                    <span className="font-medium">{label}</span>
+                    <span className="text-xs">{ok ? '✓ Borrado' : status}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => { setPhase('idle'); setSelected([]); setConfirm(''); setResults(null) }}>
+              Volver
+            </Button>
+          </div>
+        </Card>
+      ) : phase === 'confirm' ? (
+        /* ── Confirmation step ── */
+        <Card padding="sm">
+          <div className="px-6 py-5 space-y-5">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-2">
+              <p className="text-sm font-semibold text-red-800">Confirma los módulos a borrar:</p>
+              <ul className="space-y-0.5">
+                {selected.map(k => {
+                  const m = RESET_MODULES.find(m => m.key === k)!
+                  return (
+                    <li key={k} className="text-sm text-red-700 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                      {m.label} — <span className="text-xs text-red-500">{m.desc}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Escribe <span className="font-mono font-bold text-red-600">{CONFIRM_WORD}</span> para confirmar
+              </label>
+              <input
+                type="text"
+                value={confirm}
+                onChange={e => setConfirm(e.target.value.toUpperCase())}
+                placeholder={CONFIRM_WORD}
+                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+              />
+            </div>
+
+            {err && (
+              <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {err}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleReset}
+                disabled={confirm !== CONFIRM_WORD || loading}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all',
+                  confirm === CONFIRM_WORD && !loading
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                )}
+              >
+                {loading ? (
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                Ejecutar borrado
+              </button>
+              <Button variant="secondary" size="sm" onClick={() => { setPhase('idle'); setConfirm('') }}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        /* ── Module selector ── */
+        <Card padding="sm">
+          <div className="px-6 py-5 space-y-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-700">Selecciona los módulos</p>
+              <div className="flex items-center gap-3">
+                <button onClick={selectAll} className="text-xs text-[#293c4f] hover:underline font-medium">Todos</button>
+                <button onClick={clearAll}  className="text-xs text-gray-400 hover:underline">Ninguno</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {RESET_MODULES.map(m => {
+                const active = selected.includes(m.key)
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => toggle(m.key)}
+                    className={cn(
+                      'flex items-start gap-3 px-4 py-3 rounded-xl border text-left transition-all',
+                      active
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    )}
+                  >
+                    {/* Checkbox */}
+                    <div className={cn(
+                      'w-4 h-4 mt-0.5 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
+                      active ? 'border-red-500 bg-red-500' : 'border-gray-300 bg-white'
+                    )}>
+                      {active && <span className="text-white text-[10px] font-bold leading-none">✓</span>}
+                    </div>
+                    <div>
+                      <p className={cn('text-sm font-medium', active ? 'text-red-800' : 'text-gray-700')}>{m.label}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{m.desc}</p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+              <p className="text-xs text-gray-400">
+                {selected.length === 0
+                  ? 'Ningún módulo seleccionado'
+                  : `${selected.length} módulo${selected.length > 1 ? 's' : ''} seleccionado${selected.length > 1 ? 's' : ''}`
+                }
+              </p>
+              <button
+                onClick={() => { if (selected.length > 0) setPhase('confirm') }}
+                disabled={selected.length === 0}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all',
+                  selected.length > 0
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                )}
+              >
+                <Trash2 className="w-4 h-4" />
+                Borrar seleccionados
+              </button>
             </div>
           </div>
         </Card>

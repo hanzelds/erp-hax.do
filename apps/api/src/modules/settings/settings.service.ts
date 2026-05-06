@@ -235,6 +235,68 @@ export async function getEmailConfig() {
   return result
 }
 
+// ── Data Reset (danger zone) ───────────────────────────────
+export const RESET_MODULE_MAP: Record<string, () => Promise<any>> = {
+  invoices: async () => {
+    // Must delete dependents first (no Cascade on these FKs)
+    await prisma.alanubeRequest.deleteMany()   // FK: invoiceId
+    await prisma.payment.deleteMany()          // FK: invoiceId
+    await prisma.journalEntry.updateMany({ where: { invoiceId: { not: null } }, data: { invoiceId: null } })
+    await prisma.invoiceItem.deleteMany()      // Cascade but explicit is safer
+    await prisma.invoice.deleteMany()
+  },
+  quotes: async () => {
+    await prisma.quoteItem.deleteMany()
+    await prisma.quote.deleteMany()
+  },
+  expenses: async () => {
+    await prisma.journalEntry.updateMany({ where: { expenseId: { not: null } }, data: { expenseId: null } })
+    await prisma.expense.deleteMany()
+  },
+  payments: () => prisma.payment.deleteMany(),
+  payroll: async () => {
+    await prisma.journalEntry.updateMany({ where: { payrollId: { not: null } }, data: { payrollId: null } })
+    await prisma.payrollItem.deleteMany()
+    await prisma.payrollAddition.deleteMany()
+    await prisma.payroll.deleteMany()
+  },
+  products:         () => prisma.product.deleteMany(),
+  clients:          () => prisma.client.deleteMany(),
+  suppliers:        () => prisma.supplier.deleteMany(),
+  journalEntries:   () => prisma.journalEntry.deleteMany(),
+  bankTransactions: async () => {
+    await prisma.bankReconciliation.deleteMany()
+    await prisma.bankTransaction.deleteMany()
+  },
+  budgets:          () => prisma.budget.deleteMany(),
+  fixedAssets:      () => prisma.fixedAsset.deleteMany(),
+  // Additional modules
+  accounting:       async () => {
+    // Clear all journal entries and reset account balances (keep the chart of accounts)
+    await prisma.journalEntry.deleteMany()
+  },
+  banks:            async () => {
+    await prisma.bankReconciliation.deleteMany()
+    await prisma.bankTransaction.deleteMany()
+  },
+  reports:          () => prisma.fiscalReport.deleteMany(),
+}
+
+export async function resetModules(modules: string[]) {
+  const results: Record<string, string> = {}
+  for (const mod of modules) {
+    const fn = RESET_MODULE_MAP[mod]
+    if (!fn) { results[mod] = 'unknown module — skipped'; continue }
+    try {
+      await fn()
+      results[mod] = 'ok'
+    } catch (err: any) {
+      results[mod] = `error: ${err.message}`
+    }
+  }
+  return results
+}
+
 export async function updateEmailConfig(data: any) {
   const update: any = {
     smtpEnabled: data.smtpEnabled,

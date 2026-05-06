@@ -9,7 +9,7 @@ import {
 import { Download, FileDown } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, cn, openPdf } from '@/lib/utils'
-import { PageHeader, Button, Card, CardHeader, Skeleton, StatCard } from '@/components/ui'
+import { PageHeader, Button, Card, CardHeader, Skeleton, StatCard, Select } from '@/components/ui'
 
 const TABS = ['P&L', 'Balance General', 'Flujo de Caja', '606 Compras', '607 Ventas'] as const
 type Tab = typeof TABS[number]
@@ -65,7 +65,7 @@ export default function ReportsPage() {
       {(tab === 'P&L' || tab === '606 Compras' || tab === '607 Ventas' || tab === 'Flujo de Caja') && (
         <div className="flex items-center gap-3 flex-wrap">
           <label className="text-sm text-gray-600 font-medium">Período:</label>
-          <select
+          <Select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f]"
@@ -73,7 +73,7 @@ export default function ReportsPage() {
             {periodOptions().map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
-          </select>
+          </Select>
           {tab === 'P&L' && (
             <Button variant="secondary" size="sm" icon={<FileDown className="w-3.5 h-3.5" />}
               onClick={() => openPdf(`/reports/pnl/${period}/pdf`, `pnl-${period}.pdf`)}>

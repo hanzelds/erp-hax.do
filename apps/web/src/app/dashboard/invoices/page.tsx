@@ -14,6 +14,8 @@ import {
   InvoiceStatusBadge,
   Skeleton,
   EmptyState,
+  Select,
+  DatePicker,
 } from '@/components/ui'
 
 type InvoiceStatus = 'DRAFT' | 'SENDING' | 'APPROVED' | 'REJECTED' | 'PAID' | 'CANCELLED'
@@ -127,7 +129,7 @@ export default function InvoicesPage() {
           {/* Status filter */}
           <div className="flex items-center gap-1">
             <Filter className="w-3.5 h-3.5 text-gray-400" />
-            <select
+            <Select
               value={status}
               onChange={(e) => { setStatus(e.target.value); setPage(1) }}
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
@@ -135,11 +137,11 @@ export default function InvoicesPage() {
               {STATUS_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Business unit */}
-          <select
+          <Select
             value={bu}
             onChange={(e) => { setBu(e.target.value); setPage(1) }}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
@@ -147,10 +149,10 @@ export default function InvoicesPage() {
             {BU_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
-          </select>
+          </Select>
 
           {/* Type filter */}
-          <select
+          <Select
             value={type}
             onChange={(e) => { setType(e.target.value); setPage(1) }}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
@@ -158,25 +160,23 @@ export default function InvoicesPage() {
             {TYPE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
-          </select>
+          </Select>
 
           {/* Date range */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-400 whitespace-nowrap">Desde</span>
-            <input
-              type="date"
+            <DatePicker
               value={from}
-              onChange={(e) => { setFrom(e.target.value); setPage(1) }}
-              className="text-sm border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
+              onChange={(v) => { setFrom(v); setPage(1) }}
+              className="w-full"
             />
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-400 whitespace-nowrap">Hasta</span>
-            <input
-              type="date"
+            <DatePicker
               value={to}
-              onChange={(e) => { setTo(e.target.value); setPage(1) }}
-              className="text-sm border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
+              onChange={(v) => { setTo(v); setPage(1) }}
+              className="w-full"
             />
           </div>
         </div>

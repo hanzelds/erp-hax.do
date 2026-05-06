@@ -5,11 +5,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Search, ChevronLeft, CheckCircle, DollarSign, XCircle,
   Truck, Building2, FileText, Receipt, CreditCard, Banknote,
-  PiggyBank, AlertCircle, X,
+  PiggyBank, AlertCircle, X, Zap,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState, Select, DatePicker } from '@/components/ui'
 import NewContactPage from '@/components/NewContactPage'
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -285,16 +285,17 @@ export default function ExpensesPage() {
               <div className="space-y-4">
                 <F label="Proveedor">
                   <div className="flex gap-2">
-                    <select
+                    <Select
                       value={form.supplierId}
                       onChange={e => setForm((p: any) => ({ ...p, supplierId: e.target.value }))}
-                      className={ic + ' flex-1'}
+                      className={ic}
+                      wrapperClassName="flex-1"
                     >
                       <option value="">Sin proveedor</option>
                       {suppliers.map(s => (
                         <option key={s.id} value={s.id}>{s.name}{s.rnc ? ` — ${s.rnc}` : ''}</option>
                       ))}
-                    </select>
+                    </Select>
                     <button
                       type="button"
                       onClick={() => setShowNewSupplier(true)}
@@ -393,22 +394,21 @@ export default function ExpensesPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <F label="Fecha" required>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={form.expenseDate}
-                      onChange={e => setForm((p: any) => ({ ...p, expenseDate: e.target.value }))}
-                      className={ic}
+                      onChange={v => setForm((p: any) => ({ ...p, expenseDate: v }))}
+                      className="w-full"
                     />
                   </F>
                   <F label="Unidad">
-                    <select
+                    <Select
                       value={form.businessUnit}
                       onChange={e => setForm((p: any) => ({ ...p, businessUnit: e.target.value }))}
                       className={ic}
                     >
                       <option value="HAX">HAX</option>
                       <option value="KODER">KODER</option>
-                    </select>
+                    </Select>
                   </F>
                 </div>
 
@@ -434,26 +434,41 @@ export default function ExpensesPage() {
                 </F>
 
                 <F label="Tipo de comprobante">
-                  <select
+                  <Select
                     value={form.ncfType}
-                    onChange={e => setForm((p: any) => ({ ...p, ncfType: e.target.value }))}
+                    onChange={e => setForm((p: any) => ({ ...p, ncfType: e.target.value, ncf: '' }))}
                     className={ic}
                   >
                     {(Object.entries(NCF_TYPE_LABELS) as [NcfType, string][]).map(([v, l]) => (
                       <option key={v} value={v}>{l}</option>
                     ))}
-                  </select>
+                  </Select>
                 </F>
 
-                <F label="NCF (número comprobante)">
-                  <input
-                    type="text"
-                    placeholder={form.ncfType === 'B13' ? 'B1300000000' : form.ncfType === 'B11' ? 'B1100000000' : 'E310000000001'}
-                    value={form.ncf}
-                    onChange={e => setForm((p: any) => ({ ...p, ncf: e.target.value }))}
-                    className={ic + ' font-mono'}
-                  />
-                </F>
+                {/* e-CF auto-generation badge for B11 / B13 */}
+                {(form.ncfType === 'B11' || form.ncfType === 'B13') ? (
+                  <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <Zap className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-emerald-800">
+                        Comprobante electrónico automático
+                      </p>
+                      <p className="text-[11px] text-emerald-600 mt-0.5">
+                        Se generará un e-CF {form.ncfType === 'B11' ? '41 (Compras)' : '43 (Gastos Menores)'} vía Alanube al guardar. El número quedará registrado en el gasto.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <F label="NCF (número comprobante)">
+                    <input
+                      type="text"
+                      placeholder="E310000000001"
+                      value={form.ncf}
+                      onChange={e => setForm((p: any) => ({ ...p, ncf: e.target.value }))}
+                      className={ic + ' font-mono'}
+                    />
+                  </F>
+                )}
               </div>
             </div>
           </div>
@@ -609,17 +624,17 @@ export default function ExpensesPage() {
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#293c4f]"
             />
           </div>
-          <select value={statusF} onChange={e => setStatusF(e.target.value)}
+          <Select value={statusF} onChange={e => setStatusF(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f]">
             <option value="">Todos los estados</option>
             {Object.entries(STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <select value={buFilter} onChange={e => setBuFilter(e.target.value)}
+          </Select>
+          <Select value={buFilter} onChange={e => setBuFilter(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f]">
             <option value="">Todas las unidades</option>
             <option value="HAX">HAX</option>
             <option value="KODER">KODER</option>
-          </select>
+          </Select>
         </div>
       </Card>
 

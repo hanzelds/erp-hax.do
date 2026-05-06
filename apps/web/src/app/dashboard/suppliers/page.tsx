@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState, Select } from '@/components/ui'
 import { useRncLookup } from '@/hooks/useRncLookup'
 import NewContactPage from '@/components/NewContactPage'
 
@@ -322,16 +322,13 @@ function EditSupplierPage({
             </Field>
 
             <Field label="Unidad de negocio">
-              <div className="relative">
-                <select
-                  value={form.businessUnit}
-                  onChange={(e) => set('businessUnit', e.target.value as 'HAX' | 'KODER')}
-                  className={sel}>
-                  <option value="HAX">HAX</option>
-                  <option value="KODER">KODER</option>
-                </select>
-                <ChevronIcon />
-              </div>
+              <Select
+                value={form.businessUnit}
+                onChange={(e) => set('businessUnit', e.target.value as 'HAX' | 'KODER')}
+                className={sel}>
+                <option value="HAX">HAX</option>
+                <option value="KODER">KODER</option>
+              </Select>
             </Field>
           </div>
 

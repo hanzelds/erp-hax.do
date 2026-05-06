@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, ChevronDown, ChevronRight, RefreshCw, X, Edit2 } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, CardHeader, Badge, Skeleton, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Card, CardHeader, Badge, Skeleton, EmptyState, Select, DatePicker } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
 type AssetStatus   = 'ACTIVE' | 'FULLY_DEPRECIATED' | 'RETIRED'
@@ -181,19 +181,19 @@ export default function FixedAssetsPage() {
       {/* Filters */}
       <Card padding="sm">
         <div className="flex flex-wrap items-center gap-3 px-1 py-1">
-          <select value={bu} onChange={(e) => setBu(e.target.value)}
+          <Select value={bu} onChange={(e) => setBu(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700">
             {BU_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <select value={status} onChange={(e) => setStatus(e.target.value)}
+          </Select>
+          <Select value={status} onChange={(e) => setStatus(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700">
             {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}
+          </Select>
+          <Select value={category} onChange={(e) => setCategory(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700">
             <option value="">Todas las categorías</option>
             {CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-          </select>
+          </Select>
         </div>
       </Card>
 
@@ -516,22 +516,22 @@ function NewAssetModal({ onClose }: { onClose: () => void }) {
           </F>
           <div className="grid grid-cols-2 gap-4">
             <F label="Categoría *">
-              <select required value={form.category} onChange={(e) => set('category', e.target.value as AssetCategory)} className={ic}>
+              <Select required value={form.category} onChange={(e) => set('category', e.target.value as AssetCategory)} className={ic}>
                 {CATEGORY_OPTIONS.map((c) => (
                   <option key={c} value={c}>{CATEGORY_LABELS[c]}{CATEGORY_RATE[c] ? ` — ${CATEGORY_RATE[c]}` : ''}</option>
                 ))}
-              </select>
+              </Select>
             </F>
             <F label="Unidad de Negocio *">
-              <select required value={form.businessUnit} onChange={(e) => set('businessUnit', e.target.value as 'HAX' | 'KODER')} className={ic}>
+              <Select required value={form.businessUnit} onChange={(e) => set('businessUnit', e.target.value as 'HAX' | 'KODER')} className={ic}>
                 <option value="HAX">HAX</option>
                 <option value="KODER">KODER</option>
-              </select>
+              </Select>
             </F>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <F label="Fecha de Compra *">
-              <input type="date" required value={form.purchaseDate} onChange={(e) => set('purchaseDate', e.target.value)} className={ic} />
+              <DatePicker value={form.purchaseDate} onChange={v => set('purchaseDate', v)} className="w-full" />
             </F>
             <F label="Valor de Compra *">
               <input type="number" required min="0" step="0.01" value={form.purchaseValue} onChange={(e) => set('purchaseValue', e.target.value)} className={ic} placeholder="0.00" />
@@ -631,12 +631,12 @@ function EditAssetModal({ asset, onClose }: { asset: FixedAsset; onClose: () => 
 
           <div className="grid grid-cols-2 gap-4">
             <F label="Categoría *">
-              <select required value={form.category} onChange={(e) => set('category', e.target.value as AssetCategory)}
+              <Select required value={form.category} onChange={(e) => set('category', e.target.value as AssetCategory)}
                 className={cn(ic, hasDepreciation && 'opacity-50 pointer-events-none')}>
                 {CATEGORY_OPTIONS.map((c) => (
                   <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
                 ))}
-              </select>
+              </Select>
             </F>
             <F label="Vida útil (meses) *">
               <input type="number" required min="1"

@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, X, ToggleLeft, ToggleRight, Package, ArrowLeft, Check, Info, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState, Select } from '@/components/ui'
 import ConfirmModal from '@/components/ConfirmModal'
 
 interface Product {
@@ -155,13 +155,10 @@ function NewProductPage({ onCreated, onBack }: { onCreated: () => void; onBack: 
               <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Opcional" className={ic} />
             </F>
             <F label="Unidad de negocio">
-              <div className="relative">
-                <select value={businessUnit} onChange={(e) => setBusinessUnit(e.target.value as 'HAX' | 'KODER')} className={sel}>
-                  <option value="HAX">HAX</option>
-                  <option value="KODER">KODER</option>
-                </select>
-                <Chevron />
-              </div>
+              <Select value={businessUnit} onChange={(e) => setBusinessUnit(e.target.value as 'HAX' | 'KODER')} className={sel}>
+                <option value="HAX">HAX</option>
+                <option value="KODER">KODER</option>
+              </Select>
             </F>
           </div>
         </div>
@@ -199,12 +196,9 @@ function NewProductPage({ onCreated, onBack }: { onCreated: () => void; onBack: 
             {/* Impuesto */}
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Impuesto</label>
-              <div className="relative">
-                <select value={taxKey} onChange={(e) => setTaxKey(e.target.value as typeof taxKey)} className={sel}>
-                  {TAX_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <Chevron />
-              </div>
+              <Select value={taxKey} onChange={(e) => setTaxKey(e.target.value as typeof taxKey)} className={sel}>
+                {TAX_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </Select>
             </div>
 
             {/* = */}
@@ -334,18 +328,18 @@ export default function ProductsPage() {
             <input type="text" placeholder="Buscar por nombre, código…" value={search} onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#293c4f]" />
           </div>
-          <select value={typeF} onChange={(e) => setTypeF(e.target.value)}
+          <Select value={typeF} onChange={(e) => setTypeF(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white">
             <option value="">Todos los tipos</option>
             <option value="SERVICE">Servicios</option>
             <option value="PRODUCT">Productos</option>
-          </select>
-          <select value={bu} onChange={(e) => setBu(e.target.value)}
+          </Select>
+          <Select value={bu} onChange={(e) => setBu(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white">
             <option value="">Ambas unidades</option>
             <option value="HAX">HAX</option>
             <option value="KODER">KODER</option>
-          </select>
+          </Select>
         </div>
       </Card>
 
@@ -496,13 +490,10 @@ function EditProductModal({ product, onClose }: { product: Product; onClose: () 
               <input type="text" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className={ic} placeholder="Opcional" />
             </F>
             <F label="Unidad">
-              <div className="relative">
-                <select value={form.businessUnit} onChange={(e) => setForm({ ...form, businessUnit: e.target.value as 'HAX' | 'KODER' })} className={sel}>
-                  <option value="HAX">HAX</option>
-                  <option value="KODER">KODER</option>
-                </select>
-                <Chevron />
-              </div>
+              <Select value={form.businessUnit} onChange={(e) => setForm({ ...form, businessUnit: e.target.value as 'HAX' | 'KODER' })} className={sel}>
+                <option value="HAX">HAX</option>
+                <option value="KODER">KODER</option>
+              </Select>
             </F>
           </div>
           <div className="flex items-end gap-3">
@@ -518,15 +509,12 @@ function EditProductModal({ product, onClose }: { product: Product; onClose: () 
             <div className="pb-2.5 text-gray-400 font-semibold">+</div>
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Impuesto</label>
-              <div className="relative">
-                <select value={form.taxKey} onChange={(e) => setForm({ ...form, taxKey: e.target.value as typeof form.taxKey })} className={sel}>
-                  <option value="18">ITBIS 18%</option>
-                  <option value="16">ITBIS 16%</option>
-                  <option value="0">Ninguno (0%)</option>
-                  <option value="exempt">Exento</option>
-                </select>
-                <Chevron />
-              </div>
+              <Select value={form.taxKey} onChange={(e) => setForm({ ...form, taxKey: e.target.value as typeof form.taxKey })} className={sel}>
+                <option value="18">ITBIS 18%</option>
+                <option value="16">ITBIS 16%</option>
+                <option value="0">Ninguno (0%)</option>
+                <option value="exempt">Exento</option>
+              </Select>
             </div>
             <div className="pb-2.5 text-gray-400 font-semibold">=</div>
             <div className="flex-1">

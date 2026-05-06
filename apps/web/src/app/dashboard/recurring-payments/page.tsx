@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, X, RefreshCcw, AlertTriangle, DollarSign } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState, Select, DatePicker } from '@/components/ui'
 
 type Frequency = 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
 
@@ -149,20 +149,20 @@ export default function RecurringPaymentsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <F label="Monto (DOP) *"><input type="number" min="0" step="0.01" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: parseFloat(e.target.value) || 0 })} className={ic} /></F>
                 <F label="Frecuencia">
-                  <select value={editing.frequency} onChange={(e) => setEditing({ ...editing, frequency: e.target.value })} className={ic}>
+                  <Select value={editing.frequency} onChange={(e) => setEditing({ ...editing, frequency: e.target.value })} className={ic}>
                     {Object.entries(FREQ_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
+                  </Select>
                 </F>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <F label="Próximo vence"><input type="date" value={editing.nextDueDate} onChange={(e) => setEditing({ ...editing, nextDueDate: e.target.value })} className={ic} /></F>
+                <F label="Próximo vence"><DatePicker value={editing.nextDueDate} onChange={(v) => setEditing({ ...editing, nextDueDate: v })} className="w-full" /></F>
                 <F label="Categoría"><input type="text" value={editing.category ?? ''} onChange={(e) => setEditing({ ...editing, category: e.target.value })} className={ic} /></F>
               </div>
               <F label="Unidad">
-                <select value={editing.businessUnit} onChange={(e) => setEditing({ ...editing, businessUnit: e.target.value })} className={ic}>
+                <Select value={editing.businessUnit} onChange={(e) => setEditing({ ...editing, businessUnit: e.target.value })} className={ic}>
                   <option value="HAX">HAX</option>
                   <option value="KODER">KODER</option>
-                </select>
+                </Select>
               </F>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={editing.autoGenerate} onChange={(e) => setEditing({ ...editing, autoGenerate: e.target.checked })} className="rounded" />

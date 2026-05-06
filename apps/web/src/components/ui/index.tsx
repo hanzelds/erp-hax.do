@@ -1,6 +1,11 @@
 import { Slot } from '@radix-ui/react-slot'
 import { cn } from '@/lib/utils'
 
+export { DatePicker } from './DatePicker'
+export { Select }     from './Select'
+export { ConfirmDialogProvider, useConfirm } from './ConfirmDialog'
+export type { ConfirmOptions } from './ConfirmDialog'
+
 // ── Card ─────────────────────────────────────────────────────────
 interface CardProps {
   children: React.ReactNode

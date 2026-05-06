@@ -13,7 +13,7 @@ import {
 } from 'recharts'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState, Select, DatePicker, useConfirm } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
 // ─────────────────────────────────────────────────────────────
@@ -368,10 +368,10 @@ function AccountsTab() {
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 px-1">
             <div className="flex items-center gap-2 text-xs text-gray-400">
               <span>Items por página:</span>
-              <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+              <Select value={String(pageSize)} onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
                 className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-600 text-xs focus:outline-none">
                 {PAGE_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              </Select>
               <span>{Math.min((page - 1) * pageSize + 1, filtered.length)}–{Math.min(page * pageSize, filtered.length)} de {filtered.length}</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-400">
@@ -461,10 +461,10 @@ function AccountsTab() {
             </div>
             <div className="space-y-3">
               <F label="Tipo">
-                <select value={addTx.type} onChange={e => setAddTx({ ...addTx, type: e.target.value as 'CREDIT' | 'DEBIT' })} className={ic}>
+                <Select value={addTx.type} onChange={e => setAddTx({ ...addTx, type: e.target.value as 'CREDIT' | 'DEBIT' })} className={ic}>
                   <option value="CREDIT">Crédito (entrada)</option>
                   <option value="DEBIT">Débito (salida)</option>
-                </select>
+                </Select>
               </F>
               <F label="Monto (DOP) *">
                 <input type="number" min="0" step="0.01" value={addTx.amount}
@@ -476,8 +476,8 @@ function AccountsTab() {
               </F>
               <div className="grid grid-cols-2 gap-3">
                 <F label="Fecha">
-                  <input type="date" value={addTx.date}
-                    onChange={e => setAddTx({ ...addTx, date: e.target.value })} className={ic} />
+                  <DatePicker value={addTx.date}
+                    onChange={v => setAddTx({ ...addTx, date: v })} className="w-full" />
                 </F>
                 <F label="Referencia">
                   <input type="text" value={addTx.reference ?? ''}
@@ -520,11 +520,11 @@ function AccountsTab() {
                 </F>
               </div>
               <F label="Moneda">
-                <select value={newAcct.currency}
+                <Select value={newAcct.currency}
                   onChange={e => setNewAcct({ ...newAcct, currency: e.target.value })} className={ic}>
                   <option value="DOP">DOP</option>
                   <option value="USD">USD</option>
-                </select>
+                </Select>
               </F>
               <F label="Balance inicial (DOP)">
                 <input type="number" min="0" step="0.01" defaultValue={0}
@@ -613,6 +613,7 @@ function ReconciliationList({ onSelect }: { onSelect: (id: string) => void }) {
 }
 
 function ReconciliationDetail({ id, onBack }: { id: string; onBack: () => void }) {
+  const confirm = useConfirm()
   const qc = useQueryClient()
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'ADMIN'
@@ -661,7 +662,7 @@ function ReconciliationDetail({ id, onBack }: { id: string; onBack: () => void }
               </Button>
               {isAdmin && unmatched === 0 && rec.transactions.length > 0 && (
                 <Button variant="primary" size="sm" icon={<Check className="w-3.5 h-3.5" />} loading={closeRec.isPending}
-                  onClick={() => { if (confirm('¿Cerrar esta conciliación?')) closeRec.mutate() }}>
+                  onClick={async () => { if (await confirm({ title: '¿Cerrar esta conciliación?', variant: 'danger', confirmLabel: 'Cerrar' })) closeRec.mutate() }}>
                   Cerrar conciliación
                 </Button>
               )}
@@ -780,10 +781,10 @@ function NewReconciliationModal({ onClose }: { onClose: () => void }) {
         </div>
         <form onSubmit={e => { e.preventDefault(); save.mutate() }} className="p-6 space-y-4">
           <F label="Cuenta bancaria *">
-            <select required value={bankAccountId} onChange={e => setBankAccountId(e.target.value)} className={ic}>
+            <Select required value={bankAccountId} onChange={e => setBankAccountId(e.target.value)} className={ic}>
               <option value="">Seleccionar cuenta</option>
               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.bank ? ` — ${a.bank}` : ''}</option>)}
-            </select>
+            </Select>
           </F>
           <F label="Período *">
             <input type="month" required value={period} onChange={e => setPeriod(e.target.value)} className={ic} />
@@ -970,38 +971,38 @@ function ClassifyModal({ tx, reconciliationId, onClose, onSaved }: {
           {isCredit && (
             <>
               <F label="Factura correspondiente (opcional)">
-                <select value={classifiedInvoiceId} onChange={e => setClassifiedInvoiceId(e.target.value)} className={ic}>
+                <Select value={classifiedInvoiceId} onChange={e => setClassifiedInvoiceId(e.target.value)} className={ic}>
                   <option value="">Sin factura asociada</option>
                   {invoices.map(inv => (
                     <option key={inv.id} value={inv.id}>
                       {inv.number} — {inv.client?.name} — {new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(inv.total)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </F>
               <F label="Cobro ERP correspondiente (opcional)">
-                <select value={matchedPaymentId} onChange={e => setMatchedPaymentId(e.target.value)} className={ic}>
+                <Select value={matchedPaymentId} onChange={e => setMatchedPaymentId(e.target.value)} className={ic}>
                   <option value="">Sin cobro asociado</option>
                   {payments.map(p => (
                     <option key={p.id} value={p.id}>
                       {p.method} — {new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(p.amount)} — {p.paidAt?.slice(0, 10)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </F>
             </>
           )}
 
           {!isCredit && (
             <F label="Gasto ERP correspondiente (opcional)">
-              <select value={matchedExpenseId} onChange={e => setMatchedExpenseId(e.target.value)} className={ic}>
+              <Select value={matchedExpenseId} onChange={e => setMatchedExpenseId(e.target.value)} className={ic}>
                 <option value="">Sin gasto asociado</option>
                 {expenses.map(exp => (
                   <option key={exp.id} value={exp.id}>
                     {exp.description} — {new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(exp.total)} — {exp.expenseDate?.slice(0, 10)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </F>
           )}
 

@@ -6,6 +6,8 @@ import { Sidebar } from './Sidebar'
 import { Topbar }  from './Topbar'
 import { useAuthStore } from '@/lib/auth-store'
 import { cn } from '@/lib/utils'
+import { HaxMark } from '@/components/ui/HaxLogo'
+import { ConfirmDialogProvider } from '@/components/ui/ConfirmDialog'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -37,8 +39,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center">
-            <span className="text-[#293c4f] font-bold text-sm">H</span>
+          <div className="px-4 py-2 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center">
+            <HaxMark color="#293c4f" className="h-8 w-auto" />
           </div>
           <div className="flex gap-1">
             {[0, 1, 2].map((i) => (
@@ -55,6 +57,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }
 
   return (
+    <ConfirmDialogProvider>
     <div className="min-h-screen bg-gray-50">
       <Sidebar collapsed={collapsed} onToggle={handleToggle} />
 
@@ -79,5 +82,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         </footer>
       </div>
     </div>
+    </ConfirmDialogProvider>
   )
 }

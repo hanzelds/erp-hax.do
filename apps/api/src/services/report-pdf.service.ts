@@ -141,7 +141,7 @@ export async function generateBalancePdf(data: any, businessUnit?: string): Prom
   // Equity / patrimonio
   y = sectionHeader(page, bold, y, 'PATRIMONIO', width)
   const equityColor = (data.equity ?? 0) >= 0 ? GREEN : RED
-  y = dataRow(page, regular, bold, y, 'Patrimonio neto (ingresos − gastos)', fmt(data.equity ?? 0), width, 0, equityColor)
+  y = dataRow(page, regular, bold, y, 'Patrimonio neto (ingresos - gastos)', fmt(data.equity ?? 0), width, 0, equityColor)
 
   await buildFooter(doc, page)
   return doc.save()

@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database'
 
 const ECF_DEFAULTS = {
+  legacyNcfEnabled:    true,
   alanubeEnabled:      false,
   alanubeApiKey:       null as string | null,
   alanubeEnv:          'sandbox',
@@ -160,18 +161,18 @@ export async function updatePayrollConfig(data: any) {
 const ACCOUNTS_DEFAULTS = {
   acctCash:              '1101',
   acctBank:              '1102',
-  acctReceivables:       '1201',
-  acctItbisReceivable:   '1302',
+  acctReceivables:       '1103',  // Cuentas por Cobrar
+  acctItbisReceivable:   '1104',  // ITBIS por Cobrar
   acctPayablesSuppliers: '2101',
   acctPayablesEmployees: '2102',
-  acctPayablesTss:       '2103',
-  acctPayablesIsr:       '2104',
-  acctItbisPayable:      '2201',
-  acctIncomeHax:         '4101',
-  acctIncomeKoder:       '4102',
-  acctExpenseGeneral:    '5101',
-  acctExpenseSalaries:   '5102',
-  acctExpenseMarketing:  '5103',
+  acctPayablesTss:       '2104',  // TSS por Pagar
+  acctPayablesIsr:       '2105',  // ISR por Pagar
+  acctItbisPayable:      '2103',  // ITBIS por Pagar
+  acctIncomeHax:         '4001',  // Ingresos por Servicios Hax
+  acctIncomeKoder:       '4002',  // Ingresos por Servicios Koder
+  acctExpenseGeneral:    '5001',
+  acctExpenseSalaries:   '5003',
+  acctExpenseMarketing:  '5002',
 }
 const ACCOUNTS_FIELDS = Object.keys(ACCOUNTS_DEFAULTS) as (keyof typeof ACCOUNTS_DEFAULTS)[]
 

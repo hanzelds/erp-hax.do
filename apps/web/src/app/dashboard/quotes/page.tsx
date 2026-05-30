@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Send, Check, X, FileText, ArrowRight, UserPlus, ArrowLeft,
-  Trash2, ChevronDown, Download, Search, Calendar, Building2,
+  Trash2, ChevronDown, Download, Search, Calendar,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
@@ -619,7 +619,17 @@ export default function QuotesPage() {
 
   const quotes = data?.data ?? (Array.isArray(data) ? data : [])
 
-  if (showNew) return <NewQuotePage onClose={() => setShowNew(false)} />
+  if (showNew)   return <NewQuotePage onClose={() => setShowNew(false)} />
+  if (detailId)  return (
+    <QuoteDetailPage
+      id={detailId}
+      onBack={() => setDetailId(null)}
+      onConvert={id => { setDetailId(null); convertQ.mutate(id) }}
+      onSendQ={id => sendQ.mutate(id)}
+      onAcceptQ={id => acceptQ.mutate(id)}
+      onRejectQ={id => rejectQ.mutate(id)}
+    />
+  )
 
   const STATUS_TABS = [
     { value: '', label: 'Todas' },
@@ -664,28 +674,21 @@ export default function QuotesPage() {
       {/* Filters */}
       <Card padding="sm">
         <div className="flex flex-wrap items-center justify-between gap-3 px-1 py-1">
-          {/* Status tabs */}
           <div className="flex items-center gap-1 flex-wrap">
             {STATUS_TABS.map(t => (
               <button key={t.value} onClick={() => setStatus(t.value)}
                 className={cn(
                   'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  status === t.value
-                    ? 'bg-[#293c4f] text-white'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                  status === t.value ? 'bg-[#293c4f] text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
                 )}>
                 {t.label}
               </button>
             ))}
           </div>
-          {/* BU toggle */}
           <div className="flex items-center gap-1 rounded-lg border border-gray-200 overflow-hidden">
             {[{ value: '', label: 'Todas' }, { value: 'HAX', label: 'HAX' }, { value: 'KODER', label: 'KODER' }].map(b => (
               <button key={b.value} onClick={() => setBu(b.value)}
-                className={cn(
-                  'px-3 py-1.5 text-xs font-medium transition-colors',
-                  bu === b.value ? 'bg-[#293c4f] text-white' : 'text-gray-500 hover:bg-gray-50'
-                )}>
+                className={cn('px-3 py-1.5 text-xs font-medium transition-colors', bu === b.value ? 'bg-[#293c4f] text-white' : 'text-gray-500 hover:bg-gray-50')}>
                 {b.label}
               </button>
             ))}
@@ -712,11 +715,10 @@ export default function QuotesPage() {
             </thead>
             <tbody>
               {quotes.map(q => (
-                <tr key={q.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
+                <tr key={q.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors cursor-pointer"
+                  onClick={() => setDetailId(q.id)}>
                   <td className="px-3 py-3">
-                    <button onClick={() => setDetailId(q.id)} className="font-mono text-xs font-semibold text-[#293c4f] hover:underline">
-                      {q.number}
-                    </button>
+                    <span className="font-mono text-xs font-semibold text-[#293c4f] hover:underline">{q.number}</span>
                   </td>
                   <td className="px-3 py-3 text-xs text-gray-700 font-medium">{q.client?.name}</td>
                   <td className="px-3 py-3">
@@ -738,27 +740,22 @@ export default function QuotesPage() {
                       </span>
                     ) : '—'}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
-                      {/* View detail */}
-                      <button title="Ver detalle" onClick={() => setDetailId(q.id)}
-                        className="px-2 py-1 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors font-medium">
-                        Ver
-                      </button>
                       {q.status === 'DRAFT' && (
-                        <button title="Marcar como enviada" onClick={() => sendQ.mutate(q.id)}
+                        <button title="Enviar" onClick={() => sendQ.mutate(q.id)}
                           className="px-2 py-1 rounded-lg text-xs text-blue-600 hover:bg-blue-50 transition-colors font-medium flex items-center gap-1">
                           <Send className="w-3 h-3" /> Enviar
                         </button>
                       )}
                       {(q.status === 'SENT' || q.status === 'DRAFT') && (
-                        <button title="Marcar como aceptada" onClick={() => acceptQ.mutate(q.id)}
+                        <button title="Aceptar" onClick={() => acceptQ.mutate(q.id)}
                           className="px-2 py-1 rounded-lg text-xs text-emerald-600 hover:bg-emerald-50 transition-colors font-medium flex items-center gap-1">
                           <Check className="w-3 h-3" /> Aceptar
                         </button>
                       )}
                       {(q.status === 'SENT' || q.status === 'DRAFT') && (
-                        <button title="Marcar como rechazada" onClick={() => rejectQ.mutate(q.id)}
+                        <button title="Rechazar" onClick={() => rejectQ.mutate(q.id)}
                           className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -783,132 +780,429 @@ export default function QuotesPage() {
           </table>
         )}
       </Card>
-
-      {detailId && (
-        <QuoteDetailModal id={detailId} onClose={() => setDetailId(null)}
-          onConvert={id => { setDetailId(null); convertQ.mutate(id) }} />
-      )}
     </div>
   )
 }
 
 // ─────────────────────────────────────────────────────────────
-// Quote Detail Modal
+// Quote Detail / Edit — Full Page
 // ─────────────────────────────────────────────────────────────
-function QuoteDetailModal({ id, onClose, onConvert }: { id: string; onClose: () => void; onConvert: (id: string) => void }) {
+function QuoteDetailPage({
+  id, onBack, onConvert, onSendQ, onAcceptQ, onRejectQ,
+}: {
+  id: string
+  onBack: () => void
+  onConvert: (id: string) => void
+  onSendQ: (id: string) => void
+  onAcceptQ: (id: string) => void
+  onRejectQ: (id: string) => void
+}) {
+  const qc = useQueryClient()
   const { data: quote, isLoading } = useQuery<Quote>({
     queryKey: ['quote', id],
     queryFn: async () => { const { data } = await api.get(`/quotes/${id}`); return data.data ?? data },
   })
 
+  const [editing, setEditing] = useState(false)
+
+  // ── Edit state ───────────────────────────────────────────
+  const [validUntil, setValidUntil] = useState('')
+  const [notes, setNotes]           = useState('')
+  const [terms, setTerms]           = useState('')
+  const [lines, setLines]           = useState<LineItem[]>([EMPTY_LINE()])
+  const [err, setErr]               = useState<string | null>(null)
+
+  const { data: products = [] } = useQuery<Product[]>({
+    queryKey: ['products-list'],
+    queryFn: async () => { const { data } = await api.get('/products', { params: { limit: 200, isActive: true } }); return data.data ?? [] },
+    enabled: editing,
+  })
+  const { data: company } = useQuery<any>({
+    queryKey: ['company-settings'],
+    queryFn: async () => { const { data } = await api.get('/settings/company'); return data.data ?? data },
+  })
+
+  // Populate edit state from fetched quote
+  useEffect(() => {
+    if (quote && editing) {
+      setValidUntil(quote.validUntil ? quote.validUntil.slice(0, 10) : '')
+      setNotes(quote.notes ?? '')
+      setTerms(quote.terms ?? '')
+      setLines(
+        (quote.items ?? []).map(item => ({
+          productId:   '',
+          description: item.description,
+          code:        '',
+          unitPrice:   item.unitPrice,
+          discountPct: 0,
+          taxRate:     item.isExempt ? 0 : item.taxRate,
+          isExempt:    item.isExempt,
+          quantity:    item.quantity,
+        }))
+      )
+    }
+  }, [quote, editing])
+
+  const setLine = (i: number, patch: Partial<LineItem>) =>
+    setLines(prev => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l))
+  const applyProduct = (i: number, p: Product) =>
+    setLine(i, { productId: p.id, description: p.name, code: p.code ?? '', unitPrice: p.unitPrice, taxRate: p.taxRate, isExempt: p.isExempt })
+
+  const calcs      = lines.map(calcLine)
+  const subtotal   = calcs.reduce((s, c) => s + c.gross, 0)
+  const totalDisc  = calcs.reduce((s, c) => s + c.discount, 0)
+  const totalTax   = calcs.reduce((s, c) => s + c.tax, 0)
+  const grandTotal = calcs.reduce((s, c) => s + c.total, 0)
+
+  const save = useMutation({
+    mutationFn: () => api.put(`/quotes/${id}`, {
+      validUntil: validUntil || undefined,
+      notes: notes || undefined,
+      terms: terms || undefined,
+      items: lines.map((l, idx) => ({
+        description: l.description, quantity: l.quantity, unitPrice: l.unitPrice,
+        taxRate: l.isExempt ? 0 : l.taxRate, isExempt: l.isExempt, sortOrder: idx,
+      })),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['quote', id] })
+      qc.invalidateQueries({ queryKey: ['quotes'] })
+      setEditing(false)
+    },
+    onError: (e: any) => setErr(e?.response?.data?.error ?? 'Error al guardar'),
+  })
+
   if (isLoading) return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl p-8"><div className="w-6 h-6 border-2 border-[#293c4f] border-t-transparent rounded-full animate-spin mx-auto" /></div>
+    <div className="flex items-center justify-center py-24">
+      <div className="w-6 h-6 border-2 border-[#293c4f] border-t-transparent rounded-full animate-spin" />
     </div>
   )
   if (!quote) return null
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] overflow-y-auto">
-        {/* Modal header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl">
-          <div className="flex items-center gap-3">
-            <div>
-              <p className="text-sm font-bold text-gray-900 font-mono">{quote.number}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{quote.client?.name}</p>
-            </div>
-            <span className={cn('px-2.5 py-1 rounded-full text-xs font-semibold', STATUS_COLOR[quote.status])}>
-              {STATUS_LABEL[quote.status]}
-            </span>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
-            <X className="w-4 h-4" />
+  const canEdit = quote.status !== 'CONVERTED'
+
+  // ── VIEW MODE ────────────────────────────────────────────
+  if (!editing) {
+    return (
+      <div className="space-y-5">
+        {/* Top bar */}
+        <div className="flex items-center justify-between">
+          <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Cotizaciones
           </button>
+          <div className="flex items-center gap-2">
+            {canEdit && (
+              <Button variant="secondary" size="sm" icon={<Calendar className="w-3.5 h-3.5" />} onClick={() => setEditing(true)}>
+                Editar
+              </Button>
+            )}
+            <Button variant="secondary" size="sm" icon={<Download className="w-3.5 h-3.5" />}
+              onClick={() => openPdf(`/quotes/${quote.id}/pdf`, `cotizacion-${quote.number}.pdf`)}>
+              PDF
+            </Button>
+            {quote.status === 'DRAFT' && (
+              <Button variant="secondary" size="sm" icon={<Send className="w-3.5 h-3.5" />}
+                onClick={() => { onSendQ(id); qc.invalidateQueries({ queryKey: ['quote', id] }) }}>
+                Enviar
+              </Button>
+            )}
+            {(quote.status === 'SENT' || quote.status === 'DRAFT') && (
+              <Button variant="secondary" size="sm" icon={<Check className="w-3.5 h-3.5" />}
+                onClick={() => { onAcceptQ(id); qc.invalidateQueries({ queryKey: ['quote', id] }) }}>
+                Aceptar
+              </Button>
+            )}
+            {(quote.status === 'SENT' || quote.status === 'DRAFT') && (
+              <Button variant="danger" size="sm" icon={<X className="w-3.5 h-3.5" />}
+                onClick={() => { onRejectQ(id); qc.invalidateQueries({ queryKey: ['quote', id] }) }}>
+                Rechazar
+              </Button>
+            )}
+            {quote.status === 'ACCEPTED' && (
+              <Button variant="primary" size="sm" icon={<ArrowRight className="w-3.5 h-3.5" />}
+                onClick={() => onConvert(id)}>
+                Convertir a factura
+              </Button>
+            )}
+            {quote.status === 'CONVERTED' && quote.invoice && (
+              <Button variant="secondary" size="sm" icon={<FileText className="w-3.5 h-3.5" />}
+                asChild>
+                <a href={`/dashboard/invoices/${quote.invoice.id}`}>Ver factura</a>
+              </Button>
+            )}
+          </div>
         </div>
 
-        <div className="p-6 space-y-5">
-          {/* Meta */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="bg-gray-50 rounded-xl p-3">
-              <p className="text-gray-400 mb-0.5">Fecha de emisión</p>
-              <p className="font-medium text-gray-700">{formatDate(quote.createdAt)}</p>
+        {/* Document */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="px-8 py-6 border-b border-gray-100">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-4">
+                <HaxLogo color="#293c4f" className="h-9 w-auto" />
+                <div className="pl-4 border-l border-gray-100">
+                  <p className="text-sm font-semibold text-gray-800">{company?.companyName ?? 'HAX ESTUDIO CREATIVO EIRL'}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">RNC {company?.rnc ?? '133290251'}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-[#293c4f] tracking-tight">COTIZACIÓN</p>
+                <p className="font-mono text-sm font-semibold text-gray-600 mt-0.5">{quote.number}</p>
+                <div className="mt-2 flex justify-end">
+                  <span className={cn('px-2.5 py-1 rounded-full text-xs font-semibold', STATUS_COLOR[quote.status])}>
+                    {STATUS_LABEL[quote.status]}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="bg-gray-50 rounded-xl p-3">
-              <p className="text-gray-400 mb-0.5">Válida hasta</p>
-              <p className="font-medium text-gray-700">{quote.validUntil ? formatDate(quote.validUntil) : '—'}</p>
+          </div>
+
+          {/* Client + Dates */}
+          <div className="grid grid-cols-2 gap-x-12 px-8 py-5 border-b border-gray-100">
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Facturar a</p>
+              <p className="text-sm font-bold text-gray-800">{quote.client?.name}</p>
+              {quote.client?.rnc   && <p className="text-xs text-gray-500 mt-0.5">RNC / Cédula: {quote.client.rnc}</p>}
+              {quote.client?.phone && <p className="text-xs text-gray-500">{quote.client.phone}</p>}
+              {quote.client?.email && <p className="text-xs text-gray-500">{quote.client.email}</p>}
+            </div>
+            <div className="space-y-2">
+              <div>
+                <p className="text-xs text-gray-400">Fecha emisión</p>
+                <p className="text-sm font-medium text-gray-700">{formatDate(quote.createdAt)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Válida hasta</p>
+                <p className="text-sm font-medium text-gray-700">{quote.validUntil ? formatDate(quote.validUntil) : '—'}</p>
+              </div>
             </div>
           </div>
 
           {/* Items */}
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Ítems</p>
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
+          <div className="px-8 py-5 border-b border-gray-100">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Servicios / Productos</p>
+            <div className="rounded-xl border border-gray-100 overflow-hidden">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left py-2 px-3 text-gray-400 font-medium">Descripción</th>
-                    <th className="text-right py-2 px-3 text-gray-400 font-medium">Cant.</th>
-                    <th className="text-right py-2 px-3 text-gray-400 font-medium">Precio</th>
-                    <th className="text-right py-2 px-3 text-gray-400 font-medium">Total</th>
+                    <th className="text-left py-2.5 px-4 font-semibold text-gray-500">Descripción</th>
+                    <th className="text-right py-2.5 px-4 font-semibold text-gray-500">Cant.</th>
+                    <th className="text-right py-2.5 px-4 font-semibold text-gray-500">Precio unit.</th>
+                    <th className="text-right py-2.5 px-4 font-semibold text-gray-500">ITBIS</th>
+                    <th className="text-right py-2.5 px-4 font-semibold text-gray-500">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(quote.items ?? []).map((item, i) => (
-                    <tr key={i} className="border-b border-gray-50 last:border-0">
-                      <td className="py-2 px-3 text-gray-700">{item.description}</td>
-                      <td className="py-2 px-3 text-right text-gray-500">{item.quantity}</td>
-                      <td className="py-2 px-3 text-right text-gray-500">{formatCurrency(item.unitPrice)}</td>
-                      <td className="py-2 px-3 text-right font-semibold text-gray-800">
-                        {formatCurrency(item.quantity * item.unitPrice + (item.isExempt ? 0 : item.taxAmount))}
-                      </td>
-                    </tr>
-                  ))}
+                  {(quote.items ?? []).map((item, i) => {
+                    const itemTax = item.isExempt ? 0 : (item.taxAmount ?? item.quantity * item.unitPrice * item.taxRate)
+                    const itemTotal = item.quantity * item.unitPrice + itemTax
+                    return (
+                      <tr key={i} className="border-b border-gray-50 last:border-0">
+                        <td className="py-2.5 px-4 text-gray-700 font-medium">{item.description}</td>
+                        <td className="py-2.5 px-4 text-right text-gray-500">{item.quantity}</td>
+                        <td className="py-2.5 px-4 text-right text-gray-500">{formatCurrency(item.unitPrice)}</td>
+                        <td className="py-2.5 px-4 text-right text-gray-500">{item.isExempt ? 'Exento' : formatCurrency(itemTax)}</td>
+                        <td className="py-2.5 px-4 text-right font-bold text-gray-800">{formatCurrency(itemTotal)}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Totals */}
-          <div className="bg-gray-50 rounded-xl p-4 space-y-1.5 text-sm">
-            <div className="flex justify-between text-gray-600">
-              <span>Subtotal</span><span className="font-medium">{formatCurrency(quote.subtotal)}</span>
+          {/* Totals + Notes */}
+          <div className="grid grid-cols-2 gap-8 px-8 py-5">
+            <div className="space-y-3">
+              {quote.notes && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Notas</p>
+                  <p className="text-sm text-gray-600 whitespace-pre-wrap">{quote.notes}</p>
+                </div>
+              )}
+              {quote.terms && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Términos</p>
+                  <p className="text-sm text-gray-600 whitespace-pre-wrap">{quote.terms}</p>
+                </div>
+              )}
             </div>
-            <div className="flex justify-between text-gray-600">
-              <span>ITBIS</span><span className="font-medium">{formatCurrency(quote.taxAmount)}</span>
+            <div className="flex flex-col justify-end">
+              <div className="bg-gray-50 rounded-2xl p-5 space-y-2">
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Subtotal</span>
+                  <span className="font-medium">{formatCurrency(quote.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>ITBIS</span>
+                  <span className="font-medium">{formatCurrency(quote.taxAmount)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 mt-1 border-t border-gray-200">
+                  <span className="text-base font-bold text-gray-900">Total</span>
+                  <span className="text-xl font-bold text-[#293c4f]">{formatCurrency(quote.total)}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between font-bold text-base text-[#293c4f] pt-1.5 border-t border-gray-200 mt-1.5">
-              <span>Total</span><span>{formatCurrency(quote.total)}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── EDIT MODE ────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-[#f4f6f8]">
+      {/* Top bar */}
+      <div className="sticky top-0 z-10 bg-[#f4f6f8] px-6 pt-5 pb-3 flex items-center justify-between">
+        <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Cancelar edición
+        </button>
+        <h1 className="text-base font-semibold text-gray-800">Editando {quote.number}</h1>
+        <div className="w-32" />
+      </div>
+
+      <div className="px-6 pb-28 max-w-5xl mx-auto space-y-0">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+
+          {/* Document Header (read-only) */}
+          <div className="px-8 py-6 border-b border-gray-100">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-4">
+                <HaxLogo color="#293c4f" className="h-9 w-auto" />
+                <div className="pl-4 border-l border-gray-100">
+                  <p className="text-sm font-semibold text-gray-800">{company?.companyName ?? 'HAX ESTUDIO CREATIVO EIRL'}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">RNC {company?.rnc ?? '133290251'}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-[#293c4f] tracking-tight">COTIZACIÓN</p>
+                <p className="font-mono text-sm font-semibold text-gray-600 mt-0.5">{quote.number}</p>
+                <div className="mt-2 flex items-center justify-end gap-2">
+                  <span className={cn('px-2.5 py-1 rounded-full text-xs font-semibold', STATUS_COLOR[quote.status])}>
+                    {STATUS_LABEL[quote.status]}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-xs font-bold" style={{ backgroundColor: quote.businessUnit === 'HAX' ? '#eef1f4' : '#f1f5f9', color: quote.businessUnit === 'HAX' ? '#293c4f' : '#475569' }}>
+                    {quote.businessUnit}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Notes */}
-          {quote.notes && (
-            <div className="text-xs text-gray-500 border-t border-gray-100 pt-3">
-              <p className="font-medium text-gray-400 mb-1">Notas</p>
-              <p>{quote.notes}</p>
+          {/* Client (read-only) + Valid until (editable) */}
+          <div className="grid grid-cols-2 gap-x-12 px-8 py-6 border-b border-gray-100">
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Facturar a</p>
+              <p className="text-sm font-bold text-gray-800">{quote.client?.name}</p>
+              {quote.client?.rnc && <p className="text-xs text-gray-500 mt-0.5">RNC: {quote.client.rnc}</p>}
+              <p className="text-[11px] text-gray-300 mt-2 italic">El cliente no puede modificarse</p>
             </div>
-          )}
-          {quote.terms && (
-            <div className="text-xs text-gray-500">
-              <p className="font-medium text-gray-400 mb-1">Términos</p>
-              <p>{quote.terms}</p>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Válida hasta</label>
+              <DatePicker value={validUntil} onChange={v => setValidUntil(v)} className="w-full" />
             </div>
-          )}
-
-          {/* Actions */}
-          <div className="space-y-2 border-t border-gray-100 pt-4">
-            <Button variant="secondary" size="sm" className="w-full" icon={<Download className="w-3.5 h-3.5" />}
-              onClick={() => openPdf(`/quotes/${quote.id}/pdf`, `cotizacion-${quote.number}.pdf`)}>
-              Descargar PDF
-            </Button>
-            {quote.status === 'ACCEPTED' && (
-              <Button variant="primary" size="sm" className="w-full" icon={<ArrowRight className="w-3.5 h-3.5" />}
-                onClick={() => { onClose(); onConvert(id) }}>
-                Convertir a factura
-              </Button>
-            )}
           </div>
+
+          {/* Items */}
+          <div className="px-8 py-5 border-b border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Detalle de servicios / productos</p>
+            <div className="grid grid-cols-[1fr_72px_120px_72px_100px_96px_32px] gap-3 mb-2 px-1">
+              <p className="text-[11px] font-semibold text-gray-400">Descripción</p>
+              <p className="text-[11px] font-semibold text-gray-400 text-center">Cant.</p>
+              <p className="text-[11px] font-semibold text-gray-400 text-right">Precio unit.</p>
+              <p className="text-[11px] font-semibold text-gray-400 text-center">Desc. %</p>
+              <p className="text-[11px] font-semibold text-gray-400 text-center">Impuesto</p>
+              <p className="text-[11px] font-semibold text-gray-400 text-right">Total</p>
+              <span />
+            </div>
+            <div className="space-y-1">
+              {lines.map((line, i) => {
+                const { total: lineTotal, discount } = calcLine(line)
+                return (
+                  <LineRow key={i}
+                    line={line} index={i} products={products}
+                    lineTotal={lineTotal} discount={discount}
+                    showDelete={lines.length > 1}
+                    onChange={patch => setLine(i, patch)}
+                    onDelete={() => setLines(prev => prev.filter((_, idx) => idx !== i))}
+                    onApplyProduct={p => applyProduct(i, p)}
+                  />
+                )
+              })}
+            </div>
+            <button type="button" onClick={() => setLines(prev => [...prev, EMPTY_LINE()])}
+              className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-[#293c4f] hover:opacity-70 transition-opacity">
+              <Plus className="w-3.5 h-3.5" /> Agregar línea
+            </button>
+          </div>
+
+          {/* Notes + Totals */}
+          <div className="grid grid-cols-2 gap-8 px-8 py-6 border-b border-gray-100">
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Notas</label>
+                  <span className="text-xs text-gray-300">{notes.length}/290</span>
+                </div>
+                <textarea rows={3} maxLength={290} value={notes} onChange={e => setNotes(e.target.value)}
+                  placeholder="Notas visibles en la cotización…"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] resize-none placeholder-gray-300 text-gray-700" />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Términos</label>
+                  <span className="text-xs text-gray-300">{terms.length}/400</span>
+                </div>
+                <textarea rows={3} maxLength={400} value={terms} onChange={e => setTerms(e.target.value)}
+                  placeholder="Condiciones de pago, entrega, etc."
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] resize-none placeholder-gray-300 text-gray-700" />
+              </div>
+            </div>
+            <div className="flex flex-col justify-end">
+              <div className="bg-gray-50 rounded-2xl p-5 space-y-2">
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Subtotal</span><span className="font-medium">{formatCurrency(subtotal)}</span>
+                </div>
+                {totalDisc > 0 && (
+                  <div className="flex justify-between text-sm text-red-500">
+                    <span>Descuento</span><span className="font-medium">-{formatCurrency(totalDisc)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>ITBIS</span><span className="font-medium">{formatCurrency(totalTax)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 mt-1 border-t border-gray-200">
+                  <span className="text-base font-bold text-gray-900">Total</span>
+                  <span className="text-xl font-bold text-[#293c4f]">{formatCurrency(grandTotal)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-8 py-3 flex items-center justify-between">
+            <p className="text-xs text-gray-300">{company?.companyName ?? 'HAX ESTUDIO CREATIVO EIRL'} · RNC {company?.rnc ?? '133290251'}</p>
+          </div>
+        </div>
+
+        {err && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-red-600 bg-red-50 px-4 py-2.5 rounded-xl border border-red-100">
+            <X className="w-3.5 h-3.5 shrink-0" /> {err}
+          </div>
+        )}
+      </div>
+
+      {/* Fixed action bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-200 px-8 py-4 flex items-center justify-between z-40">
+        <p className="text-sm text-gray-500">
+          {grandTotal > 0 ? <>Total: <span className="font-bold text-[#293c4f]">{formatCurrency(grandTotal)}</span></> : 'Sin líneas'}
+        </p>
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={() => setEditing(false)}>Cancelar</Button>
+          <Button variant="primary" loading={save.isPending}
+            disabled={lines.every(l => !l.description)}
+            onClick={() => { setErr(null); save.mutate() }}>
+            Guardar cambios
+          </Button>
         </div>
       </div>
     </div>

@@ -470,7 +470,7 @@ function EmployeesTab() {
   const qc = useQueryClient()
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'ADMIN'
-  const [showModal, setShowModal] = useState(false)
+  const [showNew, setShowNew] = useState(false)
   const [bu, setBu] = useState('')
 
   const { data, isLoading } = useQuery<{ data: Employee[] }>({
@@ -488,6 +488,13 @@ function EmployeesTab() {
 
   const employees = data?.data ?? (Array.isArray(data) ? data : [])
 
+  if (showNew) return (
+    <NewEmployeePage
+      onBack={() => setShowNew(false)}
+      onSaved={() => { qc.invalidateQueries({ queryKey: ['employees'] }); setShowNew(false) }}
+    />
+  )
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -498,7 +505,7 @@ function EmployeesTab() {
           <option value="KODER">KODER</option>
         </Select>
         {isAdmin && (
-          <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>
+          <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowNew(true)}>
             Nuevo empleado
           </Button>
         )}
@@ -509,7 +516,7 @@ function EmployeesTab() {
           <div className="p-4 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : employees.length === 0 ? (
           <EmptyState icon={<Users className="w-5 h-5" />} title="Sin empleados" description="Registra el primer empleado para calcular nóminas."
-            action={isAdmin ? <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowModal(true)}>Nuevo empleado</Button> : undefined} />
+            action={isAdmin ? <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowNew(true)}>Nuevo empleado</Button> : undefined} />
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -552,8 +559,6 @@ function EmployeesTab() {
           </table>
         )}
       </Card>
-
-      {showModal && <NewEmployeeModal onClose={() => setShowModal(false)} />}
     </div>
   )
 }
@@ -626,10 +631,9 @@ function CalculateModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-// ── New Employee Modal ────────────────────────────────────────
+// ── New Employee Page ────────────────────────────────────────
 
-function NewEmployeeModal({ onClose }: { onClose: () => void }) {
-  const qc = useQueryClient()
+function NewEmployeePage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     name: '', email: '', phone: '', position: '', cedula: '',
     type: 'SALARIED', businessUnit: 'HAX', baseSalary: '',
@@ -643,66 +647,81 @@ function NewEmployeeModal({ onClose }: { onClose: () => void }) {
       cedula: form.cedula || undefined,
       phone:  form.phone  || undefined,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['employees'] }); onClose() },
+    onSuccess: onSaved,
   })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">Nuevo Empleado</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-        </div>
-        <form onSubmit={(e) => { e.preventDefault(); save.mutate() }} className="p-6 space-y-4">
-          <F label="Nombre completo *">
-            <input required type="text" value={form.name} onChange={(e) => set('name', e.target.value)} className={ic} placeholder="Juan García" />
-          </F>
-          <div className="grid grid-cols-2 gap-4">
-            <F label="Email *">
-              <input required type="email" value={form.email} onChange={(e) => set('email', e.target.value)} className={ic} />
-            </F>
-            <F label="Teléfono">
-              <input type="text" value={form.phone} onChange={(e) => set('phone', e.target.value)} className={ic} placeholder="809-000-0000" />
-            </F>
+    <div className="space-y-6">
+      {/* Top bar */}
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
+          <ChevronRight className="w-4 h-4 rotate-180" />
+          Volver
+        </button>
+        <span className="text-gray-300">/</span>
+        <span className="text-sm font-medium text-gray-800">Nuevo Empleado</span>
+      </div>
+
+      {/* Form card */}
+      <div className="max-w-2xl">
+        <Card>
+          <div className="px-6 py-5 border-b border-gray-100">
+            <h2 className="text-base font-semibold text-gray-900">Información del empleado</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Completa los datos para registrar al empleado en el sistema.</p>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <F label="Puesto">
-              <input type="text" value={form.position} onChange={(e) => set('position', e.target.value)} className={ic} placeholder="Diseñador" />
+          <form onSubmit={(e) => { e.preventDefault(); save.mutate() }} className="p-6 space-y-5">
+            <F label="Nombre completo *">
+              <input required type="text" value={form.name} onChange={(e) => set('name', e.target.value)} className={ic} placeholder="Juan García" />
             </F>
-            <F label="Cédula">
-              <input type="text" value={form.cedula} onChange={(e) => set('cedula', e.target.value)} className={ic} placeholder="001-0000000-0" />
+            <div className="grid grid-cols-2 gap-4">
+              <F label="Email *">
+                <input required type="email" value={form.email} onChange={(e) => set('email', e.target.value)} className={ic} placeholder="juan@empresa.com" />
+              </F>
+              <F label="Teléfono">
+                <input type="text" value={form.phone} onChange={(e) => set('phone', e.target.value)} className={ic} placeholder="809-000-0000" />
+              </F>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <F label="Puesto">
+                <input type="text" value={form.position} onChange={(e) => set('position', e.target.value)} className={ic} placeholder="Diseñador" />
+              </F>
+              <F label="Cédula">
+                <input type="text" value={form.cedula} onChange={(e) => set('cedula', e.target.value)} className={ic} placeholder="001-0000000-0" />
+              </F>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <F label="Tipo *">
+                <Select required value={form.type} onChange={(e) => set('type', e.target.value)} className={ic}>
+                  <option value="SALARIED">Asalariado</option>
+                  <option value="CONTRACTOR">Contratista</option>
+                </Select>
+              </F>
+              <F label="Unidad de negocio *">
+                <Select required value={form.businessUnit} onChange={(e) => set('businessUnit', e.target.value)} className={ic}>
+                  <option value="HAX">HAX</option>
+                  <option value="KODER">KODER</option>
+                </Select>
+              </F>
+            </div>
+            <F label="Salario base mensual (RD$) *">
+              <input required type="number" min="0" step="0.01" value={form.baseSalary}
+                onChange={(e) => set('baseSalary', e.target.value)} className={ic} placeholder="50000.00" />
             </F>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <F label="Tipo *">
-              <Select required value={form.type} onChange={(e) => set('type', e.target.value)} className={ic}>
-                <option value="SALARIED">Asalariado</option>
-                <option value="CONTRACTOR">Contratista</option>
-              </Select>
-            </F>
-            <F label="Unidad *">
-              <Select required value={form.businessUnit} onChange={(e) => set('businessUnit', e.target.value)} className={ic}>
-                <option value="HAX">HAX</option>
-                <option value="KODER">KODER</option>
-              </Select>
-            </F>
-          </div>
-          <F label="Salario base mensual (RD$) *">
-            <input required type="number" min="0" step="0.01" value={form.baseSalary}
-              onChange={(e) => set('baseSalary', e.target.value)} className={ic} placeholder="50000.00" />
-          </F>
-          {save.isError && (
-            <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-              {(save.error as any)?.response?.data?.error ?? 'Error al guardar'}
-            </p>
-          )}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
-            <Button variant="primary" type="submit" loading={save.isPending} disabled={!form.name || !form.email || !form.baseSalary}>
-              Guardar
-            </Button>
-          </div>
-        </form>
+
+            {save.isError && (
+              <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                {(save.error as any)?.response?.data?.error ?? 'Error al guardar'}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <Button variant="secondary" type="button" onClick={onBack}>Cancelar</Button>
+              <Button variant="primary" type="submit" loading={save.isPending} disabled={!form.name || !form.email || !form.baseSalary}>
+                Guardar empleado
+              </Button>
+            </div>
+          </form>
+        </Card>
       </div>
     </div>
   )

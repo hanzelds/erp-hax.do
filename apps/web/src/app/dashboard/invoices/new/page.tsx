@@ -314,6 +314,10 @@ export default function NewInvoicePage() {
   const [showNewClient, setShowNewClient] = useState(false)
   const [err, setErr]                   = useState<string | null>(null)
 
+  // Global discount
+  const [globalDiscType,  setGlobalDiscType]  = useState<'pct' | 'fixed'>('pct')
+  const [globalDiscValue, setGlobalDiscValue] = useState('')
+
   // Initial payment
   const [payEnabled, setPayEnabled] = useState(false)
   const [payAmount, setPayAmount]   = useState('')
@@ -353,11 +357,20 @@ export default function NewInvoicePage() {
       isExempt:    p.isExempt,
     })
 
-  const calcs      = lines.map(l => calcLine(l, forceExempt))
-  const subtotal   = calcs.reduce((s, c) => s + c.gross, 0)
-  const totalDisc  = calcs.reduce((s, c) => s + c.disc, 0)
-  const totalTax   = calcs.reduce((s, c) => s + c.tax, 0)
-  const grandTotal = calcs.reduce((s, c) => s + c.total, 0)
+  const calcs         = lines.map(l => calcLine(l, forceExempt))
+  const subtotal      = calcs.reduce((s, c) => s + c.gross, 0)
+  const lineDisc      = calcs.reduce((s, c) => s + c.disc, 0)
+  const subtotalAfter = subtotal - lineDisc                        // after per-line discounts
+  const totalTax      = calcs.reduce((s, c) => s + c.tax, 0)
+
+  // Global discount (applied after per-line discounts, before ITBIS)
+  const globalDiscRaw  = parseFloat(globalDiscValue) || 0
+  const globalDiscAmt  = globalDiscType === 'pct'
+    ? subtotalAfter * (globalDiscRaw / 100)
+    : Math.min(globalDiscRaw, subtotalAfter)
+
+  const totalDisc  = lineDisc + globalDiscAmt
+  const grandTotal = subtotalAfter - globalDiscAmt + totalTax
   const balance    = Math.max(0, grandTotal - (parseFloat(payAmount) || 0))
 
   // Auto-calculate due date from payment terms
@@ -386,6 +399,7 @@ export default function NewInvoicePage() {
         dueDate:   dueDate   || undefined,
         ncfType, paymentTerms,
         notes: notes || undefined,
+        discountAmount: globalDiscAmt > 0 ? globalDiscAmt : undefined,
         items: resolvedItems,
       })
       const invoiceId = resp.data?.id ?? resp.id
@@ -608,6 +622,57 @@ export default function NewInvoicePage() {
             </button>
           </div>
 
+          {/* ── Global Discount ── */}
+          <div className="px-8 py-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Descuento general</span>
+
+              {/* Type toggle */}
+              <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                {(['pct', 'fixed'] as const).map(t => (
+                  <button key={t} type="button" onClick={() => { setGlobalDiscType(t); setGlobalDiscValue('') }}
+                    className={cn('px-3 py-1.5 text-xs font-semibold transition-colors',
+                      globalDiscType === t ? 'bg-[#293c4f] text-white' : 'bg-white text-gray-500 hover:bg-gray-50')}>
+                    {t === 'pct' ? '%' : 'RD$'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Value input */}
+              <div className="relative w-36">
+                {globalDiscType === 'fixed' && (
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">RD$</span>
+                )}
+                <input
+                  type="number" min="0" max={globalDiscType === 'pct' ? 100 : undefined}
+                  step={globalDiscType === 'pct' ? '1' : '0.01'}
+                  value={globalDiscValue}
+                  onChange={e => setGlobalDiscValue(e.target.value)}
+                  placeholder="0"
+                  className={cn(
+                    'w-full text-sm text-right border border-gray-200 rounded-lg py-1.5 pr-3 focus:outline-none focus:border-[#293c4f] focus:ring-1 focus:ring-[#293c4f]/15 bg-white',
+                    globalDiscType === 'fixed' ? 'pl-8' : 'pl-3'
+                  )}
+                />
+                {globalDiscType === 'pct' && (
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">%</span>
+                )}
+              </div>
+
+              {globalDiscAmt > 0 && (
+                <span className="text-xs font-semibold text-red-500">
+                  -{formatCurrency(globalDiscAmt)}
+                </span>
+              )}
+              {globalDiscValue && parseFloat(globalDiscValue) > 0 && (
+                <button type="button" onClick={() => setGlobalDiscValue('')}
+                  className="text-gray-300 hover:text-gray-500 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* ── Totals + Notes + Payment ── */}
           <div className="grid grid-cols-2 gap-8 px-8 py-6 border-b border-gray-100">
             {/* Left: notes + initial payment */}
@@ -713,10 +778,16 @@ export default function NewInvoicePage() {
                   <span>Subtotal</span>
                   <span className="font-medium">{formatCurrency(subtotal)}</span>
                 </div>
-                {totalDisc > 0 && (
+                {lineDisc > 0 && (
+                  <div className="flex justify-between text-sm text-red-400">
+                    <span>Desc. por línea</span>
+                    <span className="font-medium">-{formatCurrency(lineDisc)}</span>
+                  </div>
+                )}
+                {globalDiscAmt > 0 && (
                   <div className="flex justify-between text-sm text-red-500">
-                    <span>Descuento</span>
-                    <span className="font-medium">-{formatCurrency(totalDisc)}</span>
+                    <span>Desc. general {globalDiscType === 'pct' ? `(${globalDiscValue}%)` : ''}</span>
+                    <span className="font-medium">-{formatCurrency(globalDiscAmt)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm text-gray-600">
@@ -769,6 +840,7 @@ export default function NewInvoicePage() {
         <div className="text-sm text-gray-500">
           {grandTotal > 0
             ? <>Total: <span className="font-bold text-[#293c4f]">{formatCurrency(grandTotal)}</span>
+                {totalDisc > 0 && <span className="ml-2 text-xs text-red-400">· Desc: -{formatCurrency(totalDisc)}</span>}
                 {payEnabled && parseFloat(payAmount) > 0 && (
                   <span className="ml-2 text-xs text-emerald-600">· Saldo: {formatCurrency(balance)}</span>
                 )}

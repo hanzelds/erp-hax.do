@@ -91,6 +91,34 @@ export function getSeqField(type: string): string {
   return SEQ_FIELD[type] ?? 'ncfConsumidor'
 }
 
+// ── Legacy B-series NCF (pre-eCF) ─────────────────────────
+// Format: B + 2-digit type + 8-digit sequential = 11 characters
+// Example: B0100000001
+
+export const LEGACY_TYPE_CODE: Record<string, string> = {
+  CREDITO_FISCAL:  '01',
+  CONSUMO:         '02',
+  NOTA_DEBITO:     '03',
+  NOTA_CREDITO:    '04',
+  COMPRAS:         '11',
+  GASTOS_MENORES:  '12',
+  REGIMEN_ESPECIAL:'14',
+  REGIMEN:         '14',
+  GUBERNAMENTAL:   '15',
+  EXPORTACIONES:   '16',
+  PAGOS_EXTERIOR:  '17',
+}
+
+export function buildLegacyNcf(type: string, sequence: number): string {
+  const typeCode = LEGACY_TYPE_CODE[type] ?? '02'
+  return `B${typeCode}${String(sequence).padStart(8, '0')}`
+}
+
+/** Returns true if the given type has a legacy B-series code */
+export function supportsLegacyNcf(type: string): boolean {
+  return !!LEGACY_TYPE_CODE[type]
+}
+
 // ── Load BU config from DB ─────────────────────────────────
 export async function getBuConfig(_businessUnit?: BusinessUnit) {
   const [c, co] = await Promise.all([

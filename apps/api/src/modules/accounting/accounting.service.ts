@@ -301,21 +301,54 @@ export async function calculateItbisPeriod(period: string) {
   const month  = parseInt(period.slice(4, 6))
   const dbPeriod = `${year}-${String(month).padStart(2, '0')}`
 
-  // Get ITBIS accrued account (2201)
-  const itbisAccount = await prisma.account.findUnique({ where: { code: '2201' } })
+  // Read configured ITBIS account codes from EcfConfig
+  const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  const itbisPayableCode     = ecfConfig?.acctItbisPayable    ?? '2103'  // ITBIS por Pagar (cobrado a clientes)
+  const itbisReceivableCode  = ecfConfig?.acctItbisReceivable ?? '1104'  // ITBIS por Cobrar (pagado en compras)
+
+  const [itbisPayableAcct, itbisReceivableAcct] = await Promise.all([
+    prisma.account.findUnique({ where: { code: itbisPayableCode } }),
+    prisma.account.findUnique({ where: { code: itbisReceivableCode } }),
+  ])
 
   let totalSalesItbis     = 0
   let totalPurchasesItbis = 0
 
-  if (itbisAccount) {
-    // Sales ITBIS: credits to 2201
+  // Sales ITBIS: credits to acctItbisPayable (ITBIS charged to clients on approved invoices)
+  if (itbisPayableAcct) {
     const salesAgg = await prisma.journalEntry.aggregate({
-      where: { creditAccountId: itbisAccount.id, period: dbPeriod },
+      where: { creditAccountId: itbisPayableAcct.id, period: dbPeriod },
       _sum: { amount: true },
     })
     totalSalesItbis = salesAgg._sum.amount ?? 0
+  }
 
-    // Purchases ITBIS: from expenses with taxAmount
+  // If no journal entries yet, fall back to summing taxAmount on approved/paid invoices
+  if (totalSalesItbis === 0) {
+    const invoiceAgg = await prisma.invoice.aggregate({
+      where: {
+        status: { in: ['APPROVED', 'PAID'] as any },
+        issueDate: {
+          gte: new Date(year, month - 1, 1),
+          lte: new Date(year, month, 0, 23, 59, 59),
+        },
+      },
+      _sum: { taxAmount: true },
+    })
+    totalSalesItbis = invoiceAgg._sum.taxAmount ?? 0
+  }
+
+  // Purchases ITBIS: debits to acctItbisReceivable OR sum expense taxAmount
+  if (itbisReceivableAcct) {
+    const purchAgg = await prisma.journalEntry.aggregate({
+      where: { debitAccountId: itbisReceivableAcct.id, period: dbPeriod },
+      _sum: { amount: true },
+    })
+    totalPurchasesItbis = purchAgg._sum.amount ?? 0
+  }
+
+  // Fallback: sum taxAmount from expenses for the month
+  if (totalPurchasesItbis === 0) {
     const expenses = await prisma.expense.aggregate({
       where: {
         expenseDate: {

@@ -4,6 +4,8 @@ import { parsePagination } from '../../utils/response'
 import { InvoiceStatus, PaymentStatus, BusinessUnit } from '@prisma/client'
 import { invoiceEmitQueue } from '../../queues/invoice.queue'
 import { logger } from '../../config/logger'
+import { buildLegacyNcf, getSeqField } from '../../services/alanube.service'
+import { generateAndSaveInvoicePdf } from '../../services/invoice-pdf.service'
 
 function generateInvoiceNumber(bu: string, count: number) {
   const prefix = bu === 'HAX' ? 'H' : 'K'
@@ -166,9 +168,10 @@ export async function createInvoice(data: any) {
     return i
   })
 
-  const subtotal: number  = items.reduce((s: number, i: any) => s + (i.quantity * i.unitPrice), 0)
-  const taxAmount: number = items.reduce((s: number, i: any) => s + (i.taxAmount ?? 0), 0)
-  const total = subtotal + taxAmount
+  const subtotal: number        = items.reduce((s: number, i: any) => s + (i.quantity * i.unitPrice), 0)
+  const taxAmount: number       = items.reduce((s: number, i: any) => s + (i.taxAmount ?? 0), 0)
+  const discountAmount: number  = parseFloat(invoiceData.discountAmount) || 0
+  const total = subtotal - discountAmount + taxAmount
 
   return prisma.invoice.create({
     data: {
@@ -176,6 +179,7 @@ export async function createInvoice(data: any) {
       type: resolvedType as any,
       number,
       subtotal,
+      discountAmount,
       taxAmount,
       total,
       amountDue: total,
@@ -240,14 +244,17 @@ export async function cancelInvoice(id: string) {
     if (config?.autoJournalEntries) {
       const now = new Date()
       const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      const creditCode = invoice.businessUnit === 'HAX' ? '4101' : '4102'
+      const incomeCode = invoice.businessUnit === 'HAX'
+        ? (config.acctIncomeHax   || '4001')
+        : (config.acctIncomeKoder || '4002')
+      const cxcCode = config.acctReceivables ?? '1103'
       // Reverso: Dr Ingresos / Cr CxC
       await autoJournalEntry({
         type: 'CREDIT_NOTE',
         businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
         description: `Anulación factura ${invoice.number}`,
-        debitCode: creditCode,
-        creditCode: '1201',
+        debitCode:  incomeCode,
+        creditCode: cxcCode,
         amount: invoice.subtotal,
         invoiceId: id,
         period,
@@ -332,14 +339,15 @@ export async function addPayment(invoiceId: string, data: any) {
   // Auto journal entry: Dr Banco / Cr CxC
   const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (ecfConfig?.autoJournalEntries) {
-    const bankCode = ecfConfig.acctBank ?? '1102'
+    const bankCode = ecfConfig.acctBank          ?? '1102'
+    const cxcCode  = ecfConfig.acctReceivables   ?? '1103'
     const period = `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}`
     await autoJournalEntry({
       type: 'PAYMENT',
       businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
       description: `Pago factura ${invoice.number}`,
-      debitCode: bankCode,
-      creditCode: '1201',
+      debitCode:  bankCode,
+      creditCode: cxcCode,
       amount,
       invoiceId,
       paymentId: payment.id,
@@ -378,9 +386,9 @@ export async function emitInvoice(id: string) {
     if (ecfConfig?.autoJournalEntries && invoice.subtotal > 0) {
       const period = `${approvedAt.getFullYear()}-${String(approvedAt.getMonth() + 1).padStart(2, '0')}`
       const incomeAccount = invoice.businessUnit === 'HAX'
-        ? (ecfConfig.acctIncomeHax   || '4101')
-        : (ecfConfig.acctIncomeKoder || '4102')
-      const acctReceivables = ecfConfig.acctReceivables || '1201'
+        ? (ecfConfig.acctIncomeHax   || '4001')
+        : (ecfConfig.acctIncomeKoder || '4002')
+      const acctReceivables = ecfConfig.acctReceivables || '1103'
       await autoJournalEntry({
         type: 'INVOICE',
         businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
@@ -410,9 +418,9 @@ export async function emitInvoice(id: string) {
   // Load EcfConfig for validations
   const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (ecfConfig) {
-    // Validate RNC for B01 (CREDITO_FISCAL) invoices
+    // Validate RNC for B01/E31 (CREDITO_FISCAL) invoices
     if (ecfConfig.requireRncB01 && invoice.type === 'CREDITO_FISCAL' && !invoice.client?.rnc) {
-      throw new AppError('Factura B01 requiere RNC del cliente', 400)
+      throw new AppError('Factura de Crédito Fiscal requiere RNC del cliente', 400)
     }
 
     // Validate retroactive days
@@ -438,6 +446,79 @@ export async function emitInvoice(id: string) {
   if (issueDate > tomorrow) {
     throw new AppError('La fecha de emisión no puede ser más de 1 día en el futuro', 400)
   }
+
+  // ── LEGACY NCF MODE (B-series, sin Alanube) ───────────────────────────────
+  if (ecfConfig?.legacyNcfEnabled) {
+    const seqField  = getSeqField(invoice.type)
+    const seq       = (ecfConfig as any)[seqField] ?? 1
+    const ncf       = buildLegacyNcf(invoice.type, seq)
+
+    // Increment sequence
+    await prisma.ecfConfig.update({
+      where:  { id: 'main' },
+      data:   { [seqField]: { increment: 1 } },
+    })
+
+    const approvedAt = new Date()
+    const period = `${approvedAt.getFullYear()}-${String(approvedAt.getMonth() + 1).padStart(2, '0')}`
+
+    const updated = await prisma.invoice.update({
+      where: { id },
+      data: {
+        status:     InvoiceStatus.APPROVED,
+        approvedAt,
+        sentAt:     approvedAt,
+        ncf,
+        alanubeStatus: 'LEGACY',
+        retryCount: 0,
+      },
+    })
+
+    logger.info(`[Legacy NCF] Invoice ${invoice.number} approved — NCF: ${ncf}`)
+
+    // Auto journal entries
+    if (ecfConfig.autoJournalEntries) {
+      const incomeAccount  = invoice.businessUnit === 'HAX'
+        ? (ecfConfig.acctIncomeHax   || '4001')
+        : (ecfConfig.acctIncomeKoder || '4002')
+      const acctReceivables  = ecfConfig.acctReceivables  || '1103'
+      const acctItbisPayable = ecfConfig.acctItbisPayable || '2103'
+
+      if (invoice.subtotal > 0) {
+        await autoJournalEntry({
+          type: 'INVOICE',
+          businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+          description: `Factura aprobada ${invoice.number} - subtotal`,
+          debitCode:  acctReceivables,
+          creditCode: incomeAccount,
+          amount: invoice.subtotal,
+          invoiceId: id,
+          period,
+        })
+      }
+      if (invoice.taxAmount > 0) {
+        await autoJournalEntry({
+          type: 'INVOICE',
+          businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+          description: `Factura aprobada ${invoice.number} - ITBIS`,
+          debitCode:  acctReceivables,
+          creditCode: acctItbisPayable,
+          amount: invoice.taxAmount,
+          invoiceId: id,
+          period,
+        })
+      }
+    }
+
+    // Generate PDF async
+    generateAndSaveInvoicePdf(id).catch((e: any) =>
+      logger.error(`[Legacy NCF] PDF error for ${id}:`, e.message)
+    )
+
+    return updated
+  }
+
+  // ── eCF MODE (e-CF via Alanube queue) ────────────────────────────────────
 
   // Transition to SENDING
   const updated = await prisma.invoice.update({

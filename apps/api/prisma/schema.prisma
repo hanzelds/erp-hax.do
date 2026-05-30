@@ -116,6 +116,7 @@ model QuoteItem {
   description String
   quantity    Float
   unitPrice   Float
+  discountPct Float   @default(0)
   taxRate     Float   @default(0.18)
   taxAmount   Float   @default(0)
   subtotal    Float
@@ -143,6 +144,7 @@ model Invoice {
   paidAt            DateTime?
   cancelledAt       DateTime?
   subtotal          Float            @default(0)
+  discountAmount    Float            @default(0)
   taxAmount         Float            @default(0)
   total             Float            @default(0)
   amountPaid        Float            @default(0)
@@ -190,6 +192,7 @@ model InvoiceItem {
   description String
   quantity    Float
   unitPrice   Float
+  discountPct Float   @default(0)
   taxRate     Float   @default(0.18)
   taxAmount   Float   @default(0)
   subtotal    Float
@@ -786,6 +789,7 @@ model ReconciliationTx {
 
 model EcfConfig {
   id                  String   @id @default("main")
+  legacyNcfEnabled    Boolean  @default(true)   // true = B-series (no Alanube), false = e-CF via Alanube
   alanubeEnabled      Boolean  @default(false)
   alanubeApiKey       String?
   alanubeEnv          String   @default("sandbox")

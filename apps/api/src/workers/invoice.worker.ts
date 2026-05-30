@@ -60,10 +60,10 @@ async function createApprovalJournalEntries(invoiceId: string, approvedAt: Date)
 
   const period = `${approvedAt.getFullYear()}-${String(approvedAt.getMonth() + 1).padStart(2, '0')}`
   const incomeAccount = invoice.businessUnit === 'HAX'
-    ? (ecfConfig.acctIncomeHax   || '4101')
-    : (ecfConfig.acctIncomeKoder || '4102')
-  const acctReceivables  = ecfConfig.acctReceivables  || '1201'
-  const acctItbisPayable = ecfConfig.acctItbisPayable || '2201'
+    ? (ecfConfig.acctIncomeHax   || '4001')
+    : (ecfConfig.acctIncomeKoder || '4002')
+  const acctReceivables  = ecfConfig.acctReceivables  || '1103'
+  const acctItbisPayable = ecfConfig.acctItbisPayable || '2103'
   const isCreditNote = invoice.type === 'NOTA_CREDITO'
 
   if (isCreditNote) {

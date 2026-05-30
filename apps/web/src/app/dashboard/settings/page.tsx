@@ -532,6 +532,7 @@ function ResetPasswordPanel({ userId, userName, onClose, onSaved }: {
 // ── e-CF tab ──────────────────────────────────────────────────
 
 interface EcfConfig {
+  legacyNcfEnabled: boolean
   alanubeEnabled: boolean
   hasApiKey: boolean
   alanubeApiKeyMasked?: string
@@ -568,6 +569,7 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
   const [form, setForm] = useState<any>(null)
   if (config && form === null) {
     setForm({
+      legacyNcfEnabled:    config.legacyNcfEnabled,
       alanubeEnabled:      config.alanubeEnabled,
       alanubeApiKey:       '',
       alanubeEnv:          config.alanubeEnv,
@@ -610,21 +612,42 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
       {/* Status banner */}
       <div className={cn(
         'flex items-center gap-3 px-4 py-3 rounded-xl border text-sm',
-        form.alanubeEnabled
-          ? 'bg-green-50 border-green-100 text-green-700'
-          : 'bg-gray-50 border-gray-100 text-gray-500'
+        form.legacyNcfEnabled
+          ? 'bg-amber-50 border-amber-200 text-amber-800'
+          : form.alanubeEnabled
+            ? 'bg-green-50 border-green-100 text-green-700'
+            : 'bg-gray-50 border-gray-100 text-gray-500'
       )}>
-        {form.alanubeEnabled
-          ? <CheckCircle2 className="w-4 h-4 shrink-0" />
-          : <AlertCircle className="w-4 h-4 shrink-0" />
+        {form.legacyNcfEnabled
+          ? <AlertCircle className="w-4 h-4 shrink-0" />
+          : form.alanubeEnabled
+            ? <CheckCircle2 className="w-4 h-4 shrink-0" />
+            : <AlertCircle className="w-4 h-4 shrink-0" />
         }
         <span>
-          {form.alanubeEnabled
-            ? `Facturación e-CF habilitada — ambiente ${form.alanubeEnv === 'production' ? 'PRODUCCIÓN' : 'sandbox'}`
-            : 'Facturación e-CF deshabilitada — las facturas se emiten en modo simulación'
+          {form.legacyNcfEnabled
+            ? 'Modo NCF Tradicional (B-series) activo — facturas se aprueban localmente con secuencias B01/B14. Prorroga DGII hasta nov 2026.'
+            : form.alanubeEnabled
+              ? `Facturación Electrónica (e-CF) activa — ambiente ${form.alanubeEnv === 'production' ? 'PRODUCCIÓN' : 'sandbox'}`
+              : 'Facturación e-CF deshabilitada — las facturas se emiten en modo simulación'
           }
         </span>
       </div>
+
+      {/* Billing mode switch */}
+      <Card>
+        <CardHeader
+          title="Modo de facturación"
+          subtitle="Prorroga DGII — puedes usar NCF tradicional hasta obtener la certificación de emisor electrónico"
+        />
+        <Toggle
+          label="Usar NCF Tradicional (B-series)"
+          description="Activo durante la prorroga DGII. Las facturas se aprueban localmente con secuencias B01, B14, etc. sin enviar a la DGII. Desactiva cuando obtengas tu certificación de emisor electrónico para usar e-CF vía Alanube."
+          value={form.legacyNcfEnabled}
+          onChange={(v) => set('legacyNcfEnabled', v)}
+          disabled={readOnly}
+        />
+      </Card>
 
       {/* Alanube connection */}
       <Card>
@@ -678,15 +701,25 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
 
       {/* NCF sequences */}
       <Card>
-        <CardHeader title="Secuencias NCF" subtitle="Próximo número a emitir por tipo de comprobante" />
+        <CardHeader
+          title={form.legacyNcfEnabled ? 'Secuencias B-series (NCF Tradicional)' : 'Secuencias e-CF (Facturación Electrónica)'}
+          subtitle="Próximo número a emitir por tipo de comprobante"
+        />
         <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
-          {([
+          {(form.legacyNcfEnabled ? [
             { key: 'ncfCreditoFiscal', label: 'B01 — Crédito Fiscal' },
             { key: 'ncfConsumidor',    label: 'B02 — Consumidor Final' },
             { key: 'ncfNotaDebito',    label: 'B03 — Nota de Débito' },
             { key: 'ncfNotaCredito',   label: 'B04 — Nota de Crédito' },
             { key: 'ncfCompras',       label: 'B11 — Comprobante Compras' },
             { key: 'ncfRegimen',       label: 'B14 — Régimen Especial' },
+          ] : [
+            { key: 'ncfCreditoFiscal', label: 'e-CF 31 — Crédito Fiscal' },
+            { key: 'ncfConsumidor',    label: 'e-CF 32 — Consumidor Final' },
+            { key: 'ncfNotaDebito',    label: 'e-CF 33 — Nota de Débito' },
+            { key: 'ncfNotaCredito',   label: 'e-CF 34 — Nota de Crédito' },
+            { key: 'ncfCompras',       label: 'e-CF 41 — Comprobante Compras' },
+            { key: 'ncfRegimen',       label: 'e-CF 44 — Régimen Especial' },
           ] as const).map(({ key, label }) => (
             <F key={key} label={label}>
               <input
@@ -777,8 +810,8 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
               disabled={readOnly}
             />
             <Toggle
-              label="Exigir RNC en crédito fiscal (B01)"
-              description="Rechaza el envío si el cliente no tiene RNC para facturas tipo B01"
+              label={`Exigir RNC en crédito fiscal (${form.legacyNcfEnabled ? 'B01' : 'e-CF 31'})`}
+              description="Rechaza el envío si el cliente no tiene RNC para facturas tipo Crédito Fiscal"
               value={form.requireRncB01}
               onChange={(v) => set('requireRncB01', v)}
               disabled={readOnly}

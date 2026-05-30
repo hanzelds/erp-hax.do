@@ -324,7 +324,7 @@ export async function generateAndSaveInvoicePdf(invoiceId: string): Promise<stri
     logger.info(`[PDF] Invoice ${invoiceId} → ${relPath} (${sizeBytes} bytes, sha256: ${hash.slice(0, 8)}…)`)
     return relPath
   } catch (err: any) {
-    logger.error(`[PDF] Failed to generate invoice PDF for ${invoiceId}:`, err.message)
+    logger.error(`[PDF] Failed to generate invoice PDF for ${invoiceId}: ${err?.message ?? err}${err?.stack ? '\n' + err.stack.split('\n').slice(1, 4).join('\n') : ''}`)
     try {
       await prisma.invoice.update({ where: { id: invoiceId }, data: { pdfStatus: 'ERROR' } })
     } catch { /* ignore */ }

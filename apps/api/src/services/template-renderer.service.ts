@@ -73,7 +73,8 @@ export async function renderTemplateToPdf(html: string, data: object): Promise<U
   try {
     await page.setContent(rendered, { waitUntil: 'networkidle0' })
     const pdfBuffer = await page.pdf({
-      format:            'A4',
+      width:             '8.5in',
+      height:            '11in',
       printBackground:   true,
       margin:            { top: '0', right: '0', bottom: '0', left: '0' },
     })

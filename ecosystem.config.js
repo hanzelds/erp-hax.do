@@ -16,11 +16,12 @@ module.exports = {
         NODE_ENV: 'production',
         API_PORT: 4000,
       },
-      error_file: './logs/api-error.log',
-      out_file:   './logs/api-out.log',
+      error_file:      './logs/api-error.log',
+      out_file:        './logs/api-out.log',
+      merge_logs:      true,          // cluster workers → un solo archivo
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
-      restart_delay: 5000,
-      autorestart: true,
+      restart_delay:   5000,
+      autorestart:     true,
     },
 
     // ─── Web (Next.js) ──────────────────────────
@@ -36,11 +37,12 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3000,
       },
-      error_file: './logs/web-error.log',
-      out_file:   './logs/web-out.log',
+      error_file:      './logs/web-error.log',
+      out_file:        './logs/web-out.log',
+      merge_logs:      true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
-      restart_delay: 5000,
-      autorestart: true,
+      restart_delay:   5000,
+      autorestart:     true,
     },
   ],
 }

@@ -15,7 +15,6 @@ router.patch('/:id/cancel',   requireAdmin, auditLog('invoice'), ctrl.cancel)
 router.post('/:id/payments',  auditLog('payment'), ctrl.addPayment)
 router.post('/:id/emit',      auditLog('invoice'), ctrl.emit)
 router.post('/:id/credit-note', auditLog('invoice'), ctrl.creditNote)
-router.post('/:id/convert-proforma', auditLog('invoice'), ctrl.convertProforma)
 router.get('/:id/pdf',             ctrl.pdf)
 router.post('/:id/pdf/regenerate', requireAdmin, ctrl.regeneratePdf)
 

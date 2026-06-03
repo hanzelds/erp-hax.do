@@ -44,8 +44,3 @@ export async function regeneratePdf(req: Request, res: Response) {
   sendSuccess(res, { message: 'PDF regenerado', path })
 }
 
-export async function convertProforma(req: Request, res: Response) {
-  const { ncfType } = req.body
-  if (!ncfType) { res.status(400).json({ error: 'ncfType requerido' }); return }
-  sendCreated(res, await svc.convertProformaToInvoice(req.params.id, ncfType))
-}

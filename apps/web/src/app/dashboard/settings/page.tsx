@@ -1838,7 +1838,7 @@ function PdfTemplatesTab({ isAdmin }: { isAdmin: boolean }) {
 
 // ── Danger Zone — Data Reset ─────────────────────────────────
 const RESET_MODULES = [
-  { key: 'invoices',         label: 'Facturas',              desc: 'Facturas, ítems, comprobantes Alanube y pagos vinculados' },
+  { key: 'invoices',         label: 'Facturas',              desc: 'Facturas, ítems, NCF y pagos vinculados' },
   { key: 'quotes',           label: 'Cotizaciones',          desc: 'Todas las cotizaciones e ítems' },
   { key: 'expenses',         label: 'Gastos',                desc: 'Todos los registros de gastos' },
   { key: 'payments',         label: 'Pagos recibidos',       desc: 'Todos los pagos registrados' },

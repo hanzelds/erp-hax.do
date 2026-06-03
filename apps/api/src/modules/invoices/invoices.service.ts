@@ -387,38 +387,6 @@ export async function emitInvoice(id: string) {
     throw new AppError(`No se puede emitir una factura en estado ${invoice.status}`, 400)
   }
 
-  // ── PROFORMA: approve directly (no Alanube/NCF) + create journal entries ──
-  if (invoice.type === 'PROFORMA') {
-    const approvedAt = new Date()
-    const updated = await prisma.invoice.update({
-      where: { id },
-      data: { status: InvoiceStatus.APPROVED, approvedAt },
-    })
-
-    // Journal entries: Dr CxC (subtotal) / Cr Ingreso — same as a normal invoice
-    // No ITBIS entry since taxAmount = 0 on proformas
-    const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
-    if (ecfConfig?.autoJournalEntries && invoice.subtotal > 0) {
-      const period = `${approvedAt.getFullYear()}-${String(approvedAt.getMonth() + 1).padStart(2, '0')}`
-      const incomeAccount = invoice.businessUnit === 'HAX'
-        ? (ecfConfig.acctIncomeHax   || '4001')
-        : (ecfConfig.acctIncomeKoder || '4002')
-      const acctReceivables = ecfConfig.acctReceivables || '1103'
-      await autoJournalEntry({
-        type: 'INVOICE',
-        businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
-        description: `Proforma aprobada ${invoice.number} - subtotal`,
-        debitCode:  acctReceivables,
-        creditCode: incomeAccount,
-        amount: invoice.subtotal,
-        invoiceId: id,
-        period,
-      })
-    }
-
-    return updated
-  }
-
   // Validate items
   if (!invoice.items || invoice.items.length === 0) {
     throw new AppError('La factura debe tener al menos un ítem', 400)
@@ -470,7 +438,6 @@ export async function emitInvoice(id: string) {
     data: {
       status:     InvoiceStatus.APPROVED,
       approvedAt,
-      sentAt:     approvedAt,
     },
   })
 
@@ -571,68 +538,6 @@ export async function createCreditNote(id: string, data: any) {
   })
 }
 
-/** Convert an approved/draft PROFORMA into a real fiscal invoice */
-export async function convertProformaToInvoice(id: string, ncfType: string) {
-  const proforma = await prisma.invoice.findUnique({
-    where: { id },
-    include: { items: true, client: true },
-  })
-  if (!proforma) throw new NotFoundError('Proforma')
-  if (proforma.type !== 'PROFORMA') throw new AppError('Solo se pueden convertir proformas', 400)
-  if (proforma.status === InvoiceStatus.CANCELLED) throw new AppError('No se puede convertir una proforma cancelada', 400)
-
-  const resolvedType = NCF_TO_INVOICE_TYPE[ncfType] ?? 'CONSUMO'
-  const isExemptType = ITBIS_EXEMPT_TYPES.has(resolvedType)
-
-  const items = proforma.items.map((i: any) => {
-    if (isExemptType) return { ...i, isExempt: true, taxRate: 0, taxAmount: 0 }
-    // Re-compute taxAmount from taxRate
-    const taxAmount = i.isExempt ? 0 : i.subtotal * (i.taxRate / 100)
-    return { ...i, taxAmount, total: i.subtotal + taxAmount }
-  })
-
-  const subtotal: number = items.reduce((s: number, i: any) => s + i.subtotal, 0)
-  const taxAmount: number = items.reduce((s: number, i: any) => s + (i.taxAmount ?? 0), 0)
-  const total = subtotal + taxAmount
-
-  const count = await prisma.invoice.count({ where: { businessUnit: proforma.businessUnit } })
-  const prefix = proforma.businessUnit === 'HAX' ? 'H' : 'K'
-  const number = `${prefix}-${String(count + 1).padStart(6, '0')}`
-
-  const newInvoice = await prisma.invoice.create({
-    data: {
-      number,
-      clientId:    proforma.clientId,
-      businessUnit: proforma.businessUnit,
-      type:        resolvedType as any,
-      status:      InvoiceStatus.DRAFT,
-      issueDate:   new Date(),
-      dueDate:     proforma.dueDate,
-      paymentTerms: proforma.paymentTerms,
-      subtotal,
-      taxAmount,
-      total,
-      amountDue:   total,
-      notes:       proforma.notes ? `${proforma.notes}\n(Origen: proforma ${proforma.number})` : `Origen: proforma ${proforma.number}`,
-      items: {
-        create: items.map((item: any, idx: number) => ({
-          description: item.description,
-          quantity:    item.quantity,
-          unitPrice:   item.unitPrice,
-          taxRate:     item.taxRate,
-          taxAmount:   item.taxAmount,
-          subtotal:    item.subtotal,
-          total:       item.total,
-          isExempt:    item.isExempt,
-          sortOrder:   idx,
-        })),
-      },
-    },
-    include: { client: true, items: { orderBy: { sortOrder: 'asc' } } },
-  })
-
-  return newInvoice
-}
 
 export async function getInvoiceStats(businessUnit?: BusinessUnit) {
   const where: any = businessUnit ? { businessUnit } : {}

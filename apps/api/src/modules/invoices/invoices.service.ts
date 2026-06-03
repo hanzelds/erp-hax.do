@@ -173,11 +173,29 @@ export async function createInvoice(data: any) {
   const discountAmount: number  = parseFloat(invoiceData.discountAmount) || 0
   const total = subtotal - discountAmount + taxAmount
 
+  // ── Assign NCF from sequence if legacyNcfEnabled ─────────────
+  let ncf: string | undefined
+  const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+  if (ecfConfig?.legacyNcfEnabled && resolvedType !== 'NOTA_CREDITO') {
+    await prisma.$transaction(async (tx) => {
+      const cfg      = await tx.ecfConfig.findUnique({ where: { id: 'main' } })
+      const seqField = getSeqField(resolvedType)
+      const seq      = (cfg as any)?.[seqField] ?? 1
+      ncf            = buildLegacyNcf(resolvedType, seq)
+      await tx.ecfConfig.update({
+        where: { id: 'main' },
+        data:  { [seqField]: seq + 1 },
+      })
+    })
+    logger.info(`[NCF] Assigned ${ncf} to new invoice ${number}`)
+  }
+
   return prisma.invoice.create({
     data: {
       ...invoiceData,
       type: resolvedType as any,
       number,
+      ...(ncf ? { ncf } : {}),
       subtotal,
       discountAmount,
       taxAmount,

@@ -533,11 +533,6 @@ function ResetPasswordPanel({ userId, userName, onClose, onSaved }: {
 
 interface EcfConfig {
   legacyNcfEnabled: boolean
-  alanubeEnabled: boolean
-  hasApiKey: boolean
-  alanubeApiKeyMasked?: string
-  alanubeEnv: string
-  alanubeApiUrl: string
   ncfCreditoFiscal: number
   ncfConsumidor: number
   ncfNotaDebito: number
@@ -546,17 +541,13 @@ interface EcfConfig {
   ncfRegimen: number
   itbisRate: number
   maxRetroactiveDays: number
-  maxRetryCount: number
   autoJournalEntries: boolean
   requireRncB01: boolean
-  pollIntervalSeconds: number
-  pollTimeoutMinutes: number
 }
 
 function EcfTab({ isAdmin }: { isAdmin: boolean }) {
   const qc = useQueryClient()
-  const [showKey, setShowKey] = useState(false)
-  const [saved, setSaved]     = useState(false)
+  const [saved, setSaved] = useState(false)
 
   const { data: config, isLoading } = useQuery<EcfConfig>({
     queryKey: ['ecf-config'],
@@ -570,10 +561,6 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
   if (config && form === null) {
     setForm({
       legacyNcfEnabled:    config.legacyNcfEnabled,
-      alanubeEnabled:      config.alanubeEnabled,
-      alanubeApiKey:       '',
-      alanubeEnv:          config.alanubeEnv,
-      alanubeApiUrl:       config.alanubeApiUrl,
       ncfCreditoFiscal:    config.ncfCreditoFiscal,
       ncfConsumidor:       config.ncfConsumidor,
       ncfNotaDebito:       config.ncfNotaDebito,
@@ -582,11 +569,8 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
       ncfRegimen:          config.ncfRegimen,
       itbisRate:           config.itbisRate,
       maxRetroactiveDays:  config.maxRetroactiveDays,
-      maxRetryCount:       config.maxRetryCount,
       autoJournalEntries:  config.autoJournalEntries,
       requireRncB01:       config.requireRncB01,
-      pollIntervalSeconds: config.pollIntervalSeconds,
-      pollTimeoutMinutes:  config.pollTimeoutMinutes,
     })
   }
 
@@ -610,116 +594,25 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
     <div className="space-y-4">
 
       {/* Status banner */}
-      <div className={cn(
-        'flex items-center gap-3 px-4 py-3 rounded-xl border text-sm',
-        form.legacyNcfEnabled
-          ? 'bg-amber-50 border-amber-200 text-amber-800'
-          : form.alanubeEnabled
-            ? 'bg-green-50 border-green-100 text-green-700'
-            : 'bg-gray-50 border-gray-100 text-gray-500'
-      )}>
-        {form.legacyNcfEnabled
-          ? <AlertCircle className="w-4 h-4 shrink-0" />
-          : form.alanubeEnabled
-            ? <CheckCircle2 className="w-4 h-4 shrink-0" />
-            : <AlertCircle className="w-4 h-4 shrink-0" />
-        }
-        <span>
-          {form.legacyNcfEnabled
-            ? 'Modo NCF Tradicional (B-series) activo — facturas se aprueban localmente con secuencias B01/B14. Prorroga DGII hasta nov 2026.'
-            : form.alanubeEnabled
-              ? `Facturación Electrónica (e-CF) activa — ambiente ${form.alanubeEnv === 'production' ? 'PRODUCCIÓN' : 'sandbox'}`
-              : 'Facturación e-CF deshabilitada — las facturas se emiten en modo simulación'
-          }
-        </span>
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl border text-sm bg-amber-50 border-amber-200 text-amber-800">
+        <AlertCircle className="w-4 h-4 shrink-0" />
+        <span>Modo NCF Tradicional (B-series) activo — facturas se aprueban localmente con secuencias B01/B14. Prorroga DGII hasta nov 2026.</span>
       </div>
-
-      {/* Billing mode switch */}
-      <Card>
-        <CardHeader
-          title="Modo de facturación"
-          subtitle="Prorroga DGII — puedes usar NCF tradicional hasta obtener la certificación de emisor electrónico"
-        />
-        <Toggle
-          label="Usar NCF Tradicional (B-series)"
-          description="Activo durante la prorroga DGII. Las facturas se aprueban localmente con secuencias B01, B14, etc. sin enviar a la DGII. Desactiva cuando obtengas tu certificación de emisor electrónico para usar e-CF vía Alanube."
-          value={form.legacyNcfEnabled}
-          onChange={(v) => set('legacyNcfEnabled', v)}
-          disabled={readOnly}
-        />
-      </Card>
-
-      {/* Alanube connection */}
-      <Card>
-        <CardHeader title="Conexión Alanube" subtitle="Credenciales de integración con el proveedor e-CF" />
-        <div className="space-y-4">
-          <Toggle
-            label="Habilitar facturación electrónica"
-            description="Activa el envío real de comprobantes a la DGII a través de Alanube"
-            value={form.alanubeEnabled}
-            onChange={(v) => set('alanubeEnabled', v)}
-            disabled={readOnly}
-          />
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <F label="API Key de Alanube">
-              <div className="relative">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={form.alanubeApiKey}
-                  onChange={(e) => set('alanubeApiKey', e.target.value)}
-                  className={ic}
-                  placeholder={config?.hasApiKey ? config.alanubeApiKeyMasked : 'Ingresa el API Key de Alanube'}
-                  disabled={readOnly}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {config?.hasApiKey && !form.alanubeApiKey && (
-                <p className="text-xs text-gray-400 mt-1">Deja vacío para mantener el API Key actual</p>
-              )}
-            </F>
-
-            <F label="Ambiente">
-              <Select value={form.alanubeEnv} onChange={(e) => set('alanubeEnv', e.target.value)} className={ic} disabled={readOnly}>
-                <option value="sandbox">Sandbox (pruebas)</option>
-                <option value="production">Producción (DGII real)</option>
-              </Select>
-            </F>
-
-            <F label="URL de la API de Alanube">
-              <input type="text" value={form.alanubeApiUrl} onChange={(e) => set('alanubeApiUrl', e.target.value)} className={ic} disabled={readOnly} />
-            </F>
-          </div>
-        </div>
-      </Card>
 
       {/* NCF sequences */}
       <Card>
         <CardHeader
-          title={form.legacyNcfEnabled ? 'Secuencias B-series (NCF Tradicional)' : 'Secuencias e-CF (Facturación Electrónica)'}
+          title="Secuencias B-series (NCF Tradicional)"
           subtitle="Próximo número a emitir por tipo de comprobante"
         />
         <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
-          {(form.legacyNcfEnabled ? [
+          {([
             { key: 'ncfCreditoFiscal', label: 'B01 — Crédito Fiscal' },
             { key: 'ncfConsumidor',    label: 'B02 — Consumidor Final' },
             { key: 'ncfNotaDebito',    label: 'B03 — Nota de Débito' },
             { key: 'ncfNotaCredito',   label: 'B04 — Nota de Crédito' },
             { key: 'ncfCompras',       label: 'B11 — Comprobante Compras' },
             { key: 'ncfRegimen',       label: 'B14 — Régimen Especial' },
-          ] : [
-            { key: 'ncfCreditoFiscal', label: 'e-CF 31 — Crédito Fiscal' },
-            { key: 'ncfConsumidor',    label: 'e-CF 32 — Consumidor Final' },
-            { key: 'ncfNotaDebito',    label: 'e-CF 33 — Nota de Débito' },
-            { key: 'ncfNotaCredito',   label: 'e-CF 34 — Nota de Crédito' },
-            { key: 'ncfCompras',       label: 'e-CF 41 — Comprobante Compras' },
-            { key: 'ncfRegimen',       label: 'e-CF 44 — Régimen Especial' },
           ] as const).map(({ key, label }) => (
             <F key={key} label={label}>
               <input
@@ -735,14 +628,14 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
         {!readOnly && (
           <p className="text-xs text-amber-600 mt-3 flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            Modificar las secuencias manualmente puede causar rechazos por duplicación de NCF. Solo editar si es necesario para sincronizar con DGII.
+            Modificar las secuencias manualmente puede causar duplicación de NCF. Solo editar si es necesario para sincronizar con DGII.
           </p>
         )}
       </Card>
 
       {/* Emission rules */}
       <Card>
-        <CardHeader title="Reglas de emisión" subtitle="Comportamiento del proceso de facturación electrónica" />
+        <CardHeader title="Reglas de facturación" subtitle="Comportamiento del proceso de aprobación de facturas" />
         <div className="space-y-5">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <F label="Tasa ITBIS (%)">
@@ -766,39 +659,6 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
               />
               <p className="text-xs text-gray-400 mt-1">Máximo de días hacia atrás para la fecha de emisión</p>
             </F>
-
-            <F label="Máximo de reintentos ante error">
-              <input
-                type="number" min="1" max="10"
-                value={form.maxRetryCount}
-                onChange={(e) => set('maxRetryCount', parseInt(e.target.value) || 1)}
-                className={ic}
-                disabled={readOnly}
-              />
-              <p className="text-xs text-gray-400 mt-1">Intentos antes de marcar como FALLO definitivo</p>
-            </F>
-
-            <F label="Intervalo de consulta de estado (seg)">
-              <input
-                type="number" min="1" max="60"
-                value={form.pollIntervalSeconds}
-                onChange={(e) => set('pollIntervalSeconds', parseInt(e.target.value) || 3)}
-                className={ic}
-                disabled={readOnly}
-              />
-              <p className="text-xs text-gray-400 mt-1">Cada cuántos segundos se consulta el estado EN_PROCESO</p>
-            </F>
-
-            <F label="Timeout de respuesta DGII (min)">
-              <input
-                type="number" min="1" max="30"
-                value={form.pollTimeoutMinutes}
-                onChange={(e) => set('pollTimeoutMinutes', parseInt(e.target.value) || 5)}
-                className={ic}
-                disabled={readOnly}
-              />
-              <p className="text-xs text-gray-400 mt-1">Minutos máximos esperando respuesta antes de TIMEOUT</p>
-            </F>
           </div>
 
           <div className="border-t border-gray-50 pt-4 space-y-3">
@@ -810,8 +670,8 @@ function EcfTab({ isAdmin }: { isAdmin: boolean }) {
               disabled={readOnly}
             />
             <Toggle
-              label={`Exigir RNC en crédito fiscal (${form.legacyNcfEnabled ? 'B01' : 'e-CF 31'})`}
-              description="Rechaza el envío si el cliente no tiene RNC para facturas tipo Crédito Fiscal"
+              label="Exigir RNC en crédito fiscal (B01)"
+              description="Rechaza la aprobación si el cliente no tiene RNC para facturas tipo Crédito Fiscal"
               value={form.requireRncB01}
               onChange={(v) => set('requireRncB01', v)}
               disabled={readOnly}

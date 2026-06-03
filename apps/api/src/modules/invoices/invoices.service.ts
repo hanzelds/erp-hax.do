@@ -2,7 +2,6 @@ import { prisma } from '../../config/database'
 import { NotFoundError, AppError } from '../../middleware/errorHandler'
 import { parsePagination } from '../../utils/response'
 import { InvoiceStatus, PaymentStatus, BusinessUnit } from '@prisma/client'
-import { invoiceEmitQueue } from '../../queues/invoice.queue'
 import { logger } from '../../config/logger'
 import { buildLegacyNcf, getSeqField } from '../../services/alanube.service'
 import { generateAndSaveInvoicePdf } from '../../services/invoice-pdf.service'
@@ -138,7 +137,6 @@ export async function getInvoice(id: string) {
       client: true,
       items: { orderBy: { sortOrder: 'asc' } },
       payments: { orderBy: { paidAt: 'desc' } },
-      alanubeRequests: { orderBy: { sentAt: 'desc' }, take: 5 },
       creditNotes: { select: { id: true, number: true, total: true, status: true } },
     },
   })
@@ -173,10 +171,9 @@ export async function createInvoice(data: any) {
   const discountAmount: number  = parseFloat(invoiceData.discountAmount) || 0
   const total = subtotal - discountAmount + taxAmount
 
-  // ── Assign NCF from sequence if legacyNcfEnabled ─────────────
+  // ── Assign NCF from sequence (always, unless NOTA_CREDITO or PROFORMA) ──────
   let ncf: string | undefined
-  const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
-  if (ecfConfig?.legacyNcfEnabled && resolvedType !== 'NOTA_CREDITO') {
+  if (resolvedType !== 'NOTA_CREDITO' && resolvedType !== 'PROFORMA') {
     await prisma.$transaction(async (tx) => {
       const cfg      = await tx.ecfConfig.findUnique({ where: { id: 'main' } })
       const seqField = getSeqField(resolvedType)
@@ -465,113 +462,62 @@ export async function emitInvoice(id: string) {
     throw new AppError('La fecha de emisión no puede ser más de 1 día en el futuro', 400)
   }
 
-  // ── LEGACY NCF MODE (B-series, sin Alanube) ───────────────────────────────
-  if (ecfConfig?.legacyNcfEnabled) {
-    const seqField  = getSeqField(invoice.type)
-    const seq       = (ecfConfig as any)[seqField] ?? 1
-    const ncf       = buildLegacyNcf(invoice.type, seq)
+  const approvedAt = new Date()
+  const period = `${approvedAt.getFullYear()}-${String(approvedAt.getMonth() + 1).padStart(2, '0')}`
 
-    // Increment sequence
-    await prisma.ecfConfig.update({
-      where:  { id: 'main' },
-      data:   { [seqField]: { increment: 1 } },
-    })
+  const updated = await prisma.invoice.update({
+    where: { id },
+    data: {
+      status:     InvoiceStatus.APPROVED,
+      approvedAt,
+      sentAt:     approvedAt,
+    },
+  })
 
-    const approvedAt = new Date()
-    const period = `${approvedAt.getFullYear()}-${String(approvedAt.getMonth() + 1).padStart(2, '0')}`
+  logger.info(`[NCF] Invoice ${invoice.number} approved — NCF: ${invoice.ncf}`)
 
-    const updated = await prisma.invoice.update({
-      where: { id },
-      data: {
-        status:     InvoiceStatus.APPROVED,
-        approvedAt,
-        sentAt:     approvedAt,
-        ncf,
-        alanubeStatus: 'LEGACY',
-        retryCount: 0,
-      },
-    })
+  // Auto journal entries
+  if (ecfConfig?.autoJournalEntries) {
+    const incomeAccount  = invoice.businessUnit === 'HAX'
+      ? (ecfConfig.acctIncomeHax   || '4001')
+      : (ecfConfig.acctIncomeKoder || '4002')
+    const acctReceivables  = ecfConfig.acctReceivables  || '1103'
+    const acctItbisPayable = ecfConfig.acctItbisPayable || '2103'
 
-    logger.info(`[Legacy NCF] Invoice ${invoice.number} approved — NCF: ${ncf}`)
-
-    // Auto journal entries
-    if (ecfConfig.autoJournalEntries) {
-      const incomeAccount  = invoice.businessUnit === 'HAX'
-        ? (ecfConfig.acctIncomeHax   || '4001')
-        : (ecfConfig.acctIncomeKoder || '4002')
-      const acctReceivables  = ecfConfig.acctReceivables  || '1103'
-      const acctItbisPayable = ecfConfig.acctItbisPayable || '2103'
-
-      if (invoice.subtotal > 0) {
-        await autoJournalEntry({
-          type: 'INVOICE',
-          businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
-          description: `Factura aprobada ${invoice.number} - subtotal`,
-          debitCode:  acctReceivables,
-          creditCode: incomeAccount,
-          amount: invoice.subtotal,
-          invoiceId: id,
-          period,
-        })
-      }
-      if (invoice.taxAmount > 0) {
-        await autoJournalEntry({
-          type: 'INVOICE',
-          businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
-          description: `Factura aprobada ${invoice.number} - ITBIS`,
-          debitCode:  acctReceivables,
-          creditCode: acctItbisPayable,
-          amount: invoice.taxAmount,
-          invoiceId: id,
-          period,
-        })
-      }
+    if (invoice.subtotal > 0) {
+      await autoJournalEntry({
+        type: 'INVOICE',
+        businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+        description: `Factura aprobada ${invoice.number} - subtotal`,
+        debitCode:  acctReceivables,
+        creditCode: incomeAccount,
+        amount: invoice.subtotal,
+        invoiceId: id,
+        period,
+      })
     }
-
-    // Generate PDF async
-    generateAndSaveInvoicePdf(id).catch((e: any) =>
-      logger.error(`[Legacy NCF] PDF error for ${id}:`, e.message)
-    )
-
-    return updated
+    if (invoice.taxAmount > 0) {
+      await autoJournalEntry({
+        type: 'INVOICE',
+        businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+        description: `Factura aprobada ${invoice.number} - ITBIS`,
+        debitCode:  acctReceivables,
+        creditCode: acctItbisPayable,
+        amount: invoice.taxAmount,
+        invoiceId: id,
+        period,
+      })
+    }
   }
 
-  // ── eCF MODE (e-CF via Alanube queue) ────────────────────────────────────
-
-  // Transition to SENDING
-  const updated = await prisma.invoice.update({
-    where: { id },
-    data: { status: InvoiceStatus.SENDING, sentAt: new Date() },
-  })
-
-  // Enqueue emission job
-  await invoiceEmitQueue.add('emit', { invoiceId: id }, {
-    jobId: `emit-${id}`,
-    removeOnComplete: true,
-  })
+  // Generate PDF async
+  generateAndSaveInvoicePdf(id).catch((e: any) =>
+    logger.error(`[NCF] PDF error for ${id}:`, e.message)
+  )
 
   return updated
 }
 
-export async function retryEmission(id: string) {
-  const invoice = await prisma.invoice.findUnique({ where: { id } })
-  if (!invoice) throw new NotFoundError('Factura')
-  if (invoice.status !== InvoiceStatus.REJECTED) {
-    throw new AppError('Solo se pueden reintentar facturas rechazadas', 400)
-  }
-
-  const updated = await prisma.invoice.update({
-    where: { id },
-    data: { status: InvoiceStatus.SENDING, rejectionReason: null, sentAt: new Date() },
-  })
-
-  await invoiceEmitQueue.add('emit', { invoiceId: id }, {
-    jobId: `emit-${id}-retry-${Date.now()}`,
-    removeOnComplete: true,
-  })
-
-  return updated
-}
 
 export async function createCreditNote(id: string, data: any) {
   const original = await prisma.invoice.findUnique({

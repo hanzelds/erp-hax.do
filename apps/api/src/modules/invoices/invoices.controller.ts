@@ -29,9 +29,6 @@ export async function stats(req: Request, res: Response) {
 export async function emit(req: Request, res: Response) {
   sendSuccess(res, await svc.emitInvoice(req.params.id))
 }
-export async function retry(req: Request, res: Response) {
-  sendSuccess(res, await svc.retryEmission(req.params.id))
-}
 export async function creditNote(req: Request, res: Response) {
   sendCreated(res, await svc.createCreditNote(req.params.id, req.body))
 }

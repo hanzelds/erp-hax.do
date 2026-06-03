@@ -2,27 +2,20 @@ import { prisma } from '../../config/database'
 
 const ECF_DEFAULTS = {
   legacyNcfEnabled:    true,
-  alanubeEnabled:      false,
-  alanubeApiKey:       null as string | null,
-  alanubeEnv:          'sandbox',
-  alanubeApiUrl:       'https://api.alanube.com.do',
-  ncfCreditoFiscal:    1,  // e-CF 31
-  ncfConsumidor:       1,  // e-CF 32
-  ncfNotaDebito:       1,  // e-CF 33
-  ncfNotaCredito:      1,  // e-CF 34
-  ncfCompras:          1,  // e-CF 41
-  ncfGastosMenores:    1,  // e-CF 43
-  ncfRegimen:          1,  // e-CF 44
-  ncfGubernamental:    1,  // e-CF 45
-  ncfExportaciones:    1,  // e-CF 46
-  ncfPagosExterior:    1,  // e-CF 47
+  ncfCreditoFiscal:    1,
+  ncfConsumidor:       1,
+  ncfNotaDebito:       1,
+  ncfNotaCredito:      1,
+  ncfCompras:          1,
+  ncfGastosMenores:    1,
+  ncfRegimen:          1,
+  ncfGubernamental:    1,
+  ncfExportaciones:    1,
+  ncfPagosExterior:    1,
   itbisRate:           0.18,
   maxRetroactiveDays:  5,
-  maxRetryCount:       5,
   autoJournalEntries:  true,
   requireRncB01:       true,
-  pollIntervalSeconds: 3,
-  pollTimeoutMinutes:  5,
 }
 
 const COMPANY_DEFAULTS = {
@@ -51,32 +44,18 @@ export async function updateCompanyConfig(data: any) {
 // ── e-CF config ───────────────────────────────────────────
 export async function getEcfConfig() {
   const c = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
-  const base = c ?? { id: 'main', ...ECF_DEFAULTS, updatedAt: new Date() }
-
-  const result: any = { ...base }
-  if (result.alanubeApiKey) {
-    result.alanubeApiKeyMasked = `****${result.alanubeApiKey.slice(-4)}`
-    result.hasApiKey = true
-    delete result.alanubeApiKey
-  } else {
-    result.hasApiKey = false
-  }
-  return result
+  return c ?? { id: 'main', ...ECF_DEFAULTS, updatedAt: new Date() }
 }
 
 export async function updateEcfConfig(data: any) {
-  const { alanubeApiKey, ...rest } = data
-
-  const update: any = { ...rest }
-  // Only update API key if a real new value is provided
-  if (alanubeApiKey && alanubeApiKey.trim() && !alanubeApiKey.startsWith('****')) {
-    update.alanubeApiKey = alanubeApiKey.trim()
-  }
+  // Strip any residual Alanube fields that may come from old clients
+  const { alanubeApiKey, alanubeEnabled, alanubeEnv, alanubeApiUrl,
+          maxRetryCount, pollIntervalSeconds, pollTimeoutMinutes, ...rest } = data
 
   await prisma.ecfConfig.upsert({
     where:  { id: 'main' },
-    update,
-    create: { id: 'main', ...ECF_DEFAULTS, ...update },
+    update: rest,
+    create: { id: 'main', ...ECF_DEFAULTS, ...rest },
   })
 
   return getEcfConfig()

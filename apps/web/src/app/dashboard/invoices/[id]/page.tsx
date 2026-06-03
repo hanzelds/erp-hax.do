@@ -8,7 +8,6 @@ import Link from 'next/link'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn, openPdf } from '@/lib/utils'
 import { Button, Card, CardHeader, InvoiceStatusBadge, Skeleton, Select } from '@/components/ui'
-import { EmissionModal } from '@/components/invoices/EmissionModal'
 import { useAuthStore } from '@/lib/auth-store'
 
 interface InvoiceDetail {
@@ -20,8 +19,6 @@ interface InvoiceDetail {
   paymentStatus: string
   ncf: string | null
   xml: string | null
-  alanubeId: string | null
-  alanubeStatus: string | null
   rejectionReason: string | null
   retryCount: number
   sentAt: string | null
@@ -43,7 +40,6 @@ interface InvoiceDetail {
   amountDue: number
   notes: string | null
   payments: { id: string; amount: number; method: string; reference: string | null; paidAt: string }[]
-  alanubeRequests: { id: string; attempt: number; status: string | null; errorMessage: string | null; sentAt: string }[]
   createdAt: string
 }
 
@@ -83,7 +79,6 @@ export default function InvoiceDetailPage() {
   const isAdmin  = user?.role === 'ADMIN'
 
   const [payModal, setPayModal]         = useState(false)
-  const [emitModal, setEmitModal]       = useState(false)
   const [convertModal, setConvertModal] = useState(false)
   const [convertNcf, setConvertNcf]     = useState('E31')
   const [payForm, setPayForm]           = useState({ amount: 0, method: 'TRANSFER', reference: '' })
@@ -94,10 +89,7 @@ export default function InvoiceDetailPage() {
       const { data } = await api.get(`/invoices/${id}`)
       return data.data ?? data
     },
-    refetchInterval: (q) => {
-      const s = (q.state.data as InvoiceDetail | undefined)?.status
-      return (s === 'SENDING' || s === 'IN_PROCESS') ? 4000 : false
-    },
+    refetchInterval: false,
   })
 
   const addPayment = useMutation({
@@ -112,17 +104,12 @@ export default function InvoiceDetailPage() {
 
   const emit = useMutation({
     mutationFn: async () => api.post(`/invoices/${id}/emit`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setEmitModal(true) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }) },
   })
 
   const regeneratePdf = useMutation({
     mutationFn: async () => api.post(`/invoices/${id}/pdf/regenerate`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invoice', id] }),
-  })
-
-  const retry = useMutation({
-    mutationFn: async () => api.post(`/invoices/${id}/retry`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setEmitModal(true) },
   })
 
   const createCreditNote = useMutation({
@@ -154,13 +141,11 @@ export default function InvoiceDetailPage() {
   if (!invoice) return <p className="text-gray-500 text-sm">Factura no encontrada.</p>
 
   const isProforma = invoice.type === 'PROFORMA'
-  const isPending  = invoice.status === 'SENDING' || invoice.status === 'IN_PROCESS'
   const canEmit    = invoice.status === 'DRAFT' && !isProforma
   const canApproveProforma = isProforma && invoice.status === 'DRAFT'
   const canConvertProforma = isProforma && (invoice.status === 'DRAFT' || invoice.status === 'APPROVED')
-  const canRetry   = invoice.status === 'REJECTED' && isAdmin && !isProforma
   const canPay     = invoice.status === 'APPROVED' && invoice.amountDue > 0 && !isProforma
-  const canCancel  = invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && !isPending
+  const canCancel  = invoice.status !== 'PAID' && invoice.status !== 'CANCELLED'
   const canCreditNote = (invoice.status === 'APPROVED' || invoice.status === 'PAID') && invoice.type !== 'NOTA_CREDITO' && !isProforma
 
   return (
@@ -173,12 +158,6 @@ export default function InvoiceDetailPage() {
         <span className="text-gray-300">/</span>
         <span className="text-gray-600 text-sm font-mono">{invoice.number}</span>
         <InvoiceStatusBadge status={invoice.status} />
-        {isPending && (
-          <span className="flex items-center gap-1.5 text-xs text-blue-600">
-            <RefreshCw className="w-3 h-3 animate-spin" />
-            {invoice.status === 'SENDING' ? 'Enviando e-CF…' : 'Validando con DGII…'}
-          </span>
-        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -349,35 +328,6 @@ export default function InvoiceDetailPage() {
             </Card>
           )}
 
-          {/* Alanube trace (admin only) */}
-          {isAdmin && invoice.alanubeRequests.length > 0 && (
-            <Card padding="sm">
-              <div className="px-1 pt-1 pb-3">
-                <h3 className="font-semibold text-gray-900 text-sm">Trazabilidad Alanube</h3>
-                <p className="text-xs text-gray-400">Historial de intentos de emisión e-CF</p>
-              </div>
-              <div className="space-y-2 px-1">
-                {invoice.alanubeRequests.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-xs">
-                    <div>
-                      <span className="font-medium text-gray-700">Intento #{r.attempt}</span>
-                      {r.errorMessage && <p className="text-red-500 mt-0.5">{r.errorMessage}</p>}
-                    </div>
-                    <div className="text-right">
-                      <span className={cn(
-                        'px-2 py-0.5 rounded-full font-medium',
-                        r.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
-                        r.status === 'REJECTED' ? 'bg-red-100 text-red-600' :
-                        r.status === 'IN_PROCESS' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-600'
-                      )}>{r.status ?? 'PENDIENTE'}</span>
-                      <p className="text-gray-400 mt-0.5">{formatDate(r.sentAt)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
         </div>
 
         {/* Sidebar */}
@@ -429,17 +379,7 @@ export default function InvoiceDetailPage() {
                   loading={emit.isPending}
                   onClick={() => emit.mutate()}
                 >
-                  Emitir e-CF
-                </Button>
-              )}
-              {canRetry && (
-                <Button
-                  variant="secondary" size="sm" className="w-full"
-                  icon={<RefreshCw className="w-3.5 h-3.5" />}
-                  loading={retry.isPending}
-                  onClick={() => retry.mutate()}
-                >
-                  Reintentar emisión
+                  Aprobar factura
                 </Button>
               )}
               {canPay && (
@@ -607,16 +547,6 @@ export default function InvoiceDetailPage() {
         </div>
       )}
 
-      {/* Emission modal */}
-      {emitModal && (
-        <EmissionModal
-          invoiceId={id}
-          invoiceNumber={invoice.number}
-          isAdmin={isAdmin}
-          onClose={() => { setEmitModal(false); qc.invalidateQueries({ queryKey: ['invoice', id] }) }}
-          onRetry={() => retry.mutate()}
-        />
-      )}
     </div>
   )
 }

@@ -244,14 +244,6 @@ const INVOICE_HTML = `<!DOCTYPE html>
       {{else}}
         <div class="inv-ncf">{{invoice.number}}</div>
       {{/if}}
-      <div class="inv-badges">
-        {{#ifEq invoice.status "APPROVED"}}<span class="badge badge-approved">Aprobada</span>{{/ifEq}}
-        {{#ifEq invoice.status "DRAFT"}}<span class="badge badge-draft">Borrador</span>{{/ifEq}}
-        {{#ifEq invoice.status "CANCELLED"}}<span class="badge badge-cancelled">Anulada</span>{{/ifEq}}
-        {{#ifEq invoice.paymentStatus "PAID"}}<span class="badge badge-paid">Pagada</span>{{/ifEq}}
-        {{#ifEq invoice.paymentStatus "PARTIAL"}}<span class="badge badge-partial">Parcial</span>{{/ifEq}}
-        {{#ifEq invoice.paymentStatus "PENDING"}}<span class="badge badge-pending">Pendiente</span>{{/ifEq}}
-      </div>
     </div>
   </div>
 
@@ -320,7 +312,7 @@ const INVOICE_HTML = `<!DOCTYPE html>
       {{#if isExempt}}
         <div class="inv-row-tax-exempt">Exento</div>
       {{else}}
-        <div class="inv-row-tax">{{fmt taxAmount}}<span class="inv-row-tax-rate">{{pct taxRate}}</span></div>
+        <div class="inv-row-tax">{{fmt taxAmount}}</div>
       {{/if}}
     </div>
     <div class="inv-row-total">{{fmt total}}</div>
@@ -331,11 +323,10 @@ const INVOICE_HTML = `<!DOCTYPE html>
     <div class="inv-totals">
       <div class="inv-tot-row"><span>Subtotal</span><span>{{fmt invoice.subtotal}}</span></div>
       <div class="inv-tot-row"><span>ITBIS</span><span>{{fmt invoice.taxAmount}}</span></div>
-      <div class="inv-tot-row"><span>Total</span><span>{{fmt invoice.total}}</span></div>
       {{#if invoice.amountPaid}}
       <div class="inv-tot-paid"><span>Pagado</span><span>− {{fmt invoice.amountPaid}}</span></div>
       {{/if}}
-      <div class="inv-tot-due"><span>Saldo pendiente</span><span>{{fmt invoice.amountDue}}</span></div>
+      <div class="inv-tot-due"><span>Total</span><span>{{fmt invoice.amountDue}}</span></div>
     </div>
   </div>
 

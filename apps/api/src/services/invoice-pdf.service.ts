@@ -232,7 +232,7 @@ export async function generateInvoicePdfWithTemplate(invoice: any): Promise<Uint
 
   if (customTpl) {
     logger.info(`[PDF] Using custom template "${customTpl.name}" for ${invoice.id}`)
-    const data = buildInvoiceTemplateData(invoice)
+    const data = await buildInvoiceTemplateData(invoice)
     return renderTemplateToPdf(customTpl.html, data)
   }
 
@@ -252,10 +252,17 @@ const PAYMENT_TERMS_LABELS: Record<string, string> = {
   PARCIAL:    'Pago parcial acordado',
 }
 
-function buildInvoiceTemplateData(invoice: any) {
+async function buildInvoiceTemplateData(invoice: any) {
+  const cfg = await prisma.companyConfig.findUnique({ where: { id: 'main' } })
   return {
     logo: HAX_LOGO_BASE64,
-    company: { name: 'HAX ESTUDIO CREATIVO EIRL', rnc: '133-290251', address: 'Santo Domingo, RD' },
+    company: {
+      name:    cfg?.companyName ?? 'HAX ESTUDIO CREATIVO EIRL',
+      rnc:     cfg?.rnc        ?? '133-290251',
+      address: cfg?.address    ?? 'Santo Domingo, RD',
+      phone:   cfg?.phone      ?? null,
+      email:   cfg?.email      ?? null,
+    },
     invoice: {
       number: invoice.number,
       ncf: invoice.ncf,

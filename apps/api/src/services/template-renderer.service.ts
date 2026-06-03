@@ -46,6 +46,12 @@ Handlebars.registerHelper('ifNot', function (this: any, v: any, opts: any) {
   return !v ? opts.fn(this) : opts.inverse(this)
 })
 
+// Formats a number with thousand separators but NO currency symbol (for quantities, rates, etc.)
+Handlebars.registerHelper('num', (n: number) => {
+  if (typeof n !== 'number') return n
+  return n % 1 === 0 ? n.toLocaleString('es-DO') : n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+})
+
 // ── Renderer ──────────────────────────────────────────────────
 
 let _browser: any = null

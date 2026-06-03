@@ -261,6 +261,7 @@ function buildInvoiceTemplateData(invoice: any) {
       status: invoice.status,
       paymentStatus: invoice.paymentStatus,
       businessUnit: invoice.businessUnit,
+      paymentTerms: invoice.paymentTerms,
       notes: invoice.notes,
     },
     client: invoice.client ?? {},

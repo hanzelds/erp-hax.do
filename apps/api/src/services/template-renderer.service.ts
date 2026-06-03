@@ -18,7 +18,7 @@ import { logger } from '../config/logger'
 
 Handlebars.registerHelper('fmt', (n: number) => {
   if (typeof n !== 'number') return n
-  return 'RD$ ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return 'RD$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 })
 
 Handlebars.registerHelper('date', (d: string | Date) => {

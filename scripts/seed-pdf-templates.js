@@ -132,6 +132,8 @@ const INVOICE_HTML = `<!DOCTYPE html>
       min-height: 11in;
       position: relative;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
     .inv-watermark {
       display: none;
@@ -210,7 +212,7 @@ const INVOICE_HTML = `<!DOCTYPE html>
     .inv-notes { padding: 16px 40px 24px; border-top: 1px solid #f1f5f9; }
     .inv-notes-text { font-size: 11.5px; color: #64748b; line-height: 1.6; font-style: italic; }
     .inv-orig-ref { background: #fffbeb; border-left: 3px solid #f59e0b; padding: 8px 12px 8px 40px; font-size: 11px; color: #92400e; }
-    .inv-footer { background: #17394f; padding: 14px 40px; display: flex; justify-content: space-between; align-items: center; }
+    .inv-footer { background: #17394f; padding: 14px 40px; display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
     .inv-footer-left { font-size: 10px; color: rgba(255,255,255,0.5); }
     .inv-footer-right { display: flex; align-items: center; gap: 8px; }
     .inv-footer-right svg { width: 30px; height: auto; }

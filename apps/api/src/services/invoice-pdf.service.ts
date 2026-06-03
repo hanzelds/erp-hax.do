@@ -240,6 +240,18 @@ export async function generateInvoicePdfWithTemplate(invoice: any): Promise<Uint
   return generateInvoicePdf(invoice)
 }
 
+const PAYMENT_TERMS_LABELS: Record<string, string> = {
+  CONTADO:    'Contado',
+  NET_7:      'Net 7 días',
+  NET_15:     'Net 15 días',
+  NET_30:     'Net 30 días',
+  NET_45:     'Net 45 días',
+  NET_60:     'Net 60 días',
+  NET_90:     'Net 90 días',
+  ANTICIPADO: 'Pago anticipado',
+  PARCIAL:    'Pago parcial acordado',
+}
+
 function buildInvoiceTemplateData(invoice: any) {
   return {
     logo: HAX_LOGO_BASE64,
@@ -261,7 +273,7 @@ function buildInvoiceTemplateData(invoice: any) {
       status: invoice.status,
       paymentStatus: invoice.paymentStatus,
       businessUnit: invoice.businessUnit,
-      paymentTerms: invoice.paymentTerms,
+      paymentTerms: PAYMENT_TERMS_LABELS[invoice.paymentTerms] ?? invoice.paymentTerms,
       notes: invoice.notes,
     },
     client: invoice.client ?? {},

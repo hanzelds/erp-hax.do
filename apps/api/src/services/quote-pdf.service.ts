@@ -5,6 +5,7 @@ import { prisma } from '../config/database'
 import { logger } from '../config/logger'
 import { getActiveTemplate } from '../modules/pdf-templates/pdf-templates.service'
 import { renderTemplateToPdf } from './template-renderer.service'
+import { HAX_LOGO_BASE64 } from '../config/assets'
 
 const BRAND = rgb(0.161, 0.235, 0.310)  // #293C4F
 const GRAY  = rgb(0.45,  0.45,  0.45)
@@ -187,6 +188,7 @@ export async function generateQuotePdfWithTemplate(quote: any): Promise<Uint8Arr
 
 function buildQuoteTemplateData(quote: any) {
   return {
+    logo: HAX_LOGO_BASE64,
     company: { name: 'HAX ESTUDIO CREATIVO EIRL', rnc: '133-290251', address: 'Santo Domingo, RD' },
     quote: {
       number: quote.number,

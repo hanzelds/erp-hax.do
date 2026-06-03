@@ -118,13 +118,13 @@ const INVOICE_HTML = `<!DOCTYPE html>
 
 {{#if isCancelled}}<div class="wm-text red">ANULADA</div>{{/if}}
 {{#if isPaid}}<div class="wm-text green">PAGADA</div>{{/if}}
-<img class="wm-brand" src="${LOGO}" alt=""/>
+<img class="wm-brand" src="{{{logo}}}" alt=""/>
 
 <div class="page">
 
 <div class="hdr">
   <div>
-    <img class="hdr-logo" src="${LOGO}" alt="HAX"/>
+    <img class="hdr-logo" src="{{{logo}}}" alt="HAX"/>
     <div class="hdr-co-name">{{company.name}}</div>
     <div class="hdr-co-meta">RNC {{company.rnc}}{{#if company.address}}<br>{{company.address}}{{/if}}</div>
   </div>
@@ -237,13 +237,13 @@ const QUOTE_HTML = `<!DOCTYPE html>
 
 {{#if isRejected}}<div class="wm-text red">RECHAZADA</div>{{/if}}
 {{#if isConverted}}<div class="wm-text" style="color:#6d28d9;opacity:.05">CONVERTIDA</div>{{/if}}
-<img class="wm-brand" src="${LOGO}" alt=""/>
+<img class="wm-brand" src="{{{logo}}}" alt=""/>
 
 <div class="page">
 
 <div class="hdr">
   <div>
-    <img class="hdr-logo" src="${LOGO}" alt="HAX"/>
+    <img class="hdr-logo" src="{{{logo}}}" alt="HAX"/>
     <div class="hdr-co-name">{{company.name}}</div>
     <div class="hdr-co-meta">RNC {{company.rnc}}{{#if company.address}}<br>{{company.address}}{{/if}}</div>
   </div>

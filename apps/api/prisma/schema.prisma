@@ -841,6 +841,7 @@ model EcfConfig {
   acctExpenseGeneral    String @default("5101")
   acctExpenseSalaries   String @default("5102")
   acctExpenseMarketing  String @default("5103")
+  ncfAuthExpiry         String?  // Fecha vencimiento autorización comprobantes (ej. "31/12/2026")
   updatedAt             DateTime @updatedAt
 
   @@map("ecf_config")

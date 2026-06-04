@@ -44,8 +44,16 @@ export async function generatePayrollSlipPdf(payrollId: string, employeeId: stri
       include: { employee: true, payroll: true },
     })
     if (!item) throw new Error('Ítem de nómina no encontrado')
+    const cfg = await prisma.companyConfig.findUnique({ where: { id: 'main' } })
     const data = {
-      company: { name: 'HAX ESTUDIO CREATIVO EIRL', rnc: '133-290251' },
+      company: {
+        name:    cfg?.companyName ?? 'HAX ESTUDIO CREATIVO EIRL',
+        rnc:     cfg?.rnc        ?? '133-290251',
+        address: cfg?.address    ?? null,
+        phone:   cfg?.phone      ?? null,
+        email:   cfg?.email      ?? null,
+        website: cfg?.website    ?? null,
+      },
       employee: item.employee,
       payroll: item.payroll,
       grossSalary: item.grossSalary,

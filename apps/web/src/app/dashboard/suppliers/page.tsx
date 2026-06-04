@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Search, Edit2, Trash2, Truck, ArrowLeft, ChevronDown, X, Loader2,
@@ -205,6 +205,14 @@ export default function SuppliersPage() {
   )
 }
 
+// ── Status badge helper ────────────────────────────────────────
+function statusCls(estado: string) {
+  const e = (estado ?? '').toUpperCase()
+  if (e === 'ACTIVO')     return 'bg-green-50 text-green-700 border-green-200'
+  if (e === 'SUSPENDIDO') return 'bg-yellow-50 text-yellow-700 border-yellow-200'
+  return 'bg-red-50 text-red-600 border-red-200'
+}
+
 // ── Edit full-page ─────────────────────────────────────────────
 function EditSupplierPage({
   supplier,
@@ -222,14 +230,62 @@ function EditSupplierPage({
   const [acctOpen,   setAcctOpen]   = useState(false)
   const [acctSearch, setAcctSearch] = useState('')
 
-  // RNC auto-lookup
-  const handleRncFound = useCallback((r: { nombre: string }) => {
-    setForm((f) => ({ ...f, name: r.nombre }))
+  // RNC / DGII lookup state
+  const [foundStatus,   setFoundStatus]   = useState<string | null>(null)
+  const [foundByNumber, setFoundByNumber] = useState(false)
+  const [suggestions,   setSuggestions]   = useState<any[]>([])
+  const [showSugg,      setShowSugg]      = useState(false)
+  const [searchingName, setSearchingName] = useState(false)
+  const nameWrapRef = useRef<HTMLDivElement>(null)
+
+  const handleRncFound = useCallback((r: any) => {
+    setForm((f) => ({ ...f, name: r.nombre_razon_social ?? r.nombre }))
+    setFoundStatus(r.estado ?? null)
+    setFoundByNumber(true)
   }, [])
+
+  useEffect(() => { setFoundStatus(null); setFoundByNumber(false) }, [form.rnc])
+
   const { isLoading: rncLoading, isNotFound: rncNotFound } = useRncLookup(
     form.rnc ?? '',
     handleRncFound
   )
+
+  // Name search suggestions
+  useEffect(() => {
+    const name = form.name ?? ''
+    if (name.length < 3 || foundByNumber) { setSuggestions([]); setShowSugg(false); return }
+    setSearchingName(true)
+    const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api'
+    const timer = setTimeout(async () => {
+      try {
+        const res  = await fetch(`${base}/rnc-lookup/nombres?buscar=${encodeURIComponent(name)}`)
+        const json = await res.json()
+        const r    = json.resultados?.slice(0, 7) ?? []
+        setSuggestions(r)
+        setShowSugg(r.length > 0)
+      } catch { /* silent */ }
+      finally { setSearchingName(false) }
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [form.name, foundByNumber])
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (nameWrapRef.current && !nameWrapRef.current.contains(e.target as Node))
+        setShowSugg(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [])
+
+  function selectSuggestion(s: any) {
+    const digits = (s.cedula_rnc ?? '').replace(/\D/g, '')
+    setForm((f) => ({ ...f, name: s.nombre_razon_social, rnc: digits || f.rnc }))
+    setFoundStatus(s.estado ?? null)
+    setFoundByNumber(true)
+    setShowSugg(false)
+  }
 
   // Expense accounts
   const { data: accounts = [] } = useQuery<Account[]>({
@@ -286,16 +342,41 @@ function EditSupplierPage({
       <Card>
         <div className="space-y-4 p-1">
 
-          {/* Nombre */}
-          <Field label="Nombre / Razón social *">
-            <input
-              type="text"
-              value={form.name ?? ''}
-              onChange={(e) => set('name', e.target.value)}
-              placeholder="Nombre del proveedor"
-              className={inp}
-            />
-          </Field>
+          {/* Nombre con sugerencias DGII */}
+          <div ref={nameWrapRef} className="relative">
+            <Field label="Nombre / Razón social *">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={form.name ?? ''}
+                  onChange={(e) => { set('name', e.target.value); setFoundStatus(null); setFoundByNumber(false) }}
+                  placeholder="Nombre del proveedor o busca desde RNC"
+                  className={inp}
+                />
+                {searchingName && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />
+                  </span>
+                )}
+              </div>
+            </Field>
+            {showSugg && suggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-gray-200 shadow-xl z-30 overflow-hidden">
+                {suggestions.map((s, i) => (
+                  <button key={i} type="button" onMouseDown={() => selectSuggestion(s)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 text-left border-b border-gray-50 last:border-0 transition-colors">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-gray-800 truncate">{s.nombre_razon_social}</p>
+                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">{s.cedula_rnc}</p>
+                    </div>
+                    <span className={`shrink-0 ml-3 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusCls(s.estado ?? '')}`}>
+                      {s.estado}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* RNC + Unidad */}
           <div className="grid grid-cols-2 gap-4">
@@ -313,7 +394,12 @@ function EditSupplierPage({
                     <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />
                   </span>
                 )}
-                {rncNotFound && !rncLoading && (form.rnc?.replace(/\D/g, '').length ?? 0) >= 9 && (
+                {foundStatus && !rncLoading && (
+                  <span className={`absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusCls(foundStatus)}`}>
+                    {foundStatus}
+                  </span>
+                )}
+                {rncNotFound && !foundStatus && !rncLoading && (form.rnc?.replace(/\D/g, '').length ?? 0) >= 9 && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-600 border-amber-200">
                     No encontrado
                   </span>

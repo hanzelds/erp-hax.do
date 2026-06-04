@@ -43,3 +43,4 @@ Thumbs.db
 
 # Certbot
 /etc/letsencrypt/
+backups/

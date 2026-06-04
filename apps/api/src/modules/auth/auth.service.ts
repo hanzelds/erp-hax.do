@@ -43,18 +43,20 @@ interface TokenPayload {
 export function generateAccessToken(payload: TokenPayload): string {
   return jwt.sign(payload, env.JWT_SECRET, {
     expiresIn: env.JWT_EXPIRES_IN,
+    algorithm: 'HS256',
   } as jwt.SignOptions)
 }
 
 export function generateRefreshToken(payload: TokenPayload): string {
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
     expiresIn: env.JWT_REFRESH_EXPIRES_IN,
+    algorithm: 'HS256',
   } as jwt.SignOptions)
 }
 
 export function verifyRefreshToken(token: string): TokenPayload {
   try {
-    return jwt.verify(token, env.JWT_REFRESH_SECRET) as TokenPayload
+    return jwt.verify(token, env.JWT_REFRESH_SECRET, { algorithms: ['HS256'] }) as TokenPayload
   } catch {
     throw new UnauthorizedError('Refresh token inválido o expirado')
   }

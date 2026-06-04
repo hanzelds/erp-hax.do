@@ -13,6 +13,6 @@ router.put('/:id',    requireAdmin, ctrl.update)
 router.delete('/:id', requireAdmin, ctrl.remove)
 router.post('/:id/activate',         requireAdmin, ctrl.activate)
 router.post('/type/:type/deactivate', requireAdmin, ctrl.deactivate)
-router.get('/:id/preview',           ctrl.preview)
+router.get('/:id/preview',           requireAdmin, ctrl.preview)
 
 export default router

@@ -77,6 +77,19 @@ export async function renderTemplateToPdf(html: string, data: object): Promise<U
   const page    = await browser.newPage()
 
   try {
+    // Block outbound network requests from Puppeteer to prevent SSRF
+    await page.setRequestInterception(true)
+    page.on('request', (req: any) => {
+      const type = req.resourceType()
+      // Allow only what's embedded in the HTML (styles, fonts loaded inline)
+      // Block any navigation or external fetch that could reach internal services
+      if (type === 'document' || type === 'xhr' || type === 'fetch' || type === 'websocket') {
+        req.abort()
+      } else {
+        req.continue()
+      }
+    })
+
     await page.setContent(rendered, { waitUntil: 'networkidle0' })
     const pdfBuffer = await page.pdf({
       width:             '8.5in',

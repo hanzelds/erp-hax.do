@@ -35,4 +35,7 @@ export const env = {
   COMPANY_NAME: optional('COMPANY_NAME', 'HAX ESTUDIO CREATIVO EIRL'),
   COMPANY_RNC: optional('COMPANY_RNC', '133290251'),
   COMPANY_EMAIL: optional('COMPANY_EMAIL', 'info@hax.com.do'),
+
+  // Proveedor de email transaccional — nunca hardcodear la llave en código
+  RESEND_API_KEY: optional('RESEND_API_KEY', ''),
 }

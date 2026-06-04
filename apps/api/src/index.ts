@@ -79,11 +79,6 @@ if (env.NODE_ENV !== 'test') {
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
-    app: 'ERP Hax API',
-    version: '1.0.0',
-    company: 'HAX ESTUDIO CREATIVO EIRL',
-    rnc: '133290251',
-    env: env.NODE_ENV,
     timestamp: new Date().toISOString(),
   })
 })

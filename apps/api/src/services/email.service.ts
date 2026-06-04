@@ -1,13 +1,18 @@
 import { Resend } from 'resend'
 import { logger } from '../config/logger'
+import { env } from '../config/env'
 
 const FROM     = 'ERP Hax <noreply@hax.com.do>'
 const REPLY_TO = 'hanzel@hax.com.do'
-const API_KEY  = process.env.RESEND_API_KEY ?? 're_MT6onwf1_CUKDBaaU3YYdppxyi9k3H4ao'
 
 let _client: Resend | null = null
 function getClient() {
-  if (!_client) _client = new Resend(API_KEY)
+  if (!_client) {
+    if (!env.RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY no configurada — agrega la variable en apps/api/.env')
+    }
+    _client = new Resend(env.RESEND_API_KEY)
+  }
   return _client
 }
 

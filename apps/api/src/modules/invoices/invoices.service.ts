@@ -401,11 +401,6 @@ export async function emitInvoice(id: string) {
   // Load EcfConfig for validations
   const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
   if (ecfConfig) {
-    // Validate RNC for B01/E31 (CREDITO_FISCAL) invoices
-    if (ecfConfig.requireRncB01 && invoice.type === 'CREDITO_FISCAL' && !invoice.client?.rnc) {
-      throw new AppError('Factura de Crédito Fiscal requiere RNC del cliente', 400)
-    }
-
     // Validate retroactive days
     if (ecfConfig.maxRetroactiveDays > 0) {
       const maxRetro = ecfConfig.maxRetroactiveDays

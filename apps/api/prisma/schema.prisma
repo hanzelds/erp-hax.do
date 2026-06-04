@@ -187,10 +187,11 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id          String  @id @default(cuid())
-  invoiceId   String
-  description String
-  quantity    Float
+  id                 String  @id @default(cuid())
+  invoiceId          String
+  description        String
+  productDescription String?
+  quantity           Float
   unitPrice   Float
   discountPct Float   @default(0)
   taxRate     Float   @default(0.18)

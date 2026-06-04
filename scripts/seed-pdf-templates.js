@@ -159,7 +159,9 @@ const INVOICE_HTML = `<!DOCTYPE html>
       border-bottom: 2px solid #17394f;
     }
     .inv-logo svg { width: 100px; height: auto; display: block; }
-    .inv-logo-meta { font-size: 10px; color: #94a3b8; margin-top: 5px; letter-spacing: 0.03em; line-height: 1.7; }
+    .inv-logo-meta { font-size: 10px; color: #64748b; margin-top: 8px; line-height: 1.75; }
+    .inv-logo-meta strong { color: #17394f; font-size: 10.5px; letter-spacing: 0.02em; }
+    .inv-row-product-desc { font-size: 9.5px; color: #94a3b8; margin-top: 3px; line-height: 1.5; white-space: pre-line; }
     .inv-doc { text-align: right; }
     .inv-doc-type { font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8; }
     .inv-ncf { font-size: 26px; font-weight: 700; color: #17394f; letter-spacing: -0.5px; line-height: 1.1; margin-top: 3px; }
@@ -234,26 +236,25 @@ const INVOICE_HTML = `<!DOCTYPE html>
           <path class="lc" d="m75.08,45.91c0,.29.02.55.07.79.05.24.1.45.14.65.05.19.13.38.25.57.12.19.22.35.29.47.07.12.2.25.39.39.19.14.33.26.43.36.1.1.25.2.47.32.22.12.36.19.43.22.07.02.23.1.47.22.24.12.41.2.5.25h-8.89c-1.15,0-2.13-.42-2.94-1.25-.81-.84-1.22-1.83-1.22-2.98v-2.08c-4.02,4.21-8.01,6.31-11.98,6.31-3.54,0-6.61-1.19-9.22-3.59-2.61-2.39-3.88-5.09-3.84-8.1.05-1.96.6-3.56,1.65-4.8,1.05-1.24,2.39-2.1,4.02-2.58,1.53-.48,4.37-.86,8.53-1.15,4.16-.29,6.96-.81,8.39-1.58,1.43-.81,2.21-1.86,2.33-3.16.12-1.29-.39-2.46-1.54-3.51-1-.91-2.31-1.58-3.91-2.01-1.6-.43-3.07-.55-4.41-.36,2.39-.91,4.74-1.22,7.06-.93,2.32.29,4.41.93,6.27,1.94,1.86,1,3.37,2.51,4.52,4.52s1.72,4.28,1.72,6.81v14.27Zm8.03-21.59c-1.77-3.2-4.54-5.58-8.32-7.14-3.78-1.55-7.67-2.16-11.69-1.83-2.92.29-5.32,1.22-7.21,2.8-1.89,1.58-2.86,3.68-2.9,6.31,0,1.15-.38,2.14-1.15,2.98-.76.84-1.7,1.26-2.8,1.26-1.34,0-2.27-.57-2.8-1.72-.53-1.15-.48-2.32.14-3.51.62-1.48,1.74-2.86,3.37-4.12,1.62-1.27,3.56-2.32,5.81-3.16,2.25-.84,4.68-1.45,7.31-1.83,2.39-.38,4.86-.59,7.42-.61,2.56-.02,5.21.13,7.96.47,2.75.33,5.24,1.08,7.46,2.22,2.22,1.15,3.84,2.65,4.84,4.52.38.72.79,1.48,1.22,2.29.43.81.91,1.71,1.43,2.65.53.96.94,1.72,1.22,2.29.48.86.81,1.51,1,1.94,2.2-3.01,3.85-5.26,4.95-6.74.43-.53.63-1.04.61-1.54-.03-.5-.28-1.16-.75-1.97-.67-1.15-1.17-2.01-1.51-2.58h6.88c-1.1,1.48-2.75,3.69-4.95,6.63-2.2,2.94-3.85,5.15-4.95,6.63,3.16,5.79,6.41,11.76,9.75,17.93.48.91,1.24,1.36,2.29,1.36h.22v.29h-12.91v-.29h.22c.33,0,.59-.14.75-.43.17-.29.18-.57.04-.86-.72-1.29-1.77-3.24-3.16-5.84-1.39-2.61-2.44-4.58-3.16-5.92-.57.81-1.46,2.02-2.65,3.62-1.2,1.6-2.08,2.79-2.65,3.55-.43.57-.63,1.11-.61,1.61s.27,1.16.75,1.97c.53.86,1.03,1.72,1.51,2.58h-6.88c1.24-1.67,3.02-4.05,5.34-7.14,2.32-3.08,3.98-5.29,4.98-6.63-2.34-4.4-4.11-7.7-5.31-9.9-.14-.29-.36-.68-.65-1.18s-.45-.82-.5-.97Zm-17.64,2.51c-.57,1.24-1.5,2.28-2.76,3.12-1.27.84-2.58,1.48-3.94,1.94-1.36.45-2.7.94-4.02,1.47-1.32.53-2.41,1.22-3.3,2.08-.88.86-1.4,1.94-1.54,3.23-.24,2.73.51,5.02,2.26,6.88,1.74,1.86,3.91,2.51,6.49,1.94,1.96-.43,4.23-2.01,6.81-4.73v-15.92Z"/>
         </g></g></g>
       </svg>
-      <div class="inv-logo-meta">{{company.name}} · RNC {{company.rnc}}<br>{{company.address}}</div>
+      <div class="inv-logo-meta">
+        <strong>{{company.name}}</strong><br>
+        RNC {{company.rnc}}<br>
+        {{#if company.address}}{{company.address}}<br>{{/if}}
+        {{#if company.phone}}{{company.phone}}<br>{{/if}}
+        {{#if company.email}}{{company.email}}<br>{{/if}}
+        {{#if invoice.businessUnit}}{{invoice.businessUnit}}{{/if}}
+      </div>
     </div>
     <div class="inv-doc">
-      <div class="inv-doc-type">{{invoice.type}}</div>
       {{#if invoice.ncf}}
+        <div class="inv-num" style="margin-bottom:2px;">No. {{invoice.number}}</div>
         <div class="inv-ncf">{{invoice.ncf}}</div>
-        <div class="inv-num">No. {{invoice.number}}</div>
       {{else}}
         <div class="inv-ncf">{{invoice.number}}</div>
       {{/if}}
+      <div class="inv-doc-type" style="margin-top:4px;">{{invoice.type}}</div>
     </div>
   </div>
-
-  {{#if invoice.businessUnit}}
-  <div class="inv-bu">
-    <span class="inv-bu-label">Unidad de negocio</span>
-    <span class="inv-bu-dot">·</span>
-    <span class="inv-bu-val">{{invoice.businessUnit}}</span>
-  </div>
-  {{/if}}
 
   {{#if originalNcf}}
   <div class="inv-orig-ref">Nota de Crédito — Factura de referencia NCF: <strong>{{originalNcf}}</strong></div>
@@ -304,6 +305,7 @@ const INVOICE_HTML = `<!DOCTYPE html>
   <div class="inv-row">
     <div>
       <div class="inv-row-desc">{{description}}</div>
+      {{#if productDescription}}<div class="inv-row-product-desc">{{productDescription}}</div>{{/if}}
       {{#if isExempt}}<div class="inv-row-exempt">✓ Exento de ITBIS</div>{{/if}}
     </div>
     <div class="inv-row-qty">{{num quantity}}</div>

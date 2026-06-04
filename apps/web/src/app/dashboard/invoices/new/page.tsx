@@ -17,9 +17,9 @@ import NewContactPage from '@/components/NewContactPage'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Client  { id: string; name: string; rnc: string | null; phone?: string | null; email?: string | null }
-interface Product { id: string; name: string; code?: string | null; unitPrice: number; taxRate: number; isExempt: boolean }
+interface Product { id: string; name: string; description?: string | null; code?: string | null; unitPrice: number; taxRate: number; isExempt: boolean }
 interface LineItem {
-  description: string; quantity: number; unitPrice: number
+  description: string; productDescription?: string | null; quantity: number; unitPrice: number
   discountPct: number; taxRate: number; isExempt: boolean
 }
 
@@ -351,10 +351,11 @@ export default function NewInvoicePage() {
 
   const applyProduct = (i: number, p: Product) =>
     setLine(i, {
-      description: p.name,
-      unitPrice:   p.unitPrice,
-      taxRate:     p.isExempt ? 0 : Math.round(p.taxRate * 100),
-      isExempt:    p.isExempt,
+      description:        p.name,
+      productDescription: p.description ?? null,
+      unitPrice:          p.unitPrice,
+      taxRate:            p.isExempt ? 0 : Math.round(p.taxRate * 100),
+      isExempt:           p.isExempt,
     })
 
   const calcs         = lines.map(l => calcLine(l, forceExempt))

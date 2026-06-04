@@ -179,17 +179,25 @@ export async function generateQuotePdfWithTemplate(quote: any): Promise<Uint8Arr
 
   if (customTpl) {
     logger.info(`[PDF] Using custom template "${customTpl.name}" for quote ${quote.id}`)
-    const data = buildQuoteTemplateData(quote)
+    const data = await buildQuoteTemplateData(quote)
     return renderTemplateToPdf(customTpl.html, data)
   }
 
   return generateQuotePdf(quote)
 }
 
-function buildQuoteTemplateData(quote: any) {
+async function buildQuoteTemplateData(quote: any) {
+  const cfg = await prisma.companyConfig.findUnique({ where: { id: 'main' } })
   return {
     logo: HAX_LOGO_BASE64,
-    company: { name: 'HAX ESTUDIO CREATIVO EIRL', rnc: '133-290251', address: 'Santo Domingo, RD' },
+    company: {
+      name:    cfg?.companyName ?? 'HAX ESTUDIO CREATIVO EIRL',
+      rnc:     cfg?.rnc        ?? '133-290251',
+      address: cfg?.address    ?? null,
+      phone:   cfg?.phone      ?? null,
+      email:   cfg?.email      ?? null,
+      website: cfg?.website    ?? null,
+    },
     quote: {
       number: quote.number,
       status: STATUS_LABEL[quote.status] ?? quote.status,

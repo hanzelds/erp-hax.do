@@ -259,9 +259,10 @@ async function buildInvoiceTemplateData(invoice: any) {
     company: {
       name:    cfg?.companyName ?? 'HAX ESTUDIO CREATIVO EIRL',
       rnc:     cfg?.rnc        ?? '133-290251',
-      address: cfg?.address    ?? 'Santo Domingo, RD',
+      address: cfg?.address    ?? null,
       phone:   cfg?.phone      ?? null,
       email:   cfg?.email      ?? null,
+      website: cfg?.website    ?? null,
     },
     invoice: {
       number: invoice.number,

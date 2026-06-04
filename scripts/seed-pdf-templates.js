@@ -158,9 +158,10 @@ const INVOICE_HTML = `<!DOCTYPE html>
       align-items: flex-start;
       border-bottom: 2px solid #17394f;
     }
-    .inv-logo svg { width: 100px; height: auto; display: block; }
-    .inv-logo-meta { font-size: 10px; color: #64748b; margin-top: 8px; line-height: 1.75; }
-    .inv-logo-meta strong { color: #17394f; font-size: 10.5px; letter-spacing: 0.02em; }
+    .inv-logo svg { width: 140px; height: auto; display: block; }
+    .inv-logo-meta { font-size: 10px; color: #64748b; margin-top: 10px; line-height: 1.85; }
+    .inv-logo-meta strong { color: #17394f; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; display: block; margin-bottom: 2px; }
+    .inv-logo-meta span { display: block; }
     .inv-row-product-desc { font-size: 9.5px; color: #94a3b8; margin-top: 3px; line-height: 1.5; white-space: pre-line; }
     .inv-doc { text-align: right; }
     .inv-doc-type { font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8; }
@@ -237,12 +238,13 @@ const INVOICE_HTML = `<!DOCTYPE html>
         </g></g></g>
       </svg>
       <div class="inv-logo-meta">
-        <strong>{{company.name}}</strong><br>
-        RNC {{company.rnc}}<br>
-        {{#if company.address}}{{company.address}}<br>{{/if}}
-        {{#if company.phone}}{{company.phone}}<br>{{/if}}
-        {{#if company.email}}{{company.email}}<br>{{/if}}
-        {{#if invoice.businessUnit}}{{invoice.businessUnit}}{{/if}}
+        <strong>{{company.name}}</strong>
+        <span>RNC {{company.rnc}}</span>
+        {{#if company.address}}<span>{{company.address}}</span>{{/if}}
+        {{#if company.phone}}<span>{{company.phone}}</span>{{/if}}
+        {{#if company.email}}<span>{{company.email}}</span>{{/if}}
+        {{#if company.website}}<span>{{company.website}}</span>{{/if}}
+        {{#if invoice.businessUnit}}<span>{{invoice.businessUnit}}</span>{{/if}}
       </div>
     </div>
     <div class="inv-doc">

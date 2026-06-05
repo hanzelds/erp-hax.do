@@ -6,10 +6,11 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line,
 } from 'recharts'
-import { Download, FileDown } from 'lucide-react'
+import { Download, FileDown, ShieldOff, ArrowRightLeft } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, cn, openPdf } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader, Skeleton, StatCard, Select } from '@/components/ui'
+import { useAuthStore } from '@/lib/auth-store'
 
 const TABS = ['P&L', 'Balance General', 'Flujo de Caja', '606 Compras', '607 Ventas'] as const
 type Tab = typeof TABS[number]
@@ -32,6 +33,39 @@ export default function ReportsPage() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
+  const { mode, setMode } = useAuthStore()
+
+  if (mode === 'proforma') {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="Reportes" subtitle="Módulo fiscal — no aplica en modo proforma" />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="max-w-md text-center space-y-6 px-4">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto">
+              <ShieldOff className="w-8 h-8 text-amber-400" />
+            </div>
+            <div>
+              <h2 className="text-white/80 text-xl font-semibold mb-2">
+                Reportes no disponibles en modo Proforma
+              </h2>
+              <p className="text-white/40 text-sm leading-relaxed">
+                Los reportes DGII (606, 607), P&amp;L y Balance General se generan
+                exclusivamente a partir de documentos fiscales con NCF.
+                Los documentos proforma no aparecen en ningún reporte oficial.
+              </p>
+            </div>
+            <button
+              onClick={() => setMode('normal')}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white/80 text-sm font-medium hover:bg-white/15 transition-all"
+            >
+              <ArrowRightLeft className="w-4 h-4" />
+              Cambiar a modo Fiscal
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">

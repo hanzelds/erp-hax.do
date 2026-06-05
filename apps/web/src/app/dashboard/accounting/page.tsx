@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Lock, TrendingDown, TrendingUp } from 'lucide-react'
+import { BookOpen, Lock, TrendingDown, TrendingUp, ShieldOff, ArrowRightLeft } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, Skeleton, EmptyState, useConfirm } from '@/components/ui'
@@ -37,8 +37,60 @@ const ACCOUNT_TYPE_LABEL: Record<string, string> = {
 export default function AccountingPage() {
   const [tab, setTab] = useState<Tab>('journal')
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7))
-  const { user } = useAuthStore()
-  const isAdmin = user?.role === 'ADMIN'
+  const { user, mode, setMode } = useAuthStore()
+  const isAdmin    = user?.role === 'ADMIN'
+  const isProforma = mode === 'proforma'
+
+  // En modo proforma: mostrar panel de bloqueo — la contabilidad es fiscal
+  if (isProforma) {
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          title="Contabilidad"
+          subtitle="Módulo fiscal — no aplica en modo proforma"
+        />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="max-w-md text-center space-y-6 px-4">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto">
+              <ShieldOff className="w-8 h-8 text-amber-400" />
+            </div>
+            <div>
+              <h2 className="text-white/80 text-xl font-semibold mb-2">
+                Contabilidad no disponible en modo Proforma
+              </h2>
+              <p className="text-white/40 text-sm leading-relaxed">
+                Los documentos proforma no generan asientos contables, no consumen
+                secuencias NCF ni afectan el ITBIS. El módulo de contabilidad opera
+                exclusivamente con documentos fiscales.
+              </p>
+            </div>
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 text-left space-y-2">
+              <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3">
+                Para acceder a este módulo debes:
+              </p>
+              {[
+                'Cambiar al modo ERP Fiscal',
+                'Los asientos se generan automáticamente al emitir facturas',
+                'El ITBIS se calcula por período sobre facturas fiscales',
+              ].map((t, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5" />
+                  <p className="text-white/40 text-sm">{t}</p>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setMode('normal')}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white/80 text-sm font-medium hover:bg-white/15 transition-all"
+            >
+              <ArrowRightLeft className="w-4 h-4" />
+              Cambiar a modo Fiscal
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">

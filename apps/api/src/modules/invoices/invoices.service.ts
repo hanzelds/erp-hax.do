@@ -341,16 +341,16 @@ export async function addPayment(invoiceId: string, data: any) {
     try {
       let bankAccount = null
 
-      if (isProforma) {
-        // Cuenta proforma: usar la que viene en el request (si fue configurada)
-        if (data.bankAccountId) {
-          bankAccount = await prisma.bankAccount.findFirst({
-            where: { id: data.bankAccountId, isActive: true },
-          })
-        }
-        // Si no se configuró cuenta proforma, no registrar depósito bancario
-      } else {
-        // Cuenta fiscal: preferir mismo BU, fallback a cualquier activa
+      if (isProforma && data.bankAccountId) {
+        // Proforma con cuenta configurada: usar esa cuenta específica
+        bankAccount = await prisma.bankAccount.findFirst({
+          where: { id: data.bankAccountId, isActive: true },
+        })
+      }
+
+      // Fallback universal: si no se encontró cuenta (proforma sin configurar
+      // o cuenta inactiva), usar la misma lógica que el modo fiscal
+      if (!bankAccount) {
         bankAccount = await prisma.bankAccount.findFirst({
           where: { isActive: true, businessUnit: invoice.businessUnit as any },
         }) ?? await prisma.bankAccount.findFirst({ where: { isActive: true } })

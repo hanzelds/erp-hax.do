@@ -9,6 +9,7 @@ import {
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, Skeleton, EmptyState, Select, DatePicker } from '@/components/ui'
+import { useAuthStore } from '@/lib/auth-store'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Payment {
@@ -82,6 +83,9 @@ const EMPTY_FORM: PaymentForm = {
 
 // ─── New Payment Page ──────────────────────────────────────────────────────────
 function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
+  const { mode, proformaBankAccountId } = useAuthStore()
+  const isProforma = mode === 'proforma'
+
   const [form, setForm]               = useState<PaymentForm>(EMPTY_FORM)
   const [clientSearch, setClientSearch] = useState('')
   const [showClientDrop, setShowClientDrop] = useState(false)
@@ -109,18 +113,23 @@ function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () =
     enabled: showClientDrop,
   })
 
-  // Pending invoices for selected client — APPROVED by DGII + payment pending/partial
+  // Facturas pendientes del cliente filtradas por modo:
+  // Fiscal  → excluye PROFORMA; Proforma → solo PROFORMA (cualquier status con saldo)
   const { data: pendingInvoices = [], isLoading: loadingInvoices } = useQuery<PendingInvoice[]>({
-    queryKey: ['pending-invoices', form.clientId],
+    queryKey: ['pending-invoices', form.clientId, mode],
     queryFn: async () => {
-      const { data } = await api.get('/invoices', {
-        params: {
-          clientId:      form.clientId,
-          status:        'APPROVED',
-          paymentStatus: 'PENDING,PARTIAL',
-          limit:         100,
-        },
-      })
+      const params: Record<string, any> = {
+        clientId:      form.clientId,
+        paymentStatus: 'PENDING,PARTIAL',
+        limit:         100,
+      }
+      if (isProforma) {
+        params.type = 'PROFORMA'            // solo proformas con saldo
+      } else {
+        params.status        = 'APPROVED'   // solo aprobadas fiscales
+        params.excludeProforma = 'true'
+      }
+      const { data } = await api.get('/invoices', { params })
       return data.data ?? data
     },
     enabled: !!form.clientId && incomeType === 'invoice',
@@ -164,11 +173,15 @@ function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () =
       if (!amountNum || amountNum <= 0) throw new Error('El monto debe ser mayor a 0')
       if (amountNum > maxAmount + 0.01) throw new Error(`El monto supera el saldo pendiente (${formatCurrency(maxAmount)})`)
       await api.post(`/invoices/${form.invoiceId}/payments`, {
-        amount:    amountNum,
-        method:    form.method,
-        reference: form.reference.trim() || null,
-        notes:     form.notes.trim() || null,
-        paidAt:    new Date(form.paidAt).toISOString(),
+        amount:        amountNum,
+        method:        form.method,
+        reference:     form.reference.trim() || null,
+        notes:         form.notes.trim() || null,
+        paidAt:        new Date(form.paidAt).toISOString(),
+        // En modo proforma: enviar la cuenta bancaria configurada para depósito
+        ...(isProforma && proformaBankAccountId
+          ? { bankAccountId: proformaBankAccountId }
+          : {}),
       })
     },
     onSuccess: () => {
@@ -518,14 +531,22 @@ function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () =
 
 // ─── Payments List Page ────────────────────────────────────────────────────────
 export default function PaymentsPage() {
+  const { mode } = useAuthStore()
+  const isProforma = mode === 'proforma'
   const [showNew, setShowNew] = useState(false)
   const [search, setSearch]   = useState('')
   const qc = useQueryClient()
 
   const { data: payments = [], isLoading } = useQuery<Payment[]>({
-    queryKey: ['payments'],
+    queryKey: ['payments', mode],
     queryFn: async () => {
-      const { data } = await api.get('/payments', { params: { limit: 100 } })
+      const params: Record<string, any> = { limit: 100 }
+      if (isProforma) {
+        params.proformaOnly = 'true'
+      } else {
+        params.excludeProforma = 'true'
+      }
+      const { data } = await api.get('/payments', { params })
       return data.data ?? data
     },
   })

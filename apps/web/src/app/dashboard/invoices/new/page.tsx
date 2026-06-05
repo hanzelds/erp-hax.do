@@ -408,12 +408,17 @@ export default function NewInvoicePage() {
       })
       const invoiceId = resp.data?.id ?? resp.id
       if (payEnabled && parseFloat(payAmount) > 0) {
+        const { proformaBankAccountId } = useAuthStore.getState()
         await api.post(`/invoices/${invoiceId}/payments`, {
           amount:    parseFloat(payAmount),
           method:    payMethod,
           reference: payRef || undefined,
           paidAt:    payDate || undefined,
           notes:     'Pago inicial al crear factura',
+          // En modo proforma, depósito en cuenta proforma configurada
+          ...(isProforma && proformaBankAccountId
+            ? { bankAccountId: proformaBankAccountId }
+            : {}),
         })
       }
       return { data: resp, invoiceId }

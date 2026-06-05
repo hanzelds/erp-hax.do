@@ -15,7 +15,17 @@ export async function listPayments(query: any) {
     if (from) where.paidAt.gte = new Date(from)
     if (to)   where.paidAt.lte = new Date(to)
   }
-  if (bu) where.invoice = { businessUnit: bu }
+
+  // Separación fiscal / proforma
+  // excludeProforma=true → solo pagos de facturas fiscales (vista normal)
+  // proformaOnly=true    → solo pagos de facturas proforma (vista proforma)
+  const invoiceFilter: any = bu ? { businessUnit: bu } : {}
+  if (query.excludeProforma === 'true') {
+    invoiceFilter.type = { not: 'PROFORMA' }
+  } else if (query.proformaOnly === 'true') {
+    invoiceFilter.type = 'PROFORMA'
+  }
+  if (Object.keys(invoiceFilter).length > 0) where.invoice = invoiceFilter
 
   const [data, total] = await Promise.all([
     prisma.payment.findMany({
@@ -26,7 +36,7 @@ export async function listPayments(query: any) {
       include: {
         invoice: {
           select: {
-            id: true, number: true, businessUnit: true,
+            id: true, number: true, businessUnit: true, type: true,
             client: { select: { id: true, name: true } },
           },
         },
@@ -44,7 +54,13 @@ export async function getPaymentStats(query: any) {
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
   const where: any = { isReversed: false }
-  if (bu) where.invoice = { businessUnit: bu }
+  const invoiceFilter: any = bu ? { businessUnit: bu } : {}
+  if (query.excludeProforma === 'true') {
+    invoiceFilter.type = { not: 'PROFORMA' }
+  } else if (query.proformaOnly === 'true') {
+    invoiceFilter.type = 'PROFORMA'
+  }
+  if (Object.keys(invoiceFilter).length > 0) where.invoice = invoiceFilter
 
   const whereThisMonth = { ...where, paidAt: { gte: firstOfMonth } }
 

@@ -69,8 +69,9 @@ export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router   = useRouter()
   const qc       = useQueryClient()
-  const user     = useAuthStore((s) => s.user)
-  const isAdmin  = user?.role === 'ADMIN'
+  const { user, mode, proformaBankAccountId } = useAuthStore()
+  const isAdmin    = user?.role === 'ADMIN'
+  const isProforma = mode === 'proforma'
 
   const [payModal, setPayModal] = useState(false)
   const [payForm, setPayForm]   = useState({ amount: 0, method: 'TRANSFER', reference: '' })
@@ -85,7 +86,13 @@ export default function InvoiceDetailPage() {
   })
 
   const addPayment = useMutation({
-    mutationFn: async (body: typeof payForm) => api.post(`/invoices/${id}/payments`, body),
+    mutationFn: async (body: typeof payForm) => api.post(`/invoices/${id}/payments`, {
+      ...body,
+      // En modo proforma, enviar la cuenta bancaria proforma configurada
+      ...(isProforma && proformaBankAccountId
+        ? { bankAccountId: proformaBankAccountId }
+        : {}),
+    }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setPayModal(false) },
   })
 

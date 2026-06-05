@@ -327,17 +327,34 @@ export async function addPayment(invoiceId: string, data: any) {
     }),
   ])
 
-  // Facturas PROFORMA: no generan movimientos bancarios ni asientos contables
+  // Determinar si la factura es proforma
   const isProforma = (invoice as any).type === 'PROFORMA'
 
-  // Auto bank deposit: TRANSFER or CHECK → credit active bank account (solo fiscal)
+  // ── Depósito bancario ─────────────────────────────────────────────────────
+  // Fiscal:   buscar cuenta activa del mismo BU (comportamiento original)
+  // Proforma: usar data.bankAccountId si viene en el request (cuenta proforma
+  //           configurada por el usuario); si no viene, omitir depósito
   const BANK_METHODS = ['TRANSFER', 'CHECK', 'TRANSFERENCIA', 'CHEQUE']
-  if (!isProforma && BANK_METHODS.includes((data.method ?? '').toUpperCase())) {
+  const shouldDeposit = BANK_METHODS.includes((data.method ?? '').toUpperCase())
+
+  if (shouldDeposit) {
     try {
-      // Find first active bank account (prefer same BU, fallback to any)
-      const bankAccount = await prisma.bankAccount.findFirst({
-        where: { isActive: true, businessUnit: invoice.businessUnit as any },
-      }) ?? await prisma.bankAccount.findFirst({ where: { isActive: true } })
+      let bankAccount = null
+
+      if (isProforma) {
+        // Cuenta proforma: usar la que viene en el request (si fue configurada)
+        if (data.bankAccountId) {
+          bankAccount = await prisma.bankAccount.findFirst({
+            where: { id: data.bankAccountId, isActive: true },
+          })
+        }
+        // Si no se configuró cuenta proforma, no registrar depósito bancario
+      } else {
+        // Cuenta fiscal: preferir mismo BU, fallback a cualquier activa
+        bankAccount = await prisma.bankAccount.findFirst({
+          where: { isActive: true, businessUnit: invoice.businessUnit as any },
+        }) ?? await prisma.bankAccount.findFirst({ where: { isActive: true } })
+      }
 
       if (bankAccount) {
         await prisma.$transaction([
@@ -346,7 +363,7 @@ export async function addPayment(invoiceId: string, data: any) {
               bankAccountId: bankAccount.id,
               type: 'CREDIT',
               amount,
-              description: `Cobro factura ${invoice.number}`,
+              description: `Cobro factura ${invoice.number}${isProforma ? ' (proforma)' : ''}`,
               reference: data.reference ?? `PAY-${payment.id.slice(-6).toUpperCase()}`,
               transactionDate: paidAt,
               status: 'MATCHED',
@@ -359,10 +376,10 @@ export async function addPayment(invoiceId: string, data: any) {
           }),
         ])
       }
-    } catch { /* non-critical — don't fail payment */ }
+    } catch { /* non-critical — no fallar el pago */ }
   }
 
-  // Auto journal entry: Dr Banco / Cr CxC (solo fiscal)
+  // ── Asiento contable: solo facturas fiscales ─────────────────────────────
   if (!isProforma) {
     const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
     if (ecfConfig?.autoJournalEntries) {

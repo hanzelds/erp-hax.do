@@ -105,10 +105,10 @@ function JournalTab({ period, proformaOnly }: { period: string; proformaOnly: bo
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-gray-100">
-            {proformaOnly
+            {(proformaOnly
               ? ['Factura', 'Cliente', 'Método', 'Referencia', 'Monto', 'Fecha', 'BU']
               : ['Tipo', 'Descripción', 'Débito', 'Crédito', 'Monto', 'Período', 'BU']
-            }.map((h) => (
+            ).map((h) => (
               <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2.5">{h}</th>
             ))}
           </tr></thead>

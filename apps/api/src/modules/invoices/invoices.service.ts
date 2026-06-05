@@ -115,6 +115,14 @@ export async function listInvoices(query: any) {
     if (query.from) where.issueDate.gte = new Date(query.from)
     if (query.to) where.issueDate.lte = new Date(query.to)
   }
+  // Separación fiscal/proforma:
+  // excludeProforma=true → oculta PROFORMA de la vista fiscal
+  // type=PROFORMA       → muestra solo proformas (vista proforma)
+  if (query.excludeProforma === 'true' || query.excludeProforma === true) {
+    where.type = { not: 'PROFORMA' }
+  } else if (query.type) {
+    where.type = query.type
+  }
 
   const [data, total] = await Promise.all([
     prisma.invoice.findMany({
@@ -319,9 +327,12 @@ export async function addPayment(invoiceId: string, data: any) {
     }),
   ])
 
-  // Auto bank deposit: TRANSFER or CHECK → credit active bank account
+  // Facturas PROFORMA: no generan movimientos bancarios ni asientos contables
+  const isProforma = (invoice as any).type === 'PROFORMA'
+
+  // Auto bank deposit: TRANSFER or CHECK → credit active bank account (solo fiscal)
   const BANK_METHODS = ['TRANSFER', 'CHECK', 'TRANSFERENCIA', 'CHEQUE']
-  if (BANK_METHODS.includes((data.method ?? '').toUpperCase())) {
+  if (!isProforma && BANK_METHODS.includes((data.method ?? '').toUpperCase())) {
     try {
       // Find first active bank account (prefer same BU, fallback to any)
       const bankAccount = await prisma.bankAccount.findFirst({
@@ -351,23 +362,25 @@ export async function addPayment(invoiceId: string, data: any) {
     } catch { /* non-critical — don't fail payment */ }
   }
 
-  // Auto journal entry: Dr Banco / Cr CxC
-  const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
-  if (ecfConfig?.autoJournalEntries) {
-    const bankCode = ecfConfig.acctBank          ?? '1102'
-    const cxcCode  = ecfConfig.acctReceivables   ?? '1103'
-    const period = `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}`
-    await autoJournalEntry({
-      type: 'PAYMENT',
-      businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
-      description: `Pago factura ${invoice.number}`,
-      debitCode:  bankCode,
-      creditCode: cxcCode,
-      amount,
-      invoiceId,
-      paymentId: payment.id,
-      period,
-    })
+  // Auto journal entry: Dr Banco / Cr CxC (solo fiscal)
+  if (!isProforma) {
+    const ecfConfig = await prisma.ecfConfig.findUnique({ where: { id: 'main' } })
+    if (ecfConfig?.autoJournalEntries) {
+      const bankCode = ecfConfig.acctBank          ?? '1102'
+      const cxcCode  = ecfConfig.acctReceivables   ?? '1103'
+      const period = `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}`
+      await autoJournalEntry({
+        type: 'PAYMENT',
+        businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+        description: `Pago factura ${invoice.number}`,
+        debitCode:  bankCode,
+        creditCode: cxcCode,
+        amount,
+        invoiceId,
+        paymentId: payment.id,
+        period,
+      })
+    }
   }
 
   return payment
@@ -535,20 +548,21 @@ export async function createCreditNote(id: string, data: any) {
 
 
 export async function getInvoiceStats(businessUnit?: BusinessUnit) {
-  const where: any = businessUnit ? { businessUnit } : {}
+  // Stats son siempre fiscales — excluir PROFORMA
+  const fiscalBase: any = { type: { not: 'PROFORMA' }, ...(businessUnit ? { businessUnit } : {}) }
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
   const [total, byStatus, monthRevenue, overdue] = await Promise.all([
-    prisma.invoice.count({ where }),
-    prisma.invoice.groupBy({ by: ['status'], where, _count: true, _sum: { total: true } }),
+    prisma.invoice.count({ where: fiscalBase }),
+    prisma.invoice.groupBy({ by: ['status'], where: fiscalBase, _count: true, _sum: { total: true } }),
     prisma.invoice.aggregate({
-      where: { ...where, issueDate: { gte: monthStart }, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...fiscalBase, issueDate: { gte: monthStart }, status: { not: InvoiceStatus.CANCELLED } },
       _sum: { total: true, amountPaid: true },
     }),
     prisma.invoice.count({
       where: {
-        ...where,
+        ...fiscalBase,
         paymentStatus: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIAL] },
         dueDate: { lt: now },
         status: { not: InvoiceStatus.CANCELLED },

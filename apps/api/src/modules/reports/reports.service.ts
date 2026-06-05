@@ -1,6 +1,9 @@
 import { prisma } from '../../config/database'
 import { InvoiceStatus, ExpenseStatus, BusinessUnit } from '@prisma/client'
 
+/** Filtro global: excluir facturas proforma de todos los cálculos fiscales */
+const NO_PROFORMA = { type: { not: 'PROFORMA' as any } }
+
 function periodWhere(period: string) {
   const [year, month] = period.split('-').map(Number)
   const start = new Date(year, month - 1, 1)
@@ -34,15 +37,15 @@ export async function getDashboard(businessUnit?: BusinessUnit) {
     expensesByCategory,
   ] = await Promise.all([
     prisma.invoice.aggregate({
-      where: { ...buWhere, issueDate: { gte: monthStart }, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, ...NO_PROFORMA, issueDate: { gte: monthStart }, status: { not: InvoiceStatus.CANCELLED } },
       _sum: { total: true },
     }),
     prisma.invoice.aggregate({
-      where: { ...buWhere, issueDate: { gte: prevStart, lte: prevEnd }, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, ...NO_PROFORMA, issueDate: { gte: prevStart, lte: prevEnd }, status: { not: InvoiceStatus.CANCELLED } },
       _sum: { total: true },
     }),
     prisma.invoice.aggregate({
-      where: { ...buWhere, paymentStatus: { in: ['PENDING', 'PARTIAL'] }, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, ...NO_PROFORMA, paymentStatus: { in: ['PENDING', 'PARTIAL'] }, status: { not: InvoiceStatus.CANCELLED } },
       _sum: { amountDue: true },
       _count: { id: true },
     }),
@@ -51,13 +54,13 @@ export async function getDashboard(businessUnit?: BusinessUnit) {
       _sum: { total: true },
     }),
     prisma.invoice.count({
-      where: { ...buWhere, issueDate: { gte: monthStart }, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, ...NO_PROFORMA, issueDate: { gte: monthStart }, status: { not: InvoiceStatus.CANCELLED } },
     }),
     prisma.invoice.count({
-      where: { ...buWhere, issueDate: { gte: todayStart }, status: InvoiceStatus.APPROVED },
+      where: { ...buWhere, ...NO_PROFORMA, issueDate: { gte: todayStart }, status: InvoiceStatus.APPROVED },
     }),
     prisma.invoice.findMany({
-      where: { ...buWhere, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, ...NO_PROFORMA, status: { not: InvoiceStatus.CANCELLED } },
       select: {
         id: true, number: true, total: true, status: true, issueDate: true, businessUnit: true,
         client: { select: { name: true } },
@@ -66,7 +69,7 @@ export async function getDashboard(businessUnit?: BusinessUnit) {
       take: 5,
     }),
     prisma.invoice.findMany({
-      where: { ...buWhere, paymentStatus: { in: ['PENDING', 'PARTIAL'] }, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, ...NO_PROFORMA, paymentStatus: { in: ['PENDING', 'PARTIAL'] }, status: { not: InvoiceStatus.CANCELLED } },
       select: { amountDue: true, issueDate: true, client: { select: { name: true } } },
       orderBy: { issueDate: 'asc' },
       take: 8,
@@ -78,16 +81,16 @@ export async function getDashboard(businessUnit?: BusinessUnit) {
     }),
   ])
 
-  // Revenue chart: last 6 months by BU
+  // Revenue chart: last 6 months by BU (fiscal only)
   const revenueChart = await Promise.all(
     months.map(async (m) => {
       const [hax, koder] = await Promise.all([
         prisma.invoice.aggregate({
-          where: { businessUnit: 'HAX', issueDate: { gte: m.start, lte: m.end }, status: { not: InvoiceStatus.CANCELLED } },
+          where: { ...NO_PROFORMA, businessUnit: 'HAX', issueDate: { gte: m.start, lte: m.end }, status: { not: InvoiceStatus.CANCELLED } },
           _sum: { total: true },
         }),
         prisma.invoice.aggregate({
-          where: { businessUnit: 'KODER', issueDate: { gte: m.start, lte: m.end }, status: { not: InvoiceStatus.CANCELLED } },
+          where: { ...NO_PROFORMA, businessUnit: 'KODER', issueDate: { gte: m.start, lte: m.end }, status: { not: InvoiceStatus.CANCELLED } },
           _sum: { total: true },
         }),
       ])
@@ -137,7 +140,7 @@ export async function getPnL(period: string, businessUnit?: BusinessUnit) {
 
   const [revenue, expenses, collected] = await Promise.all([
     prisma.invoice.aggregate({
-      where: { ...buWhere, issueDate: { gte: start, lte: end }, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, ...NO_PROFORMA, issueDate: { gte: start, lte: end }, status: { not: InvoiceStatus.CANCELLED } },
       _sum: { total: true, taxAmount: true },
     }),
     prisma.expense.aggregate({
@@ -145,7 +148,7 @@ export async function getPnL(period: string, businessUnit?: BusinessUnit) {
       _sum: { total: true, taxAmount: true },
     }),
     prisma.payment.aggregate({
-      where: { paidAt: { gte: start, lte: end }, invoice: buWhere },
+      where: { paidAt: { gte: start, lte: end }, invoice: { ...buWhere, ...NO_PROFORMA } },
       _sum: { amount: true },
     }),
   ])
@@ -171,7 +174,7 @@ export async function getBalanceSheet(businessUnit?: BusinessUnit) {
 
   const [receivable, bankBalances, totalRevenue, totalExpenses] = await Promise.all([
     prisma.invoice.aggregate({
-      where: { ...buWhere, paymentStatus: { in: ['PENDING', 'PARTIAL'] }, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, ...NO_PROFORMA, paymentStatus: { in: ['PENDING', 'PARTIAL'] }, status: { not: InvoiceStatus.CANCELLED } },
       _sum: { amountDue: true },
     }),
     prisma.bankAccount.aggregate({
@@ -179,7 +182,7 @@ export async function getBalanceSheet(businessUnit?: BusinessUnit) {
       _sum: { balance: true },
     }),
     prisma.invoice.aggregate({
-      where: { ...buWhere, status: { not: InvoiceStatus.CANCELLED } },
+      where: { ...buWhere, ...NO_PROFORMA, status: { not: InvoiceStatus.CANCELLED } },
       _sum: { amountPaid: true },
     }),
     prisma.expense.aggregate({
@@ -204,7 +207,7 @@ export async function getCashFlow(period: string, businessUnit?: BusinessUnit) {
 
   const [inflows, outflows] = await Promise.all([
     prisma.payment.findMany({
-      where: { paidAt: { gte: start, lte: end }, invoice: buWhere },
+      where: { paidAt: { gte: start, lte: end }, invoice: { ...buWhere, ...NO_PROFORMA } },
       select: { amount: true, method: true, paidAt: true },
       orderBy: { paidAt: 'asc' },
     }),

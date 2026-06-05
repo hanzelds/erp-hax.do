@@ -323,10 +323,11 @@ export async function calculateItbisPeriod(period: string) {
     totalSalesItbis = salesAgg._sum.amount ?? 0
   }
 
-  // If no journal entries yet, fall back to summing taxAmount on approved/paid invoices
+  // If no journal entries yet, fall back to summing taxAmount on approved/paid fiscal invoices
   if (totalSalesItbis === 0) {
     const invoiceAgg = await prisma.invoice.aggregate({
       where: {
+        type: { not: 'PROFORMA' as any },   // excluir proformas del cálculo ITBIS
         status: { in: ['APPROVED', 'PAID'] as any },
         issueDate: {
           gte: new Date(year, month - 1, 1),

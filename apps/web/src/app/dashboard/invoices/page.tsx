@@ -17,6 +17,7 @@ import {
   Select,
   DatePicker,
 } from '@/components/ui'
+import { useAuthStore } from '@/lib/auth-store'
 
 type InvoiceStatus = 'DRAFT' | 'SENDING' | 'APPROVED' | 'REJECTED' | 'PAID' | 'CANCELLED'
 
@@ -64,6 +65,9 @@ const TYPE_OPTIONS = [
 ]
 
 export default function InvoicesPage() {
+  const { mode } = useAuthStore()
+  const isProforma = mode === 'proforma'
+
   const [search, setSearch]   = useState('')
   const [status, setStatus]   = useState('')
   const [bu, setBu]           = useState('')
@@ -73,20 +77,31 @@ export default function InvoicesPage() {
   const [page, setPage]       = useState(1)
 
   const { data, isLoading, isFetching, refetch } = useQuery<InvoicesResponse>({
-    queryKey: ['invoices', { search, status, bu, type, from, to, page }],
+    queryKey: ['invoices', { search, status, bu, type, from, to, page, mode }],
     queryFn: async () => {
-      const { data } = await api.get('/invoices', {
-        params: {
-          search: search || undefined,
-          status: status || undefined,
-          businessUnit: bu || undefined,
-          type: type || undefined,
-          from: from ? new Date(from).toISOString() : undefined,
-          to: to ? new Date(to).toISOString() : undefined,
-          page,
-          limit: 20,
-        },
-      })
+      const params: Record<string, any> = {
+        search: search || undefined,
+        status: status || undefined,
+        businessUnit: bu || undefined,
+        from: from ? new Date(from).toISOString() : undefined,
+        to: to ? new Date(to).toISOString() : undefined,
+        page,
+        limit: 20,
+      }
+
+      if (isProforma) {
+        // Modo proforma: mostrar solo PROFORMA (el filtro de tipo del usuario es ignorado)
+        params.type = 'PROFORMA'
+      } else {
+        // Modo fiscal: excluir PROFORMA por defecto; respetar filtro manual de tipo
+        if (type) {
+          params.type = type
+        } else {
+          params.excludeProforma = 'true'
+        }
+      }
+
+      const { data } = await api.get('/invoices', { params })
       return data
     },
   })
@@ -97,8 +112,8 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Facturación"
-        subtitle="Facturas electrónicas e-CF"
+        title={isProforma ? 'Facturación — Proforma' : 'Facturación'}
+        subtitle={isProforma ? 'Documentos proforma sin efecto fiscal' : 'Facturas electrónicas e-CF'}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={() => refetch()} disabled={isFetching}>
@@ -151,16 +166,18 @@ export default function InvoicesPage() {
             ))}
           </Select>
 
-          {/* Type filter */}
-          <Select
-            value={type}
-            onChange={(e) => { setType(e.target.value); setPage(1) }}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
-          >
-            {TYPE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </Select>
+          {/* Type filter — solo en modo fiscal */}
+          {!isProforma && (
+            <Select
+              value={type}
+              onChange={(e) => { setType(e.target.value); setPage(1) }}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
+            >
+              {TYPE_OPTIONS.filter(o => o.value !== 'PROFORMA').map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </Select>
+          )}
 
           {/* Date range */}
           <div className="flex items-center gap-1.5">

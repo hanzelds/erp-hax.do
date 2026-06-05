@@ -10,17 +10,25 @@ export interface User {
   permissions: string[]
 }
 
+export type ErpMode = 'normal' | 'proforma'
+
 interface AuthState {
   user: User | null
   token: string | null
   isAuthenticated: boolean
   isLoading: boolean
+  /** 'normal' = ERP fiscal completo; 'proforma' = sin NCF ni asientos */
+  mode: ErpMode
+  /** ID de la cuenta bancaria preferida en modo proforma */
+  proformaBankAccountId: string | null
 
-  login:   (email: string, password: string) => Promise<void>
-  logout:  () => void
-  setUser: (user: User) => void
+  login:                   (email: string, password: string) => Promise<void>
+  logout:                  () => void
+  setUser:                 (user: User) => void
+  setMode:                 (mode: ErpMode) => void
+  setProformaBankAccount:  (id: string | null) => void
   /** Check if the logged-in user has access to a module */
-  can:     (module: string) => boolean
+  can:                     (module: string) => boolean
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -30,6 +38,8 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       isAuthenticated: false,
       isLoading: false,
+      mode: 'normal',
+      proformaBankAccountId: null,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true })
@@ -47,11 +57,15 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         localStorage.removeItem('hax_token')
         localStorage.removeItem('hax_user')
-        set({ user: null, token: null, isAuthenticated: false })
+        set({ user: null, token: null, isAuthenticated: false, mode: 'normal' })
         window.location.href = '/auth/login'
       },
 
       setUser: (user: User) => set({ user }),
+
+      setMode: (mode: ErpMode) => set({ mode }),
+
+      setProformaBankAccount: (id: string | null) => set({ proformaBankAccountId: id }),
 
       can: (module: string) => {
         const { user } = get()
@@ -63,9 +77,11 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'hax_auth',
       partialize: (state) => ({
-        user:            state.user,
-        token:           state.token,
-        isAuthenticated: state.isAuthenticated,
+        user:                  state.user,
+        token:                 state.token,
+        isAuthenticated:       state.isAuthenticated,
+        mode:                  state.mode,
+        proformaBankAccountId: state.proformaBankAccountId,
       }),
     }
   )

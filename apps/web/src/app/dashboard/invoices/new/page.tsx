@@ -14,6 +14,7 @@ import { formatCurrency, cn } from '@/lib/utils'
 import { Button, Select, DatePicker } from '@/components/ui'
 import { HaxLogo } from '@/components/ui/HaxLogo'
 import NewContactPage from '@/components/NewContactPage'
+import { useAuthStore } from '@/lib/auth-store'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Client  { id: string; name: string; rnc: string | null; phone?: string | null; email?: string | null }
@@ -298,8 +299,10 @@ function LineRow({ line, index, products, forceExempt, showDelete, onChange, onD
 // Main Page
 // ─────────────────────────────────────────────────────────────────────────────
 export default function NewInvoicePage() {
-  const router = useRouter()
-  const qc     = useQueryClient()
+  const router     = useRouter()
+  const qc         = useQueryClient()
+  const { mode }   = useAuthStore()
+  const isProforma = mode === 'proforma'
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -307,7 +310,7 @@ export default function NewInvoicePage() {
   const [bu, setBu]                     = useState<'HAX' | 'KODER'>('HAX')
   const [issueDate, setIssueDate]       = useState(today)
   const [dueDate, setDueDate]           = useState('')
-  const [ncfType, setNcfType]           = useState('E31')
+  const [ncfType, setNcfType]           = useState(isProforma ? 'PROFORMA' : 'E31')
   const [paymentTerms, setPaymentTerms] = useState('NET_30')
   const [notes, setNotes]               = useState('')
   const [lines, setLines]               = useState<LineItem[]>([EMPTY_LINE()])
@@ -457,6 +460,16 @@ export default function NewInvoicePage() {
       </div>
 
       <div className="px-6 pb-28 max-w-5xl mx-auto space-y-4">
+
+        {/* ── Banner modo proforma ── */}
+        {isProforma && (
+          <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3">
+            <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse" />
+            <p className="text-amber-700 text-sm font-medium">
+              Modo Proforma activo — este documento no generará NCF, ITBIS ni asientos contables
+            </p>
+          </div>
+        )}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
 
           {/* ── Document Header ── */}
@@ -531,8 +544,15 @@ export default function NewInvoicePage() {
               {/* NCF type */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Tipo de documento</label>
-                <Select value={ncfType} onChange={e => setNcfType(e.target.value)}
-                  className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] bg-white">
+                <Select
+                  value={ncfType}
+                  onChange={e => { if (!isProforma) setNcfType(e.target.value) }}
+                  disabled={isProforma}
+                  className={cn(
+                    'w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] bg-white',
+                    isProforma ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed opacity-70' : 'border-gray-200',
+                  )}
+                >
                   <optgroup label="Fiscal (e-CF DGII)">
                     {NCF_TYPES.filter(n => n.fiscal).map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
                   </optgroup>
@@ -545,7 +565,7 @@ export default function NewInvoicePage() {
                     <span>⚠</span> Tipo {ncfType.replace('E', '')} — ITBIS exento en todos los ítems
                   </p>
                 )}
-                {ncfType === 'PROFORMA' && (
+                {ncfType === 'PROFORMA' && !isProforma && (
                   <p className="text-[11px] text-purple-600 mt-1.5 flex items-center gap-1">
                     <span>ℹ</span> Proforma — sin efecto fiscal ni asientos contables
                   </p>

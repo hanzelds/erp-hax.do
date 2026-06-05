@@ -9,7 +9,7 @@ import { formatDate, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader, Select, useConfirm } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
-const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Presupuestos', 'Activos Fijos', 'Nómina', 'Cuentas Contables', 'Correo', 'Plantillas PDF', 'Datos'] as const
+const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Modo Proforma', 'Presupuestos', 'Activos Fijos', 'Nómina', 'Cuentas Contables', 'Correo', 'Plantillas PDF', 'Datos'] as const
 type Tab = typeof TABS[number]
 
 export default function SettingsPage() {
@@ -39,6 +39,7 @@ export default function SettingsPage() {
       {tab === 'Usuarios'             && <UsersTab />}
       {tab === 'Facturación e-CF'     && <EcfTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Facturación General'  && <GeneralTab isAdmin={user?.role === 'ADMIN'} />}
+      {tab === 'Modo Proforma'        && <ProformaTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Presupuestos'         && <BudgetsTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Activos Fijos'        && <FixedAssetsTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Nómina'               && <PayrollTab isAdmin={user?.role === 'ADMIN'} />}
@@ -777,6 +778,109 @@ function GeneralTab({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
     </Card>
+  )
+}
+
+// ── Proforma Tab ─────────────────────────────────────────────
+
+function ProformaTab({ isAdmin }: { isAdmin: boolean }) {
+  const { mode, setMode, proformaBankAccountId, setProformaBankAccount } = useAuthStore()
+  const isProforma = mode === 'proforma'
+
+  const { data: bankAccounts = [], isLoading: loadingBanks } = useQuery<{ id: string; name: string; bankName: string }[]>({
+    queryKey: ['bank-accounts-list'],
+    queryFn: async () => {
+      const { data } = await api.get('/bank-accounts', { params: { limit: 100 } })
+      return data.data ?? data
+    },
+  })
+
+  return (
+    <div className="space-y-4">
+      {/* Estado actual del modo */}
+      <Card>
+        <CardHeader
+          title="Modo de operación"
+          subtitle="Alterna entre ERP Fiscal completo y modo Proforma sin asientos fiscales"
+        />
+        <div className="flex items-start gap-4 p-1">
+          {/* Fiscal */}
+          <button
+            onClick={() => setMode('normal')}
+            className={cn(
+              'flex-1 text-left p-4 rounded-xl border-2 transition-all',
+              !isProforma
+                ? 'border-emerald-500 bg-emerald-50'
+                : 'border-gray-200 bg-white hover:border-gray-300',
+            )}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-gray-800">ERP Fiscal</span>
+              {!isProforma && <span className="text-[11px] text-emerald-600 font-medium bg-emerald-100 px-2 py-0.5 rounded-full">Activo</span>}
+            </div>
+            <p className="text-xs text-gray-500">NCF · Asientos automáticos · Reportes DGII · ITBIS</p>
+          </button>
+
+          {/* Proforma */}
+          <button
+            onClick={() => setMode('proforma')}
+            className={cn(
+              'flex-1 text-left p-4 rounded-xl border-2 transition-all',
+              isProforma
+                ? 'border-amber-500 bg-amber-50'
+                : 'border-gray-200 bg-white hover:border-gray-300',
+            )}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-gray-800">ERP Proforma</span>
+              {isProforma && <span className="text-[11px] text-amber-700 font-medium bg-amber-100 px-2 py-0.5 rounded-full">Activo</span>}
+            </div>
+            <p className="text-xs text-gray-500">Sin NCF · Sin asientos · Sin ITBIS · Dark mode</p>
+          </button>
+        </div>
+
+        <p className="text-xs text-gray-400 mt-3 px-1">
+          Este ajuste es por sesión y se guarda localmente. Puedes cambiarlo también desde el toggle en la barra lateral.
+        </p>
+      </Card>
+
+      {/* Cuenta banco proforma */}
+      <Card>
+        <CardHeader
+          title="Cuenta bancaria para modo Proforma"
+          subtitle="Cuenta por defecto para documentos y cobros en modo Proforma"
+        />
+        {loadingBanks ? (
+          <div className="animate-pulse bg-gray-100 rounded-xl h-12" />
+        ) : bankAccounts.length === 0 ? (
+          <p className="text-sm text-gray-400">No hay cuentas bancarias configuradas.</p>
+        ) : (
+          <div className="space-y-3">
+            <F label="Cuenta bancaria proforma">
+              <Select
+                value={proformaBankAccountId ?? ''}
+                onChange={e => setProformaBankAccount(e.target.value || null)}
+                disabled={!isAdmin}
+                className={cn(
+                  'w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] bg-white',
+                  !isAdmin && 'opacity-60 cursor-not-allowed',
+                )}
+              >
+                <option value="">— Sin cuenta específica —</option>
+                {bankAccounts.map(acc => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name}{acc.bankName ? ` · ${acc.bankName}` : ''}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-gray-400 mt-1">
+                Se guarda localmente por dispositivo. Cada usuario puede tener su propia preferencia.
+              </p>
+            </F>
+          </div>
+        )}
+      </Card>
+    </div>
   )
 }
 

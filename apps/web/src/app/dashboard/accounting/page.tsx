@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Lock, TrendingDown, TrendingUp, ShieldOff, ArrowRightLeft } from 'lucide-react'
+import { BookOpen, Lock, TrendingDown, TrendingUp } from 'lucide-react'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, Skeleton, EmptyState, useConfirm } from '@/components/ui'
@@ -37,60 +37,9 @@ const ACCOUNT_TYPE_LABEL: Record<string, string> = {
 export default function AccountingPage() {
   const [tab, setTab] = useState<Tab>('journal')
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7))
-  const { user, mode, setMode } = useAuthStore()
+  const { user, mode } = useAuthStore()
   const isAdmin    = user?.role === 'ADMIN'
   const isProforma = mode === 'proforma'
-
-  // En modo proforma: mostrar panel de bloqueo — la contabilidad es fiscal
-  if (isProforma) {
-    return (
-      <div className="space-y-5">
-        <PageHeader
-          title="Contabilidad"
-          subtitle="Módulo fiscal — no aplica en modo proforma"
-        />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="max-w-md text-center space-y-6 px-4">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto">
-              <ShieldOff className="w-8 h-8 text-amber-400" />
-            </div>
-            <div>
-              <h2 className="text-white/80 text-xl font-semibold mb-2">
-                Contabilidad no disponible en modo Proforma
-              </h2>
-              <p className="text-white/40 text-sm leading-relaxed">
-                Los documentos proforma no generan asientos contables, no consumen
-                secuencias NCF ni afectan el ITBIS. El módulo de contabilidad opera
-                exclusivamente con documentos fiscales.
-              </p>
-            </div>
-            <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 text-left space-y-2">
-              <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3">
-                Para acceder a este módulo debes:
-              </p>
-              {[
-                'Cambiar al modo ERP Fiscal',
-                'Los asientos se generan automáticamente al emitir facturas',
-                'El ITBIS se calcula por período sobre facturas fiscales',
-              ].map((t, i) => (
-                <div key={i} className="flex items-start gap-2.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5" />
-                  <p className="text-white/40 text-sm">{t}</p>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setMode('normal')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white/80 text-sm font-medium hover:bg-white/15 transition-all"
-            >
-              <ArrowRightLeft className="w-4 h-4" />
-              Cambiar a modo Fiscal
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-5">
@@ -113,13 +62,13 @@ export default function AccountingPage() {
         ))}
       </div>
 
-      {tab === 'journal'       && <JournalTab period={period} />}
+      {tab === 'journal'       && <JournalTab period={period} proformaOnly={isProforma} />}
       {tab === 'accounts'      && <AccountsTab />}
-      {tab === 'trial-balance' && <TrialBalanceTab period={period} />}
-      {tab === 'balance-sheet' && <BalanceSheetTab period={period} />}
-      {tab === 'pnl'           && <PnLTab period={period} />}
-      {tab === 'margins'       && <MarginsTab year={parseInt(period.slice(0, 4))} />}
-      {tab === 'itbis'         && <ItbisTab />}
+      {tab === 'trial-balance' && <TrialBalanceTab period={period} proformaOnly={isProforma} />}
+      {tab === 'balance-sheet' && <BalanceSheetTab period={period} proformaOnly={isProforma} />}
+      {tab === 'pnl'           && <PnLTab period={period} proformaOnly={isProforma} />}
+      {tab === 'margins'       && <MarginsTab year={parseInt(period.slice(0, 4))} proformaOnly={isProforma} />}
+      {tab === 'itbis'         && <ItbisTab proformaOnly={isProforma} />}
       {tab === 'periods'       && <PeriodsTab isAdmin={isAdmin} />}
     </div>
   )
@@ -127,38 +76,67 @@ export default function AccountingPage() {
 
 // ── Journal ───────────────────────────────────────────────────
 
-function JournalTab({ period }: { period: string }) {
+function JournalTab({ period, proformaOnly }: { period: string; proformaOnly: boolean }) {
   const { data, isLoading } = useQuery<any>({
-    queryKey: ['journal', period],
+    queryKey: ['journal', period, proformaOnly],
     queryFn: async () => {
-      const { data } = await api.get('/accounting/journal', { params: { period, limit: 200 } })
+      const { data } = await api.get('/accounting/journal', {
+        params: { period, limit: 200, ...(proformaOnly ? { proformaOnly: 'true' } : {}) },
+      })
       return data.data ?? data
     },
   })
   const entries: any[] = Array.isArray(data) ? data : (data?.data ?? [])
   if (isLoading) return <Skeletons />
-  if (!entries.length) return <EmptyState icon={<BookOpen className="w-5 h-5" />} title="Sin asientos" description="No hay asientos para este período." />
+  if (!entries.length) return (
+    <EmptyState
+      icon={<BookOpen className="w-5 h-5" />}
+      title={proformaOnly ? 'Sin cobros proforma' : 'Sin asientos'}
+      description={proformaOnly ? 'No hay cobros registrados en facturas proforma para este período.' : 'No hay asientos para este período.'}
+    />
+  )
   return (
     <Card padding="sm">
+      {proformaOnly && (
+        <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-700 font-medium">
+          Movimientos proforma — cobros sobre facturas proforma (sin asientos de doble entrada)
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-gray-100">
-            {['Tipo', 'Descripción', 'Débito', 'Crédito', 'Monto', 'Período', 'BU'].map((h) => (
+            {proformaOnly
+              ? ['Factura', 'Cliente', 'Método', 'Referencia', 'Monto', 'Fecha', 'BU']
+              : ['Tipo', 'Descripción', 'Débito', 'Crédito', 'Monto', 'Período', 'BU']
+            }.map((h) => (
               <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2.5">{h}</th>
             ))}
           </tr></thead>
           <tbody>
-            {entries.map((e: any) => (
-              <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50/60">
-                <td className="px-3 py-2.5"><span className={cn('px-2 py-0.5 rounded text-xs font-medium', TYPE_COLOR[e.type] ?? 'bg-gray-100 text-gray-600')}>{TYPE_LABEL[e.type] ?? e.type}</span></td>
-                <td className="px-3 py-2.5 text-xs text-gray-700 max-w-[200px] truncate">{e.description}</td>
-                <td className="px-3 py-2.5 text-xs font-mono text-gray-500">{e.debitAccount?.code}</td>
-                <td className="px-3 py-2.5 text-xs font-mono text-gray-500">{e.creditAccount?.code}</td>
-                <td className="px-3 py-2.5 text-xs font-semibold text-[#293c4f]">{formatCurrency(e.amount)}</td>
-                <td className="px-3 py-2.5 text-xs font-mono text-gray-400">{e.period}</td>
-                <td className="px-3 py-2.5 text-xs font-medium" style={e.businessUnit === 'HAX' ? { color: '#293c4f' } : { color: '#475569' }}>{e.businessUnit}</td>
-              </tr>
-            ))}
+            {proformaOnly
+              ? entries.map((e: any) => (
+                  <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50/60">
+                    <td className="px-3 py-2.5 text-xs font-mono font-semibold text-[#293c4f]">{e.invoice?.number}</td>
+                    <td className="px-3 py-2.5 text-xs text-gray-700 max-w-[180px] truncate">{e.invoice?.client?.name}</td>
+                    <td className="px-3 py-2.5 text-xs text-gray-500">{e.method}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-gray-400">{e.reference ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-xs font-semibold text-[#293c4f]">{formatCurrency(e.amount)}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-gray-400">{formatDate(e.paidAt)}</td>
+                    <td className="px-3 py-2.5 text-xs font-medium" style={e.invoice?.businessUnit === 'HAX' ? { color: '#293c4f' } : { color: '#475569' }}>{e.invoice?.businessUnit}</td>
+                  </tr>
+                ))
+              : entries.map((e: any) => (
+                  <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50/60">
+                    <td className="px-3 py-2.5"><span className={cn('px-2 py-0.5 rounded text-xs font-medium', TYPE_COLOR[e.type] ?? 'bg-gray-100 text-gray-600')}>{TYPE_LABEL[e.type] ?? e.type}</span></td>
+                    <td className="px-3 py-2.5 text-xs text-gray-700 max-w-[200px] truncate">{e.description}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-gray-500">{e.debitAccount?.code}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-gray-500">{e.creditAccount?.code}</td>
+                    <td className="px-3 py-2.5 text-xs font-semibold text-[#293c4f]">{formatCurrency(e.amount)}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-gray-400">{e.period}</td>
+                    <td className="px-3 py-2.5 text-xs font-medium" style={e.businessUnit === 'HAX' ? { color: '#293c4f' } : { color: '#475569' }}>{e.businessUnit}</td>
+                  </tr>
+                ))
+            }
           </tbody>
         </table>
       </div>
@@ -197,10 +175,15 @@ function AccountsTab() {
 
 // ── Trial Balance ─────────────────────────────────────────────
 
-function TrialBalanceTab({ period }: { period: string }) {
+function TrialBalanceTab({ period, proformaOnly }: { period: string; proformaOnly: boolean }) {
   const { data, isLoading, error } = useQuery<any>({
-    queryKey: ['trial-balance', period],
-    queryFn: async () => { const { data } = await api.get('/accounting/trial-balance', { params: { period } }); return data.data ?? data },
+    queryKey: ['trial-balance', period, proformaOnly],
+    queryFn: async () => {
+      const { data } = await api.get('/accounting/trial-balance', {
+        params: { period, ...(proformaOnly ? { proformaOnly: 'true' } : {}) },
+      })
+      return data.data ?? data
+    },
     retry: false,
   })
   if (isLoading) return <Skeletons />
@@ -248,10 +231,15 @@ function TrialBalanceTab({ period }: { period: string }) {
 
 // ── Balance Sheet ─────────────────────────────────────────────
 
-function BalanceSheetTab({ period }: { period: string }) {
+function BalanceSheetTab({ period, proformaOnly }: { period: string; proformaOnly: boolean }) {
   const { data, isLoading } = useQuery<any>({
-    queryKey: ['balance-sheet', period],
-    queryFn: async () => { const { data } = await api.get('/accounting/balance-sheet', { params: { period } }); return data.data ?? data },
+    queryKey: ['balance-sheet', period, proformaOnly],
+    queryFn: async () => {
+      const { data } = await api.get('/accounting/balance-sheet', {
+        params: { period, ...(proformaOnly ? { proformaOnly: 'true' } : {}) },
+      })
+      return data.data ?? data
+    },
   })
   if (isLoading) return <Skeletons />
   if (!data) return null
@@ -293,10 +281,15 @@ function BalanceSheetTab({ period }: { period: string }) {
 
 // ── P&L ───────────────────────────────────────────────────────
 
-function PnLTab({ period }: { period: string }) {
+function PnLTab({ period, proformaOnly }: { period: string; proformaOnly: boolean }) {
   const { data, isLoading } = useQuery<any>({
-    queryKey: ['pnl', period],
-    queryFn: async () => { const { data } = await api.get('/accounting/pnl', { params: { period } }); return data.data ?? data },
+    queryKey: ['pnl', period, proformaOnly],
+    queryFn: async () => {
+      const { data } = await api.get('/accounting/pnl', {
+        params: { period, ...(proformaOnly ? { proformaOnly: 'true' } : {}) },
+      })
+      return data.data ?? data
+    },
   })
   if (isLoading) return <Skeletons />
   if (!data) return null
@@ -337,10 +330,15 @@ function PnLTab({ period }: { period: string }) {
 
 // ── Margins ───────────────────────────────────────────────────
 
-function MarginsTab({ year }: { year: number }) {
+function MarginsTab({ year, proformaOnly }: { year: number; proformaOnly: boolean }) {
   const { data, isLoading } = useQuery<any>({
-    queryKey: ['margins', year],
-    queryFn: async () => { const { data } = await api.get('/accounting/margins', { params: { year } }); return data.data ?? data },
+    queryKey: ['margins', year, proformaOnly],
+    queryFn: async () => {
+      const { data } = await api.get('/accounting/margins', {
+        params: { year, ...(proformaOnly ? { proformaOnly: 'true' } : {}) },
+      })
+      return data.data ?? data
+    },
   })
   if (isLoading) return <Skeletons />
   if (!data) return null
@@ -389,7 +387,21 @@ const ITBIS_STATUS_COLOR: Record<string, string> = {
   FILED: 'bg-purple-100 text-purple-700', PAID: 'bg-green-100 text-green-700', OVERDUE: 'bg-red-100 text-red-700',
 }
 
-function ItbisTab() {
+function ItbisTab({ proformaOnly }: { proformaOnly: boolean }) {
+  if (proformaOnly) {
+    return (
+      <Card>
+        <div className="p-8 text-center space-y-3">
+          <p className="text-sm font-semibold text-gray-600">ITBIS — Modo Proforma</p>
+          <p className="text-3xl font-bold text-gray-300">RD$ 0.00</p>
+          <p className="text-xs text-gray-400 max-w-xs mx-auto">
+            Las facturas proforma son exentas de ITBIS por diseño.
+            No se genera ITBIS por cobrar ni ITBIS por pagar en este modo.
+          </p>
+        </div>
+      </Card>
+    )
+  }
   const qc = useQueryClient()
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'ADMIN'

@@ -6,8 +6,14 @@ export async function chartOfAccounts(req: Request, res: Response) {
   sendSuccess(res, await svc.getChartOfAccounts())
 }
 export async function journalEntries(req: Request, res: Response) {
-  const result = await svc.getJournalEntries(req.query)
-  sendPaginated(res, result.data, result.total, result.page, result.limit)
+  const isProforma = req.query.proformaOnly === 'true'
+  if (isProforma) {
+    const result = await svc.getProformaJournal(req.query)
+    sendPaginated(res, result.data, result.total, result.page, result.limit)
+  } else {
+    const result = await svc.getJournalEntries(req.query)
+    sendPaginated(res, result.data, result.total, result.page, result.limit)
+  }
 }
 export async function ledger(req: Request, res: Response) {
   sendSuccess(res, await svc.getLedger(req.params.code, req.query.period as string | undefined))
@@ -17,21 +23,43 @@ export async function trialBalance(req: Request, res: Response) {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })()
-  sendSuccess(res, await svc.getTrialBalance(period))
+  const isProforma = req.query.proformaOnly === 'true'
+  if (isProforma) {
+    sendSuccess(res, await svc.getProformaTrialBalance(period, req.query.businessUnit as string | undefined))
+  } else {
+    sendSuccess(res, await svc.getTrialBalance(period))
+  }
 }
 export async function balanceSheet(req: Request, res: Response) {
-  sendSuccess(res, await svc.getBalanceSheet(req.query.period as string | undefined))
+  const isProforma = req.query.proformaOnly === 'true'
+  if (isProforma) {
+    sendSuccess(res, await svc.getProformaBalanceSheet(req.query.businessUnit as string | undefined))
+  } else {
+    sendSuccess(res, await svc.getBalanceSheet(req.query.period as string | undefined))
+  }
 }
 export async function pnl(req: Request, res: Response) {
   const period = (req.query.period as string) || (() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })()
-  sendSuccess(res, await svc.getPnL(period, req.query.businessUnit as string | undefined))
+  const bu = req.query.businessUnit as string | undefined
+  const isProforma = req.query.proformaOnly === 'true'
+  if (isProforma) {
+    sendSuccess(res, await svc.getProformaPnL(period, bu))
+  } else {
+    sendSuccess(res, await svc.getPnL(period, bu))
+  }
 }
 export async function margins(req: Request, res: Response) {
   const year = parseInt(req.query.year as string) || new Date().getFullYear()
-  sendSuccess(res, await svc.getMargins(year, req.query.businessUnit as string | undefined))
+  const bu   = req.query.businessUnit as string | undefined
+  const isProforma = req.query.proformaOnly === 'true'
+  if (isProforma) {
+    sendSuccess(res, await svc.getProformaMargins(year, bu))
+  } else {
+    sendSuccess(res, await svc.getMargins(year, bu))
+  }
 }
 export async function fiscalPeriods(req: Request, res: Response) {
   sendSuccess(res, await svc.getFiscalPeriods())

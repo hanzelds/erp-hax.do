@@ -429,3 +429,215 @@ export async function checkOverduePeriods() {
   })
   return { marked: updated.count }
 }
+
+// ══════════════════════════════════════════════════════════════
+// FUNCIONES PROFORMA — cálculos basados en facturas PROFORMA
+// (no en asientos de diario, que proforma no genera)
+// ══════════════════════════════════════════════════════════════
+
+function proformaPeriodWhere(period: string) {
+  const [year, month] = period.split('-').map(Number)
+  return {
+    start: new Date(year, month - 1, 1),
+    end:   new Date(year, month, 0, 23, 59, 59),
+  }
+}
+
+/** Movimientos proforma: cobros registrados sobre facturas PROFORMA */
+export async function getProformaJournal(query: any) {
+  const { page, limit, skip } = parsePagination(query)
+  const invoiceFilter: any = { type: 'PROFORMA' }
+  if (query.businessUnit) invoiceFilter.businessUnit = query.businessUnit
+
+  const where: any = { invoice: invoiceFilter }
+  if (query.period) {
+    const { start, end } = proformaPeriodWhere(query.period)
+    where.paidAt = { gte: start, lte: end }
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.payment.findMany({
+      where, skip, take: limit,
+      orderBy: { paidAt: 'desc' },
+      include: {
+        invoice: {
+          select: { number: true, businessUnit: true, client: { select: { name: true } } },
+        },
+      },
+    }),
+    prisma.payment.count({ where }),
+  ])
+  return { data, total, page, limit }
+}
+
+/** Balance de comprobación proforma: resumen de facturas PROFORMA del período */
+export async function getProformaTrialBalance(period: string, businessUnit?: string) {
+  const { start, end } = proformaPeriodWhere(period)
+  const buWhere: any = businessUnit ? { businessUnit } : {}
+
+  const [emitted, collected, pending, cancelled] = await Promise.all([
+    prisma.invoice.aggregate({
+      where: { ...buWhere, type: 'PROFORMA', issueDate: { gte: start, lte: end }, status: { not: 'CANCELLED' as any } },
+      _sum: { total: true, taxAmount: true }, _count: { id: true },
+    }),
+    prisma.payment.aggregate({
+      where: { paidAt: { gte: start, lte: end }, invoice: { ...buWhere, type: 'PROFORMA' } },
+      _sum: { amount: true }, _count: { id: true },
+    }),
+    prisma.invoice.aggregate({
+      where: { ...buWhere, type: 'PROFORMA', paymentStatus: { in: ['PENDING', 'PARTIAL'] as any }, status: { not: 'CANCELLED' as any } },
+      _sum: { amountDue: true }, _count: { id: true },
+    }),
+    prisma.invoice.count({
+      where: { ...buWhere, type: 'PROFORMA', issueDate: { gte: start, lte: end }, status: 'CANCELLED' as any },
+    }),
+  ])
+
+  const totalEmitted   = emitted._sum.total ?? 0
+  const totalCollected = collected._sum.amount ?? 0
+
+  const lines = [
+    { accountCode: 'PRO-EMI', accountName: 'Proformas emitidas',         type: 'INCOME',  totalDebit: 0,              totalCredit: totalEmitted,   balance: totalEmitted },
+    { accountCode: 'PRO-COB', accountName: 'Cobros recibidos',           type: 'ASSET',   totalDebit: totalCollected, totalCredit: 0,              balance: totalCollected },
+    { accountCode: 'PRO-CXC', accountName: 'Cuentas por cobrar',         type: 'ASSET',   totalDebit: pending._sum.amountDue ?? 0, totalCredit: 0, balance: pending._sum.amountDue ?? 0 },
+  ].filter(l => l.totalDebit > 0 || l.totalCredit > 0)
+
+  return {
+    period,
+    lines,
+    totalDebit:  lines.reduce((s, l) => s + l.totalDebit, 0),
+    totalCredit: lines.reduce((s, l) => s + l.totalCredit, 0),
+    balanced: true,
+    meta: {
+      invoicesEmitted: emitted._count.id,
+      invoicesCancelled: cancelled,
+      paymentCount: collected._count.id,
+      pendingCount: pending._count.id,
+    },
+  }
+}
+
+/** Balance de situación proforma: activos (CxC + cobrado) vs patrimonio */
+export async function getProformaBalanceSheet(businessUnit?: string) {
+  const buWhere: any = businessUnit ? { businessUnit } : {}
+
+  const [receivable, paid] = await Promise.all([
+    prisma.invoice.aggregate({
+      where: { ...buWhere, type: 'PROFORMA', paymentStatus: { in: ['PENDING', 'PARTIAL'] as any }, status: { not: 'CANCELLED' as any } },
+      _sum: { amountDue: true },
+    }),
+    prisma.invoice.aggregate({
+      where: { ...buWhere, type: 'PROFORMA', status: { not: 'CANCELLED' as any } },
+      _sum: { amountPaid: true },
+    }),
+  ])
+
+  const cxc     = receivable._sum.amountDue ?? 0
+  const cobrado = paid._sum.amountPaid ?? 0
+
+  return {
+    assets: {
+      items: [
+        ...(cobrado > 0 ? [{ id: 'cobrado', code: 'CJA', name: 'Cobrado (proforma)',          balance: cobrado }] : []),
+        ...(cxc > 0     ? [{ id: 'cxc',     code: 'CXC', name: 'Por cobrar (proforma)',        balance: cxc     }] : []),
+      ],
+      total: cobrado + cxc,
+    },
+    liabilities: { items: [], total: 0 },
+    equity: {
+      items: cobrado > 0 ? [{ id: 'ing', code: 'ING', name: 'Ingresos proforma cobrados', balance: cobrado }] : [],
+      netWorth: cobrado,
+    },
+  }
+}
+
+/** P&G proforma: ingresos de facturas PROFORMA vs gastos del período */
+export async function getProformaPnL(period: string, businessUnit?: string) {
+  const { start, end } = proformaPeriodWhere(period)
+  const buWhere: any = businessUnit ? { businessUnit } : {}
+
+  const [revenue, expenses, collected] = await Promise.all([
+    prisma.invoice.aggregate({
+      where: { ...buWhere, type: 'PROFORMA', issueDate: { gte: start, lte: end }, status: { not: 'CANCELLED' as any } },
+      _sum: { subtotal: true, total: true },
+    }),
+    prisma.expense.aggregate({
+      where: { ...buWhere, expenseDate: { gte: start, lte: end }, status: { not: 'CANCELLED' as any } },
+      _sum: { total: true },
+    }),
+    prisma.payment.aggregate({
+      where: { paidAt: { gte: start, lte: end }, invoice: { ...buWhere, type: 'PROFORMA' } },
+      _sum: { amount: true },
+    }),
+  ])
+
+  const grossRevenue  = revenue._sum.total ?? 0
+  const totalExpenses = expenses._sum.total ?? 0
+  const netIncome     = grossRevenue - totalExpenses
+  const netMargin     = grossRevenue > 0 ? parseFloat(((netIncome / grossRevenue) * 100).toFixed(2)) : 0
+
+  return {
+    period,
+    businessUnit: businessUnit ?? 'ALL',
+    income: {
+      items: grossRevenue > 0 ? [{ id: 'pro', code: 'PRO', name: 'Ingresos proforma', balance: grossRevenue }] : [],
+      total: grossRevenue,
+    },
+    expenses: {
+      items: totalExpenses > 0 ? [{ id: 'gas', code: 'GAS', name: 'Gastos del período', balance: totalExpenses }] : [],
+      total: totalExpenses,
+    },
+    netIncome,
+    netMargin,
+    collectedRevenue: collected._sum.amount ?? 0,
+  }
+}
+
+/** Márgenes proforma: tendencia mensual de ingresos PROFORMA */
+export async function getProformaMargins(year: number, businessUnit?: string) {
+  const buWhere: any = businessUnit ? { businessUnit } : {}
+  const months = Array.from({ length: 12 }, (_, i) => i + 1)
+
+  const rows = await Promise.all(
+    months.map(async (month) => {
+      const start  = new Date(year, month - 1, 1)
+      const end    = new Date(year, month, 0, 23, 59, 59)
+      const period = `${year}-${String(month).padStart(2, '0')}`
+
+      const [rev, exp] = await Promise.all([
+        prisma.invoice.aggregate({
+          where: { ...buWhere, type: 'PROFORMA', issueDate: { gte: start, lte: end }, status: { not: 'CANCELLED' as any } },
+          _sum: { total: true },
+        }),
+        prisma.expense.aggregate({
+          where: { ...buWhere, expenseDate: { gte: start, lte: end }, status: { not: 'CANCELLED' as any } },
+          _sum: { total: true },
+        }),
+      ])
+
+      const revenue  = rev._sum.total ?? 0
+      const expenses = exp._sum.total ?? 0
+      const net      = revenue - expenses
+      return {
+        period, month, revenue, expenses, net,
+        margin: revenue > 0 ? parseFloat(((net / revenue) * 100).toFixed(2)) : 0,
+      }
+    }),
+  )
+
+  const totalRevenue  = rows.reduce((s, r) => s + r.revenue, 0)
+  const totalExpenses = rows.reduce((s, r) => s + r.expenses, 0)
+  const totalNet      = totalRevenue - totalExpenses
+
+  return {
+    year,
+    businessUnit: businessUnit ?? 'ALL',
+    monthly: rows.filter((r) => r.revenue > 0 || r.expenses > 0),
+    ytd: {
+      revenue:  totalRevenue,
+      expenses: totalExpenses,
+      net:      totalNet,
+      margin:   totalRevenue > 0 ? parseFloat(((totalNet / totalRevenue) * 100).toFixed(2)) : 0,
+    },
+  }
+}

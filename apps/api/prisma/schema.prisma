@@ -514,7 +514,8 @@ model Employee {
   terminatedAt DateTime?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  payrollItems PayrollItem[]
+  payrollItems      PayrollItem[]
+  commissionPlans   CommissionPlan[]
 
   @@index([businessUnit])
   @@index([type, isActive])
@@ -1108,4 +1109,62 @@ enum BudgetStatus {
 enum ReconciliationStatus {
   OPEN
   CLOSED
+}
+
+// ── Commissions ──────────────────────────────────────────────
+
+enum CommissionBase {
+  TOTAL        // Total factura incluyendo ITBIS
+  SUBTOTAL     // Subtotal sin ITBIS
+  COLLECTED    // Solo lo efectivamente cobrado (pagos recibidos)
+}
+
+enum CommissionEntryStatus {
+  DRAFT
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+model CommissionPlan {
+  id           String        @id @default(cuid())
+  name         String
+  beneficiary  String
+  employeeId   String?
+  businessUnit BusinessUnit
+  rate         Float
+  base         CommissionBase @default(COLLECTED)
+  minAmount    Float?
+  isActive     Boolean       @default(true)
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  entries  CommissionEntry[]
+  employee Employee?         @relation(fields: [employeeId], references: [id])
+
+  @@index([businessUnit, isActive])
+  @@map("commission_plans")
+}
+
+model CommissionEntry {
+  id                String                @id @default(cuid())
+  planId            String
+  period            String
+  baseAmount        Float
+  rate              Float
+  amount            Float
+  invoiceCount      Int                   @default(0)
+  status            CommissionEntryStatus @default(DRAFT)
+  sentToPayroll     Boolean               @default(false)
+  payrollAdditionId String?
+  notes             String?
+  calculatedAt      DateTime              @default(now())
+  approvedAt        DateTime?
+
+  plan CommissionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, period])
+  @@index([period, status])
+  @@map("commission_entries")
 }

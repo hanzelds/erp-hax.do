@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, Users, Receipt, CreditCard, BarChart3,
   BookOpen, UserCheck, Settings, Truck, Package, Landmark,
-  ShoppingCart, Monitor, PiggyBank, Layers, ClipboardList,
+  ShoppingCart, Monitor, PiggyBank, Layers, ClipboardList, TrendingUp,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -56,7 +56,8 @@ export const navigation: NavSection[] = [
   {
     title: 'Operaciones',
     items: [
-      { label: 'Nómina',       href: '/dashboard/payroll',  icon: UserCheck,     module: 'payroll',   description: 'Empleados y pagos' },
+      { label: 'Nómina',       href: '/dashboard/payroll',      icon: UserCheck,  module: 'payroll',      description: 'Empleados y pagos' },
+      { label: 'Comisiones',   href: '/dashboard/commissions',  icon: TrendingUp, module: 'commissions',  description: 'Comisiones por ventas y cobranza' },
     ],
   },
   {

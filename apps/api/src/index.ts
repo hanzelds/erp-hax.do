@@ -30,6 +30,7 @@ import budgetRoutes          from './modules/budgets/budgets.routes'
 import bankReconciliationRoutes from './modules/bank-reconciliation/bank-reconciliation.routes'
 import reportRoutes          from './modules/reports/reports.routes'
 import payrollRoutes          from './modules/payroll/payroll.routes'
+import commissionsRoutes      from './modules/commissions/commissions.routes'
 import settingsRoutes        from './modules/settings/settings.routes'
 import notificationRoutes   from './modules/notifications/notifications.routes'
 import pdfTemplateRoutes    from './modules/pdf-templates/pdf-templates.routes'
@@ -148,6 +149,7 @@ app.use('/api/budgets',            apiLimiter,   budgetRoutes)
 app.use('/api/bank-reconciliation',apiLimiter,   bankReconciliationRoutes)
 app.use('/api/reports',            apiLimiter,   reportRoutes)
 app.use('/api/payroll',            apiLimiter,   payrollRoutes)
+app.use('/api/commissions',        apiLimiter,   commissionsRoutes)
 app.use('/api/settings',           apiLimiter,   settingsRoutes)
 app.use('/api/notifications',      apiLimiter,   notificationRoutes)
 app.use('/api/pdf-templates',      apiLimiter,   pdfTemplateRoutes)

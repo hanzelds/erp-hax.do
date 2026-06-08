@@ -5,7 +5,7 @@ import { UserRole } from '@prisma/client'
 // ── Module permissions ────────────────────────────────────────
 export const ALL_MODULES = [
   'dashboard', 'invoices', 'quotes', 'clients', 'payments',
-  'expenses', 'suppliers', 'products', 'payroll', 'fixed-assets',
+  'expenses', 'suppliers', 'products', 'payroll', 'commissions', 'fixed-assets',
   'accounting', 'bank-accounts', 'bank-reconciliation', 'budgets',
   'reports', 'settings',
 ]

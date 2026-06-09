@@ -270,6 +270,7 @@ async function buildInvoiceTemplateData(invoice: any) {
       type: invoice.type === 'NOTA_CREDITO'    ? 'NOTA DE CRÉDITO' :
             invoice.type === 'CONSUMO'          ? 'FACTURA CONSUMIDOR FINAL' :
             invoice.type === 'REGIMEN_ESPECIAL' ? 'FACTURA RÉGIMEN ESPECIAL (B14)' :
+            invoice.type === 'PROFORMA'         ? 'DOCUMENTO PROFORMA' :
             'FACTURA DE CRÉDITO FISCAL',
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,
@@ -296,9 +297,10 @@ async function buildInvoiceTemplateData(invoice: any) {
       total:      i.total,
       isExempt:   i.isExempt,
     })),
-    isApproved: invoice.status === 'APPROVED',
+    isApproved:  invoice.status === 'APPROVED',
     isCancelled: invoice.status === 'CANCELLED',
-    isPaid: invoice.paymentStatus === 'PAID' || invoice.status === 'PAID',
+    isPaid:      invoice.paymentStatus === 'PAID' || invoice.status === 'PAID',
+    isProforma:  invoice.type === 'PROFORMA',
     originalNcf: invoice.originalInvoice?.ncf ?? null,
     generatedAt: new Date().toLocaleDateString('es-DO'),
   }

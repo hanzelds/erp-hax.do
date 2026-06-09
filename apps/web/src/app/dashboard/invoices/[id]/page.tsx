@@ -235,7 +235,7 @@ export default function InvoiceDetailPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  {['Descripción', 'Cant.', 'Precio unit.', 'ITBIS', 'Total'].map((h) => (
+                  {['Descripción', 'Cant.', 'Precio unit.', ...(invoice.type !== 'PROFORMA' ? ['ITBIS'] : []), 'Total'].map((h) => (
                     <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2">{h}</th>
                   ))}
                 </tr>
@@ -246,13 +246,15 @@ export default function InvoiceDetailPage() {
                     <td className="px-3 py-2.5 text-xs text-gray-700">{item.description}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-600">{item.quantity}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-600">{formatCurrency(item.unitPrice)}</td>
-                    <td className="px-3 py-2.5 text-xs text-gray-600">
-                      {invoice.type === 'REGIMEN_ESPECIAL'
-                        ? <span className="text-amber-600 font-medium">Exento</span>
-                        : item.taxAmount === 0
-                          ? <span className="text-gray-400">Exento</span>
-                          : formatCurrency(item.taxAmount)}
-                    </td>
+                    {invoice.type !== 'PROFORMA' && (
+                      <td className="px-3 py-2.5 text-xs text-gray-600">
+                        {invoice.type === 'REGIMEN_ESPECIAL'
+                          ? <span className="text-amber-600 font-medium">Exento</span>
+                          : item.taxAmount === 0
+                            ? <span className="text-gray-400">Exento</span>
+                            : formatCurrency(item.taxAmount)}
+                      </td>
+                    )}
                     <td className="px-3 py-2.5 text-xs font-semibold text-gray-800">{formatCurrency(item.total)}</td>
                   </tr>
                 ))}
@@ -260,12 +262,14 @@ export default function InvoiceDetailPage() {
             </table>
             <div className="border-t border-gray-100 mt-2 pt-3 px-3 space-y-1.5">
               <div className="flex justify-between text-xs text-gray-500"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span></div>
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>ITBIS</span>
-                {invoice.type === 'REGIMEN_ESPECIAL'
-                  ? <span className="text-amber-600 font-medium">Exento (B14)</span>
-                  : <span>{formatCurrency(invoice.taxAmount)}</span>}
-              </div>
+              {invoice.type !== 'PROFORMA' && (
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>ITBIS</span>
+                  {invoice.type === 'REGIMEN_ESPECIAL'
+                    ? <span className="text-amber-600 font-medium">Exento (B14)</span>
+                    : <span>{formatCurrency(invoice.taxAmount)}</span>}
+                </div>
+              )}
               <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-100"><span>Total</span><span>{formatCurrency(invoice.total)}</span></div>
             </div>
           </Card>

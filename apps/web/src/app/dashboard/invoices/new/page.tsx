@@ -172,8 +172,8 @@ function TaxSelector({ isExempt, taxRate, onChange, disabled }: {
 }
 
 // ─── Line Row ─────────────────────────────────────────────────────────────────
-function LineRow({ line, index, products, forceExempt, showDelete, onChange, onDelete, onApplyProduct }: {
-  line: LineItem; index: number; products: Product[]; forceExempt: boolean
+function LineRow({ line, index, products, forceExempt, hideItbis, showDelete, onChange, onDelete, onApplyProduct }: {
+  line: LineItem; index: number; products: Product[]; forceExempt: boolean; hideItbis?: boolean
   showDelete: boolean
   onChange: (patch: Partial<LineItem>) => void
   onDelete: () => void
@@ -196,7 +196,10 @@ function LineRow({ line, index, products, forceExempt, showDelete, onChange, onD
   const { disc, tax, total } = calcLine(line, forceExempt)
 
   return (
-    <div className="group grid grid-cols-[1fr_64px_112px_64px_96px_88px_28px] gap-2.5 items-center px-1 py-2 rounded-xl hover:bg-gray-50/80 transition-colors">
+    <div className={cn(
+      'group grid gap-2.5 items-center px-1 py-2 rounded-xl hover:bg-gray-50/80 transition-colors',
+      hideItbis ? 'grid-cols-[1fr_64px_112px_64px_88px_28px]' : 'grid-cols-[1fr_64px_112px_64px_96px_88px_28px]',
+    )}>
 
       {/* Description + product picker */}
       <div ref={dropRef} className="relative">
@@ -266,20 +269,21 @@ function LineRow({ line, index, products, forceExempt, showDelete, onChange, onD
         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 pointer-events-none">%</span>
       </div>
 
-      {/* Tax */}
-      <div className="flex justify-center">
-        <TaxSelector
-          isExempt={forceExempt || line.isExempt} taxRate={line.taxRate}
-          disabled={forceExempt}
-          onChange={v => onChange({ isExempt: v.isExempt, taxRate: v.taxRate })}
-        />
-      </div>
+      {/* Tax — oculto en modo proforma */}
+      {!hideItbis && (
+        <div className="flex justify-center">
+          <TaxSelector
+            isExempt={forceExempt || line.isExempt} taxRate={line.taxRate}
+            disabled={forceExempt}
+            onChange={v => onChange({ isExempt: v.isExempt, taxRate: v.taxRate })}
+          />
+        </div>
+      )}
 
       {/* Total */}
       <div className="text-right">
         <p className="text-sm font-bold text-gray-800">{formatCurrency(total)}</p>
         {disc > 0 && <p className="text-[10px] text-red-400">-{formatCurrency(disc)}</p>}
-        {tax > 0 && !forceExempt && <p className="text-[10px] text-gray-400">+{formatCurrency(tax)}</p>}
       </div>
 
       {/* Delete */}
@@ -434,7 +438,7 @@ export default function NewInvoicePage() {
 
   // ── Catalog confirm modal ────────────────────────────────────────────────
   if (catalogPrompt.length > 0 && pendingInvoiceId) {
-    return <CatalogConfirmModal items={catalogPrompt} onDone={() => router.push(`/dashboard/invoices/${pendingInvoiceId}`)} />
+    return <CatalogConfirmModal items={catalogPrompt} onDone={() => router.push(`/dashboard/invoices/${pendingInvoiceId}`)} hideItbis={isProforma} />
   }
 
   if (showNewClient) {
@@ -565,9 +569,9 @@ export default function NewInvoicePage() {
                     {NCF_TYPES.filter(n => !n.fiscal).map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
                   </optgroup>
                 </Select>
-                {ncfInfo.exempt && ncfType !== 'PROFORMA' && (
+                {ncfInfo.exempt && !isProforma && (
                   <p className="text-[11px] text-amber-600 mt-1.5 flex items-center gap-1">
-                    <span>⚠</span> Tipo {ncfType.replace('E', '')} — ITBIS exento en todos los ítems
+                    <span>⚠</span> Tipo {ncfType.replace('E', '')} — exento de ITBIS en todos los ítems
                   </p>
                 )}
                 {ncfType === 'PROFORMA' && !isProforma && (
@@ -619,12 +623,17 @@ export default function NewInvoicePage() {
             </div>
 
             {/* Column headers */}
-            <div className="grid grid-cols-[1fr_64px_112px_64px_96px_88px_28px] gap-2.5 mb-2 px-1">
+            <div className={cn(
+              'gap-2.5 mb-2 px-1 grid',
+              isProforma
+                ? 'grid-cols-[1fr_64px_112px_64px_88px_28px]'
+                : 'grid-cols-[1fr_64px_112px_64px_96px_88px_28px]',
+            )}>
               <p className="text-[11px] font-semibold text-gray-400">Descripción</p>
               <p className="text-[11px] font-semibold text-gray-400 text-center">Cant.</p>
               <p className="text-[11px] font-semibold text-gray-400 text-right">Precio unit.</p>
               <p className="text-[11px] font-semibold text-gray-400 text-center">Desc. %</p>
-              <p className="text-[11px] font-semibold text-gray-400 text-center">ITBIS</p>
+              {!isProforma && <p className="text-[11px] font-semibold text-gray-400 text-center">ITBIS</p>}
               <p className="text-[11px] font-semibold text-gray-400 text-right">Total</p>
               <span />
             </div>
@@ -634,6 +643,7 @@ export default function NewInvoicePage() {
                 <LineRow key={i}
                   line={line} index={i} products={products}
                   forceExempt={forceExempt}
+                  hideItbis={isProforma}
                   showDelete={lines.length > 1}
                   onChange={patch => setLine(i, patch)}
                   onDelete={() => setLines(prev => prev.filter((_, idx) => idx !== i))}
@@ -816,14 +826,14 @@ export default function NewInvoicePage() {
                     <span className="font-medium">-{formatCurrency(globalDiscAmt)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>ITBIS</span>
-                  {ncfType === 'PROFORMA'
-                    ? <span className="font-medium text-purple-600">No aplica</span>
-                    : forceExempt
+                {!isProforma && (
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>ITBIS</span>
+                    {forceExempt
                       ? <span className="font-medium text-amber-600">Exento</span>
                       : <span className="font-medium">{formatCurrency(totalTax)}</span>}
-                </div>
+                  </div>
+                )}
                 <div className="flex justify-between items-center pt-2 mt-1 border-t border-gray-200">
                   <span className="text-base font-bold text-gray-900">Total</span>
                   <span className="text-xl font-bold text-[#293c4f]">{formatCurrency(grandTotal)}</span>
@@ -890,7 +900,7 @@ export default function NewInvoicePage() {
 }
 
 // ─── Catalog Confirm Modal ────────────────────────────────────────────────────
-function CatalogConfirmModal({ items, onDone }: { items: LineItem[]; onDone: () => void }) {
+function CatalogConfirmModal({ items, onDone, hideItbis }: { items: LineItem[]; onDone: () => void; hideItbis?: boolean }) {
   const [selected, setSelected] = useState<Set<number>>(new Set(items.map((_, i) => i)))
   const [saving, setSaving]     = useState(false)
   const [err, setErr]           = useState('')
@@ -934,7 +944,7 @@ function CatalogConfirmModal({ items, onDone }: { items: LineItem[]; onDone: () 
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 truncate">{item.description}</p>
-                <p className="text-xs text-gray-400">{item.isExempt ? 'ITBIS exento' : `ITBIS ${item.taxRate}%`} · {formatCurrency(item.unitPrice)}</p>
+                {!hideItbis && <p className="text-xs text-gray-400">{item.isExempt ? 'ITBIS exento' : `ITBIS ${item.taxRate}%`} · {formatCurrency(item.unitPrice)}</p>}
               </div>
             </label>
           ))}

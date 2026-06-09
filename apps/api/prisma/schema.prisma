@@ -46,6 +46,7 @@ model Client {
   crmOpportunities CrmOpportunity[]
   invoices         Invoice[]
   quotes           Quote[]
+  commissionPlans  CommissionPlanClient[]
 
   @@index([name])
   @@index([isActive])
@@ -1119,6 +1120,11 @@ enum CommissionBase {
   COLLECTED    // Solo lo efectivamente cobrado (pagos recibidos)
 }
 
+enum CommissionClientScope {
+  ALL       // Aplica a todos los clientes
+  SPECIFIC  // Solo a clientes explícitamente listados
+}
+
 enum CommissionEntryStatus {
   DRAFT
   APPROVED
@@ -1127,24 +1133,37 @@ enum CommissionEntryStatus {
 }
 
 model CommissionPlan {
-  id           String        @id @default(cuid())
+  id           String                 @id @default(cuid())
   name         String
   beneficiary  String
   employeeId   String?
   businessUnit BusinessUnit
   rate         Float
-  base         CommissionBase @default(COLLECTED)
+  base         CommissionBase         @default(COLLECTED)
+  clientScope  CommissionClientScope  @default(ALL)
   minAmount    Float?
-  isActive     Boolean       @default(true)
+  isActive     Boolean                @default(true)
   notes        String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
 
   entries  CommissionEntry[]
-  employee Employee?         @relation(fields: [employeeId], references: [id])
+  clients  CommissionPlanClient[]
+  employee Employee?              @relation(fields: [employeeId], references: [id])
 
   @@index([businessUnit, isActive])
   @@map("commission_plans")
+}
+
+model CommissionPlanClient {
+  planId   String
+  clientId String
+
+  plan   CommissionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  client Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@id([planId, clientId])
+  @@map("commission_plan_clients")
 }
 
 model CommissionEntry {

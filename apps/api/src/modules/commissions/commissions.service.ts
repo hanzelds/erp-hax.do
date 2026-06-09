@@ -17,6 +17,7 @@ export async function listPlans(query: any) {
       orderBy: { createdAt: 'desc' },
       include: {
         employee: { select: { id: true, name: true, position: true } },
+        clients:  { include: { client: { select: { id: true, name: true, rnc: true } } } },
         _count: { select: { entries: true } },
       },
     }),
@@ -26,6 +27,9 @@ export async function listPlans(query: any) {
 }
 
 export async function createPlan(data: any) {
+  const clientIds: string[] = Array.isArray(data.clientIds) ? data.clientIds : []
+  const clientScope = clientIds.length > 0 ? 'SPECIFIC' : (data.clientScope ?? 'ALL')
+
   return prisma.commissionPlan.create({
     data: {
       name:         data.name,
@@ -34,10 +38,17 @@ export async function createPlan(data: any) {
       businessUnit: data.businessUnit,
       rate:         parseFloat(data.rate),
       base:         data.base ?? 'COLLECTED',
+      clientScope:  clientScope as any,
       minAmount:    data.minAmount ? parseFloat(data.minAmount) : null,
       notes:        data.notes || null,
+      clients:      clientIds.length > 0
+        ? { create: clientIds.map((clientId: string) => ({ clientId })) }
+        : undefined,
     },
-    include: { employee: { select: { id: true, name: true } } },
+    include: {
+      employee: { select: { id: true, name: true } },
+      clients:  { include: { client: { select: { id: true, name: true, rnc: true } } } },
+    },
   })
 }
 
@@ -55,10 +66,23 @@ export async function updatePlan(id: string, data: any) {
   if (data.isActive    !== undefined) updateData.isActive    = data.isActive
   if (data.notes       !== undefined) updateData.notes       = data.notes || null
 
+  // Actualizar clientes si vienen en el request
+  if (Array.isArray(data.clientIds)) {
+    const clientIds: string[] = data.clientIds
+    updateData.clientScope = clientIds.length > 0 ? 'SPECIFIC' : 'ALL'
+    updateData.clients = {
+      deleteMany: {},
+      create: clientIds.map((clientId: string) => ({ clientId })),
+    }
+  }
+
   return prisma.commissionPlan.update({
     where: { id },
     data: updateData,
-    include: { employee: { select: { id: true, name: true } } },
+    include: {
+      employee: { select: { id: true, name: true } },
+      clients:  { include: { client: { select: { id: true, name: true, rnc: true } } } },
+    },
   })
 }
 
@@ -94,7 +118,10 @@ export async function calculate(params: {
 
   const plans = await prisma.commissionPlan.findMany({
     where: planWhere,
-    include: { employee: { select: { id: true, name: true } } },
+    include: {
+      employee: { select: { id: true, name: true } },
+      clients:  { include: { client: { select: { id: true, name: true, rnc: true } } } },
+    },
   })
 
   if (!plans.length) throw new AppError('No hay planes de comisión activos para los criterios dados', 404)
@@ -103,32 +130,39 @@ export async function calculate(params: {
     ? { type: 'PROFORMA' as any }
     : { type: { not: 'PROFORMA' as any } }
 
-  const results = await Promise.all(plans.map(async (plan) => {
+  const results = await Promise.all(plans.map(async (plan: any) => {
     const buWhere: any = { businessUnit: plan.businessUnit }
+
+    // Filtro por clientes específicos si el plan lo requiere
+    const clientIds = plan.clientScope === 'SPECIFIC'
+      ? plan.clients.map((c: any) => c.clientId)
+      : null
+    const clientFilter = clientIds?.length
+      ? { clientId: { in: clientIds } }
+      : {}
 
     let baseAmount = 0
     let invoiceCount = 0
 
     if (plan.base === 'COLLECTED') {
-      // Suma pagos recibidos en el período sobre facturas de este BU
       const agg = await prisma.payment.aggregate({
         where: {
           paidAt: { gte: start, lte: end },
-          invoice: { ...buWhere, ...invoiceTypeFilter },
+          invoice: { ...buWhere, ...invoiceTypeFilter, ...clientFilter },
         },
         _sum: { amount: true },
         _count: { id: true },
       })
-      baseAmount    = agg._sum.amount ?? 0
-      invoiceCount  = agg._count.id   ?? 0
+      baseAmount   = agg._sum.amount ?? 0
+      invoiceCount = agg._count.id   ?? 0
 
     } else {
-      // Suma total/subtotal de facturas emitidas en el período
       const sumField = plan.base === 'TOTAL' ? 'total' : 'subtotal'
       const agg = await prisma.invoice.aggregate({
         where: {
           ...buWhere,
           ...invoiceTypeFilter,
+          ...clientFilter,
           issueDate: { gte: start, lte: end },
           status: { in: ['APPROVED', 'PAID'] as any },
         },
@@ -174,8 +208,10 @@ export async function calculate(params: {
         businessUnit: plan.businessUnit,
         base:         plan.base,
         rate:         plan.rate,
+        clientScope:  plan.clientScope,
         minAmount:    plan.minAmount,
-        employee:     plan.employee,
+        employee:     (plan as any).employee,
+        clients:      (plan as any).clients?.map((c: any) => c.client) ?? [],
       },
       meetsMinimum,
     }
@@ -201,8 +237,9 @@ export async function listEntries(query: any) {
         plan: {
           select: {
             id: true, name: true, beneficiary: true, businessUnit: true,
-            base: true, rate: true,
+            base: true, rate: true, clientScope: true,
             employee: { select: { id: true, name: true } },
+            clients:  { include: { client: { select: { id: true, name: true } } } },
           },
         },
       },

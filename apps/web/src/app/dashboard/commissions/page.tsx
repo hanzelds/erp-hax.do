@@ -26,6 +26,8 @@ interface CommissionPlan {
   businessUnit: 'HAX' | 'KODER'
   rate: number
   base: CommissionBase
+  clientScope: CommissionClientScope
+  clients: { client: { id: string; name: string; rnc: string | null } }[]
   minAmount: number | null
   isActive: boolean
   notes: string | null
@@ -60,6 +62,8 @@ const BASE_LABELS: Record<CommissionBase, string> = {
   SUBTOTAL:  'Subtotal (sin ITBIS)',
   COLLECTED: 'Cobrado efectivamente',
 }
+
+type CommissionClientScope = 'ALL' | 'SPECIFIC'
 
 const STATUS_STYLES: Record<EntryStatus, string> = {
   DRAFT:     'bg-gray-100 text-gray-600',
@@ -243,7 +247,7 @@ function CalculatorTab() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-gray-100">
-                    {['Beneficiario', 'BU', 'Base cálculo', 'Monto base', 'Tasa', 'Comisión', 'Docs', 'Estado', ''].map(h => (
+                    {['Beneficiario', 'BU', 'Clientes', 'Base cálculo', 'Monto base', 'Tasa', 'Comisión', 'Docs', 'Estado', ''].map(h => (
                       <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2.5 whitespace-nowrap">{h}</th>
                     ))}
                   </tr></thead>
@@ -259,6 +263,20 @@ function CalculatorTab() {
                             r.plan.businessUnit === 'HAX' ? 'bg-[#293c4f]/10 text-[#293c4f]' : 'bg-slate-100 text-slate-600')}>
                             {r.plan.businessUnit}
                           </span>
+                        </td>
+                        <td className="px-3 py-3 max-w-[140px]">
+                          {(r.plan as any).clientScope === 'ALL' ? (
+                            <span className="text-xs text-gray-400 italic">Todos</span>
+                          ) : (
+                            <div className="space-y-0.5">
+                              {((r.plan as any).clients ?? []).slice(0, 2).map((c: any) => (
+                                <p key={c.id} className="text-xs text-gray-700 truncate">{c.name}</p>
+                              ))}
+                              {((r.plan as any).clients ?? []).length > 2 && (
+                                <p className="text-xs text-gray-400">+{(r.plan as any).clients.length - 2} más</p>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-3 text-xs text-gray-500">{BASE_LABELS[r.plan.base]}</td>
                         <td className="px-3 py-3 text-xs font-mono text-gray-700">{formatCurrency(r.baseAmount)}</td>
@@ -310,7 +328,7 @@ function CalculatorTab() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-50 border-t-2 border-gray-200">
-                      <td colSpan={5} className="px-3 py-2.5 text-xs font-bold text-gray-600">TOTAL</td>
+                      <td colSpan={6} className="px-3 py-2.5 text-xs font-bold text-gray-600">TOTAL</td>
                       <td className="px-3 py-2.5 text-base font-bold text-[#293c4f]">{formatCurrency(totalCommissions)}</td>
                       <td colSpan={3} />
                     </tr>
@@ -381,7 +399,7 @@ function PlansTab() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-gray-100">
-                {['Plan', 'Beneficiario', 'BU', 'Base', 'Tasa', 'Mínimo', 'Cálculos', 'Estado', ''].map(h => (
+                {['Plan', 'Beneficiario', 'BU', 'Clientes', 'Base', 'Tasa', 'Mínimo', 'Cálculos', 'Estado', ''].map(h => (
                   <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2.5 whitespace-nowrap">{h}</th>
                 ))}
               </tr></thead>
@@ -398,6 +416,20 @@ function PlansTab() {
                         plan.businessUnit === 'HAX' ? 'bg-[#293c4f]/10 text-[#293c4f]' : 'bg-slate-100 text-slate-600')}>
                         {plan.businessUnit}
                       </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      {plan.clientScope === 'ALL' ? (
+                        <span className="text-xs text-gray-400 italic">Todos</span>
+                      ) : (
+                        <div className="space-y-0.5">
+                          {plan.clients.slice(0, 2).map(c => (
+                            <p key={c.client.id} className="text-xs text-gray-700 truncate max-w-[140px]">{c.client.name}</p>
+                          ))}
+                          {plan.clients.length > 2 && (
+                            <p className="text-xs text-gray-400">+{plan.clients.length - 2} más</p>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-3 text-xs text-gray-500">{BASE_LABELS[plan.base]}</td>
                     <td className="px-3 py-3 text-sm font-mono font-semibold text-[#293c4f]">{(plan.rate * 100).toFixed(1)}%</td>

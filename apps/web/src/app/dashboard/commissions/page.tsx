@@ -3,12 +3,14 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  TrendingUp, Plus, Check, Send, X, ChevronDown, ChevronUp,
-  Edit2, ToggleLeft, ToggleRight, Calculator,
+  TrendingUp, Plus, Check, Send, X,
+  ToggleLeft, ToggleRight, Calculator,
 } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
 import { formatCurrency, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, CardHeader, Skeleton, EmptyState, Select, useConfirm } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState, Select, useConfirm } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
 // ── Types ─────────────────────────────────────────────────────
@@ -334,28 +336,11 @@ function CalculatorTab() {
 
 // ── Plans Tab ─────────────────────────────────────────────────
 
-interface PlanFormState {
-  name: string; beneficiary: string; employeeId: string
-  businessUnit: string; rate: string; base: CommissionBase
-  minAmount: string; notes: string
-}
-
-const EMPTY_PLAN_FORM: PlanFormState = {
-  name: '', beneficiary: '', employeeId: '',
-  businessUnit: 'HAX', rate: '', base: 'COLLECTED',
-  minAmount: '', notes: '',
-}
-
 function PlansTab() {
   const qc = useQueryClient()
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'ADMIN'
-  const confirm = useConfirm()
-
-  const [showModal, setShowModal] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm]           = useState<PlanFormState>(EMPTY_PLAN_FORM)
-  const [formErr, setFormErr]     = useState<string | null>(null)
+  const router  = useRouter()
 
   const { data, isLoading } = useQuery<{ data: CommissionPlan[] }>({
     queryKey: ['commission-plans'],
@@ -365,50 +350,7 @@ function PlansTab() {
     },
   })
 
-  const { data: employees = [] } = useQuery<any[]>({
-    queryKey: ['employees-active'],
-    queryFn: async () => {
-      const { data } = await api.get('/payroll/employees', { params: { isActive: true, limit: 200 } })
-      return data.data ?? data
-    },
-  })
-
   const plans = data?.data ?? []
-
-  const save = useMutation({
-    mutationFn: async () => {
-      if (!form.name.trim()) throw new Error('El nombre del plan es requerido')
-      if (!form.beneficiary.trim()) throw new Error('El beneficiario es requerido')
-      if (!form.rate || parseFloat(form.rate) <= 0) throw new Error('La tasa debe ser mayor a 0')
-      if (parseFloat(form.rate) > 100) throw new Error('La tasa no puede superar 100%')
-
-      const body = {
-        name:         form.name.trim(),
-        beneficiary:  form.beneficiary.trim(),
-        employeeId:   form.employeeId || undefined,
-        businessUnit: form.businessUnit,
-        rate:         parseFloat(form.rate) / 100,
-        base:         form.base,
-        minAmount:    form.minAmount ? parseFloat(form.minAmount) : undefined,
-        notes:        form.notes.trim() || undefined,
-      }
-      if (editingId) {
-        return api.patch(`/commissions/plans/${editingId}`, body)
-      } else {
-        return api.post('/commissions/plans', body)
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['commission-plans'] })
-      setShowModal(false)
-      setEditingId(null)
-      setForm(EMPTY_PLAN_FORM)
-      setFormErr(null)
-    },
-    onError: (err: any) => {
-      setFormErr(err?.response?.data?.error ?? err?.message ?? 'Error al guardar')
-    },
-  })
 
   const toggleActive = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
@@ -416,30 +358,14 @@ function PlansTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['commission-plans'] }),
   })
 
-  function openEdit(plan: CommissionPlan) {
-    setForm({
-      name:         plan.name,
-      beneficiary:  plan.beneficiary,
-      employeeId:   plan.employeeId ?? '',
-      businessUnit: plan.businessUnit,
-      rate:         String((plan.rate * 100).toFixed(2)),
-      base:         plan.base,
-      minAmount:    plan.minAmount ? String(plan.minAmount) : '',
-      notes:        plan.notes ?? '',
-    })
-    setEditingId(plan.id)
-    setShowModal(true)
-  }
-
   if (isLoading) return <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
 
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
         {isAdmin && (
-          <Button variant="primary" size="sm" icon={<Plus className="w-4 h-4" />}
-            onClick={() => { setForm(EMPTY_PLAN_FORM); setEditingId(null); setShowModal(true) }}>
-            Nuevo plan
+          <Button asChild variant="primary" size="sm" icon={<Plus className="w-4 h-4" />}>
+            <Link href="/dashboard/commissions/new">Nuevo plan</Link>
           </Button>
         )}
       </div>
@@ -486,10 +412,6 @@ function PlansTab() {
                     <td className="px-3 py-3">
                       {isAdmin && (
                         <div className="flex items-center gap-1">
-                          <button onClick={() => openEdit(plan)} title="Editar"
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-[#293c4f] hover:bg-gray-100 transition-colors">
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
                           <button
                             onClick={() => toggleActive.mutate({ id: plan.id, isActive: plan.isActive })}
                             title={plan.isActive ? 'Desactivar' : 'Activar'}
@@ -510,96 +432,6 @@ function PlansTab() {
         </Card>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="text-base font-semibold text-gray-800">{editingId ? 'Editar plan' : 'Nuevo plan de comisión'}</h3>
-              <button onClick={() => { setShowModal(false); setFormErr(null) }} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
-              {formErr && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{formErr}</p>}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Nombre del plan *</label>
-                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="Plan Vendedores HAX" className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f]" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Beneficiario *</label>
-                  <input value={form.beneficiary} onChange={e => setForm(f => ({ ...f, beneficiary: e.target.value }))}
-                    placeholder="Carlos Pérez" className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f]" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Unidad de negocio *</label>
-                  <Select value={form.businessUnit} onChange={e => setForm(f => ({ ...f, businessUnit: e.target.value }))}
-                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] bg-white">
-                    <option value="HAX">HAX</option>
-                    <option value="KODER">KODER</option>
-                  </Select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Base de cálculo</label>
-                  <Select value={form.base} onChange={e => setForm(f => ({ ...f, base: e.target.value as CommissionBase }))}
-                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] bg-white">
-                    <option value="COLLECTED">Cobrado efectivamente</option>
-                    <option value="TOTAL">Total factura (con ITBIS)</option>
-                    <option value="SUBTOTAL">Subtotal (sin ITBIS)</option>
-                  </Select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Tasa (%) *</label>
-                  <div className="relative">
-                    <input type="number" min="0" max="100" step="0.1" value={form.rate}
-                      onChange={e => setForm(f => ({ ...f, rate: e.target.value }))}
-                      placeholder="5.00"
-                      className="w-full text-sm border border-gray-200 rounded-xl px-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f]" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Monto mínimo</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">RD$</span>
-                    <input type="number" min="0" step="1" value={form.minAmount}
-                      onChange={e => setForm(f => ({ ...f, minAmount: e.target.value }))}
-                      placeholder="0"
-                      className="w-full text-sm border border-gray-200 rounded-xl pl-10 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f]" />
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">Ventas mínimas para activar la comisión</p>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Vinculado a empleado (opcional)</label>
-                  <Select value={form.employeeId} onChange={e => setForm(f => ({ ...f, employeeId: e.target.value }))}
-                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] bg-white">
-                    <option value="">— Sin vincular a empleado —</option>
-                    {employees.map((e: any) => (
-                      <option key={e.id} value={e.id}>{e.name}{e.position ? ` · ${e.position}` : ''}</option>
-                    ))}
-                  </Select>
-                  <p className="text-xs text-gray-400 mt-1">Si está vinculado, "Enviar a nómina" añade la comisión al empleado</p>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notas</label>
-                  <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                    rows={2} placeholder="Observaciones del plan…"
-                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] resize-none" />
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <Button variant="secondary" size="sm" onClick={() => { setShowModal(false); setFormErr(null) }}>Cancelar</Button>
-              <Button variant="primary" size="sm" loading={save.isPending} onClick={() => save.mutate()}>
-                {editingId ? 'Guardar cambios' : 'Crear plan'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -616,7 +448,6 @@ function HistoryTab() {
   const [period, setPeriod] = useState('')
   const [status, setStatus] = useState('')
   const [bu, setBu]         = useState('')
-  const [expanded, setExpanded] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery<{ data: CommissionEntry[]; total: number }>({
     queryKey: ['commission-entries', period, status, bu],

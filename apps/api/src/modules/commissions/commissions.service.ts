@@ -279,13 +279,17 @@ export async function sendToPayroll(id: string) {
     }
   }
 
+  if (!payrollItemId) {
+    throw new AppError('No se pudo determinar el ítem de nómina para asignar la comisión.', 500)
+  }
+
   // Crear PayrollAddition
   const addition = await prisma.payrollAddition.create({
     data: {
-      payrollItemId,
-      type:        'COMMISSION',
-      description: `Comisión ${plan.name} — período ${dbPeriod}`,
-      amount:      entry.amount,
+      payrollItemId: payrollItemId as string,
+      type:          'COMMISSION',
+      description:   `Comisión ${plan.name} — período ${dbPeriod}`,
+      amount:        entry.amount,
     },
   })
 

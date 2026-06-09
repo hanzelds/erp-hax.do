@@ -728,7 +728,7 @@ function HistoryTab() {
                           {entry.status !== 'PAID' && entry.status !== 'CANCELLED' && (
                             <button
                               onClick={async () => {
-                                const ok = await confirm({ title: '¿Cancelar comisión?', description: 'Esta acción no se puede deshacer.' })
+                                const ok = await confirm({ title: '¿Cancelar comisión?', message: 'Esta acción no se puede deshacer.', variant: 'danger' })
                                 if (ok) cancel.mutate(entry.id)
                               }}
                               title="Cancelar"

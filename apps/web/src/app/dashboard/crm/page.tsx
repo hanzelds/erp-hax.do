@@ -83,7 +83,8 @@ export default function CrmPage() {
     },
   })
 
-  const { data: pipeline = {}, isLoading } = useQuery<Record<LeadStatus, { items: Opportunity[]; count: number; totalValue: number }>>({
+  type PipelineData = Partial<Record<LeadStatus, { items: Opportunity[]; count: number; totalValue: number }>>
+  const { data: pipeline = {} as PipelineData, isLoading } = useQuery<PipelineData>({
     queryKey: ['crm-pipeline', buFilter],
     queryFn: async () => {
       const { data } = await api.get(`/crm/pipeline${buParam}`)

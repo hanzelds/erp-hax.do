@@ -66,15 +66,35 @@ model CrmOpportunity {
   closedAt     DateTime?
   closedReason String?
   assignedTo   String?
+  leadSource   LeadSource?
+  contactName  String?
+  contactPhone String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   client       Client       @relation(fields: [clientId], references: [id])
   quotes       Quote[]
+  activities   CrmActivity[]
 
   @@index([clientId])
   @@index([status])
   @@index([businessUnit])
   @@map("crm_opportunities")
+}
+
+model CrmActivity {
+  id            String         @id @default(cuid())
+  opportunityId String
+  type          ActivityType
+  title         String
+  description   String?
+  dueDate       DateTime?
+  completedAt   DateTime?
+  createdBy     String
+  createdAt     DateTime       @default(now())
+  opportunity   CrmOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+  @@map("crm_activities")
 }
 
 model Quote {
@@ -1039,6 +1059,23 @@ enum LeadStatus {
   NEGOTIATION
   CLOSED_WON
   CLOSED_LOST
+}
+
+enum LeadSource {
+  REFERRAL
+  COLD_OUTREACH
+  INBOUND
+  SOCIAL_MEDIA
+  EVENT
+  REPEAT
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  MEETING
+  TASK
+  NOTE
 }
 
 enum QuoteStatus {

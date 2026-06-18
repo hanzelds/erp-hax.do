@@ -30,6 +30,7 @@ export const navigation: NavSection[] = [
     title: 'Ventas',
     items: [
       { label: 'Facturación',  href: '/dashboard/invoices',  icon: FileText,      module: 'invoices',  description: 'Facturas electrónicas' },
+      { label: 'CRM',          href: '/dashboard/crm',       icon: TrendingUp,    module: 'crm',       description: 'Pipeline de ventas y oportunidades' },
       { label: 'Cotizaciones', href: '/dashboard/quotes',    icon: ClipboardList, module: 'quotes',    description: 'Propuestas y cotizaciones' },
       { label: 'Pagos recibidos', href: '/dashboard/payments', icon: CreditCard,    module: 'payments',  description: 'Pagos y cobros' },
       { label: 'Clientes',     href: '/dashboard/clients',   icon: Users,         module: 'clients',   description: 'Gestión de clientes' },

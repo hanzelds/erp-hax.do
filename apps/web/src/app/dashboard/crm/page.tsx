@@ -155,7 +155,7 @@ export default function CrmPage() {
                     buFilter === u ? 'bg-[#293c4f] text-white' : 'text-gray-500 hover:text-gray-700'
                   )}
                 >
-                  {u === 'ALL' ? 'Holding' : u}
+                  {u === 'ALL' ? 'All' : u}
                 </button>
               ))}
             </div>

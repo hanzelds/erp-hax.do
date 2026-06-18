@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, X, Edit2, Trash2, UserX, UserCheck } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
 import { formatDate, cn } from '@/lib/utils'
 import {
@@ -48,6 +49,7 @@ function sanitize(f: ClientForm) {
 }
 
 export default function ClientsPage() {
+  const router = useRouter()
   const qc = useQueryClient()
   const [search, setSearch]     = useState('')
   const [editing, setEditing]   = useState<ClientForm | null>(null)
@@ -205,7 +207,11 @@ export default function ClientsPage() {
             </thead>
             <tbody>
               {clients.map((c) => (
-                <tr key={c.id} className={cn('border-b border-gray-50 hover:bg-gray-50/60 transition-colors', !c.isActive && 'opacity-50')}>
+                <tr
+                  key={c.id}
+                  className={cn('border-b border-gray-50 hover:bg-gray-50/60 transition-colors cursor-pointer', !c.isActive && 'opacity-50')}
+                  onClick={() => router.push(`/dashboard/clients/${c.id}`)}
+                >
                   <td className="px-3 py-3">
                     <span className="text-gray-800 font-medium text-xs">{c.name}</span>
                   </td>
@@ -213,7 +219,7 @@ export default function ClientsPage() {
                   <td className="px-3 py-3 text-xs text-gray-500">{c.email ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500">{c.phone ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-400">{formatDate(c.createdAt)}</td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
                       <Button variant="ghost" size="sm" title="Editar" onClick={() => openEdit(c)}>
                         <Edit2 className="w-3.5 h-3.5" />

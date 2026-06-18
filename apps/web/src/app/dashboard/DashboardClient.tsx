@@ -65,6 +65,15 @@ export function DashboardClient() {
     staleTime: 60_000,
   })
 
+  const { data: crmStats } = useQuery<{ totalPipeline: number; weightedForecast: number; wonThisMonth: number; winRate: number }>({
+    queryKey: ['crm-analytics-dashboard'],
+    queryFn: async () => {
+      const { data } = await api.get('/crm/analytics')
+      return data.data ?? data
+    },
+    staleTime: 60_000,
+  })
+
   const now         = new Date()
   const currentMonth = now.toLocaleDateString('es-DO', { month: 'long', year: 'numeric' })
 
@@ -134,6 +143,41 @@ export function DashboardClient() {
           icon={<TrendingUp className="w-4 h-4" />}
           accent="#2563eb"
         />
+      </div>
+
+      {/* ── CRM Pipeline KPIs ────────────────────────── */}
+      <div>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Pipeline CRM</h2>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard
+            label="Pipeline activo"
+            value={formatCurrency(crmStats?.totalPipeline ?? 0)}
+            sub="excluyendo perdidos"
+            icon={<TrendingUp className="w-4 h-4" />}
+            accent="#293c4f"
+          />
+          <StatCard
+            label="Pronóstico"
+            value={formatCurrency(crmStats?.weightedForecast ?? 0)}
+            sub="ponderado por probabilidad"
+            icon={<TrendingUp className="w-4 h-4" />}
+            accent="#7c3aed"
+          />
+          <StatCard
+            label="Ganado este mes"
+            value={formatCurrency(crmStats?.wonThisMonth ?? 0)}
+            sub="deals cerrados"
+            icon={<CheckCircle2 className="w-4 h-4" />}
+            accent="#16a34a"
+          />
+          <StatCard
+            label="Win rate (90d)"
+            value={`${crmStats?.winRate ?? 0}%`}
+            sub="ganados vs perdidos"
+            icon={<TrendingUp className="w-4 h-4" />}
+            accent="#d97706"
+          />
+        </div>
       </div>
 
       {/* ── Charts row ────────────────────────────────── */}

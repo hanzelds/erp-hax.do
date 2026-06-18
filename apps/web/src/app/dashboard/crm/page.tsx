@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, TrendingUp, Users, Target, Award } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Plus, TrendingUp, Users, Target, Award } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
-import { PageHeader, Button, Card, Skeleton, EmptyState, Select } from '@/components/ui'
+import { PageHeader, Button, Card, Skeleton, EmptyState } from '@/components/ui'
 
 type LeadStatus = 'LEAD' | 'CONTACT' | 'PROPOSAL' | 'NEGOTIATION' | 'CLOSED_WON' | 'CLOSED_LOST'
 type BuFilter = 'ALL' | 'HAX' | 'KODER'
@@ -38,8 +38,6 @@ interface Analytics {
   byStage: { status: LeadStatus; count: number; totalValue: number }[]
 }
 
-interface Client { id: string; name: string; email?: string }
-
 const STAGES: { status: LeadStatus; label: string; color: string; headerColor: string }[] = [
   { status: 'LEAD',        label: 'Lead',        color: 'bg-gray-100 text-gray-700 border-gray-200',       headerColor: 'bg-gray-100' },
   { status: 'CONTACT',     label: 'Contactado',  color: 'bg-blue-50 text-blue-700 border-blue-200',        headerColor: 'bg-blue-50' },
@@ -49,29 +47,10 @@ const STAGES: { status: LeadStatus; label: string; color: string; headerColor: s
   { status: 'CLOSED_LOST', label: 'Perdido',     color: 'bg-red-50 text-red-600 border-red-200',           headerColor: 'bg-red-50' },
 ]
 
-const LEAD_SOURCES = [
-  { value: 'REFERRAL',      label: 'Referido' },
-  { value: 'COLD_OUTREACH', label: 'Prospección' },
-  { value: 'INBOUND',       label: 'Llegó solo' },
-  { value: 'SOCIAL_MEDIA',  label: 'Redes sociales' },
-  { value: 'EVENT',         label: 'Evento' },
-  { value: 'REPEAT',        label: 'Cliente recurrente' },
-]
-
-const EMPTY = {
-  title: '', clientId: '', description: '', value: 0, probability: 20,
-  status: 'LEAD' as LeadStatus, businessUnit: 'HAX' as const,
-  assignedTo: '', leadSource: '', contactName: '', expectedDate: '',
-}
-
 export default function CrmPage() {
   const router = useRouter()
-  const qc = useQueryClient()
   const [view, setView]         = useState<'kanban' | 'list'>('kanban')
   const [buFilter, setBuFilter] = useState<BuFilter>('ALL')
-  const [editing, setEditing]   = useState<any | null>(null)
-  const [isNew, setIsNew]       = useState(false)
-  const [clientSearch, setClientSearch] = useState('')
 
   const buParam = buFilter !== 'ALL' ? `?businessUnit=${buFilter}` : ''
 
@@ -101,33 +80,6 @@ export default function CrmPage() {
     enabled: view === 'list',
   })
 
-  const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ['clients-search', clientSearch],
-    queryFn: async () => {
-      const { data } = await api.get(`/clients?search=${clientSearch}&limit=10`)
-      return data.data ?? data
-    },
-    enabled: !!editing && clientSearch.length > 1,
-  })
-
-  const save = useMutation({
-    mutationFn: async (body: any) => {
-      const payload = { ...body }
-      if (!payload.value) payload.value = null
-      if (!payload.expectedDate) payload.expectedDate = null
-      if (!payload.leadSource) payload.leadSource = null
-      if (!payload.contactName) payload.contactName = null
-      if (!payload.assignedTo) payload.assignedTo = null
-      if (isNew) await api.post('/crm', payload)
-      else await api.patch(`/crm/${payload.id}`, payload)
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['crm-pipeline'] })
-      qc.invalidateQueries({ queryKey: ['crm-list'] })
-      qc.invalidateQueries({ queryKey: ['crm-analytics'] })
-      setEditing(null)
-    },
-  })
 
   const totalPipeline = analyticsData?.totalPipeline ?? 0
 
@@ -174,7 +126,7 @@ export default function CrmPage() {
               ))}
             </div>
             <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => { setEditing({ ...EMPTY }); setIsNew(true); setClientSearch('') }}
+              onClick={() => router.push('/dashboard/crm/new')}
             >
               Nueva oportunidad
             </Button>
@@ -298,151 +250,6 @@ export default function CrmPage() {
         </Card>
       )}
 
-      {/* Modal nueva / editar oportunidad */}
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 pb-4 sticky top-0 bg-white z-10 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-900">{isNew ? 'Nueva oportunidad' : 'Editar oportunidad'}</h2>
-              <button onClick={() => setEditing(null)}><X className="w-5 h-5 text-gray-400" /></button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <F label="Título de la oportunidad *">
-                <input
-                  type="text"
-                  placeholder="Ej: Rediseño web corporativo"
-                  value={editing.title}
-                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                  className={ic}
-                />
-              </F>
-
-              <F label="Cliente *">
-                {isNew ? (
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Buscar cliente por nombre..."
-                      value={editing.clientId ? (clients.find(c => c.id === editing.clientId)?.name ?? clientSearch) : clientSearch}
-                      onChange={(e) => {
-                        setClientSearch(e.target.value)
-                        if (editing.clientId) setEditing({ ...editing, clientId: '' })
-                      }}
-                      className={ic}
-                    />
-                    {clients.length > 0 && !editing.clientId && (
-                      <div className="absolute z-10 top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
-                        {clients.map((c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => { setEditing({ ...editing, clientId: c.id }); setClientSearch(c.name) }}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors"
-                          >
-                            <span className="font-medium">{c.name}</span>
-                            {c.email && <span className="text-gray-400 text-xs ml-2">{c.email}</span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {clientSearch.length > 1 && clients.length === 0 && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        No encontrado.{' '}
-                        <a href="/dashboard/clients" target="_blank" className="text-[#293c4f] underline">Crear cliente</a>
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <input type="text" value={editing.client?.name ?? ''} disabled className={cn(ic, 'bg-gray-50 text-gray-500')} />
-                )}
-              </F>
-
-              <div className="grid grid-cols-2 gap-3">
-                <F label="Valor estimado (DOP)">
-                  <input type="number" min="0" value={editing.value ?? ''} placeholder="0"
-                    onChange={(e) => setEditing({ ...editing, value: parseFloat(e.target.value) || 0 })}
-                    className={ic} />
-                </F>
-                <F label="Probabilidad (%)">
-                  <input type="number" min="0" max="100" value={editing.probability ?? 20}
-                    onChange={(e) => setEditing({ ...editing, probability: parseInt(e.target.value) || 0 })}
-                    className={ic} />
-                </F>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <F label="Etapa">
-                  <Select value={editing.status} onChange={(e: any) => setEditing({ ...editing, status: e.target.value })} className={ic}>
-                    {STAGES.map((s) => <option key={s.status} value={s.status}>{s.label}</option>)}
-                  </Select>
-                </F>
-                <F label="Unidad de negocio">
-                  <Select value={editing.businessUnit} onChange={(e: any) => setEditing({ ...editing, businessUnit: e.target.value })} className={ic}>
-                    <option value="HAX">HAX Estudio</option>
-                    <option value="KODER">KODER</option>
-                  </Select>
-                </F>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <F label="Origen del lead">
-                  <Select value={editing.leadSource ?? ''} onChange={(e: any) => setEditing({ ...editing, leadSource: e.target.value })} className={ic}>
-                    <option value="">— Seleccionar —</option>
-                    {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </Select>
-                </F>
-                <F label="Cierre esperado">
-                  <input type="date" value={editing.expectedDate?.substring(0, 10) ?? ''}
-                    onChange={(e) => setEditing({ ...editing, expectedDate: e.target.value })}
-                    className={ic} />
-                </F>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <F label="Persona de contacto">
-                  <input type="text" value={editing.contactName ?? ''} placeholder="Nombre del contacto"
-                    onChange={(e) => setEditing({ ...editing, contactName: e.target.value })}
-                    className={ic} />
-                </F>
-                <F label="Asignado a">
-                  <input type="text" value={editing.assignedTo ?? ''} placeholder="Nombre del responsable"
-                    onChange={(e) => setEditing({ ...editing, assignedTo: e.target.value })}
-                    className={ic} />
-                </F>
-              </div>
-
-              <F label="Descripción">
-                <textarea value={editing.description ?? ''} rows={2} placeholder="Detalles de la oportunidad..."
-                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                  className={cn(ic, 'resize-none')} />
-              </F>
-            </div>
-
-            <div className="flex justify-end gap-2 p-6 pt-0">
-              <Button variant="secondary" size="sm" onClick={() => setEditing(null)}>Cancelar</Button>
-              <Button
-                variant="primary" size="sm" loading={save.isPending}
-                disabled={!editing.title || !editing.clientId}
-                onClick={() => save.mutate(editing)}
-              >
-                {isNew ? 'Crear' : 'Guardar'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-const ic = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white'
-
-function F({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-      {children}
     </div>
   )
 }

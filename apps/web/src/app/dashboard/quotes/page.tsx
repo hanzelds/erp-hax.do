@@ -4,9 +4,10 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Send, Check, X, FileText, ArrowRight, UserPlus, ArrowLeft,
-  Trash2, ChevronDown, Download, Search, Calendar,
+  Trash2, ChevronDown, Download, Search, Calendar, Link2,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn, openPdf } from '@/lib/utils'
 import { PageHeader, Button, Card, Skeleton, EmptyState, DatePicker } from '@/components/ui'
@@ -22,6 +23,7 @@ interface Quote {
   id: string; number: string; status: QuoteStatus; businessUnit: 'HAX' | 'KODER'
   subtotal: number; taxAmount: number; total: number; validUntil?: string
   notes?: string; terms?: string; createdAt: string
+  opportunityId?: string | null
   client: Client; items?: QuoteItem[]; _count?: { items: number }
   invoice?: { id: string; number: string; status: string } | null
 }
@@ -286,11 +288,11 @@ function LineRow({ line, index, products, lineTotal, discount, showDelete, onCha
 // ─────────────────────────────────────────────────────────────
 // New Quote — Full Page
 // ─────────────────────────────────────────────────────────────
-function NewQuotePage({ onClose }: { onClose: () => void }) {
+function NewQuotePage({ onClose, opportunityId: opId, clientId: initClientId }: { onClose: () => void; opportunityId?: string; clientId?: string }) {
   const qc = useQueryClient()
   const today = new Date().toISOString().slice(0, 10)
 
-  const [clientId, setClientId]     = useState('')
+  const [clientId, setClientId]     = useState(initClientId ?? '')
   const [bu, setBu]                 = useState<'HAX' | 'KODER'>('HAX')
   const [issueDate, setIssueDate]   = useState(today)
   const [validUntil, setValidUntil] = useState('')
@@ -332,6 +334,7 @@ function NewQuotePage({ onClose }: { onClose: () => void }) {
       clientId, businessUnit: bu,
       validUntil: validUntil || undefined,
       notes: notes || undefined, terms: terms || undefined,
+      opportunityId: opId || undefined,
       items: lines.map((l, idx) => ({
         description: l.description, quantity: l.quantity, unitPrice: l.unitPrice,
         taxRate: l.isExempt ? 0 : l.taxRate, isExempt: l.isExempt, sortOrder: idx,
@@ -361,6 +364,13 @@ function NewQuotePage({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="px-6 pb-28 max-w-5xl mx-auto space-y-0">
+        {opId && (
+          <div className="mb-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-2">
+            <Link2 className="w-4 h-4 text-blue-600 shrink-0" />
+            <span className="text-sm text-blue-700">Cotización vinculada a una oportunidad CRM</span>
+            <Link href={`/dashboard/crm/${opId}`} className="text-xs text-blue-600 underline ml-auto shrink-0" onClick={onClose}>Ver oportunidad →</Link>
+          </div>
+        )}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
 
           {/* ── Document Header ── */}
@@ -585,10 +595,13 @@ function NewQuotePage({ onClose }: { onClose: () => void }) {
 // Quotes List Page
 // ─────────────────────────────────────────────────────────────
 export default function QuotesPage() {
+  const searchParams = useSearchParams()
   const [status, setStatus]     = useState('')
   const [bu, setBu]             = useState('')
-  const [showNew, setShowNew]   = useState(false)
+  const [showNew, setShowNew]   = useState(searchParams.get('open') === 'new')
   const [detailId, setDetailId] = useState<string | null>(null)
+  const urlOpportunityId = searchParams.get('opportunityId') ?? undefined
+  const urlClientId      = searchParams.get('clientId') ?? undefined
   const router = useRouter()
   const qc     = useQueryClient()
 
@@ -619,7 +632,7 @@ export default function QuotesPage() {
 
   const quotes = data?.data ?? (Array.isArray(data) ? data : [])
 
-  if (showNew)   return <NewQuotePage onClose={() => setShowNew(false)} />
+  if (showNew)   return <NewQuotePage onClose={() => setShowNew(false)} opportunityId={urlOpportunityId} clientId={urlClientId} />
   if (detailId)  return (
     <QuoteDetailPage
       id={detailId}
@@ -708,7 +721,7 @@ export default function QuotesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                {['Número', 'Cliente', 'BU', 'Estado', 'Total', 'Válida hasta', 'Acciones'].map(h => (
+                {['Número', 'Cliente', 'BU', 'Estado', 'Total', 'Válida hasta', 'CRM', 'Acciones'].map(h => (
                   <th key={h} className="text-left text-xs font-medium text-gray-400 px-3 py-2.5">{h}</th>
                 ))}
               </tr>
@@ -739,6 +752,14 @@ export default function QuotesPage() {
                         {formatDate(q.validUntil)}
                       </span>
                     ) : '—'}
+                  </td>
+                  <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                    {q.opportunityId ? (
+                      <Link href={`/dashboard/crm/${q.opportunityId}`}
+                        className="text-xs text-[#293c4f] underline hover:opacity-70 transition-opacity">
+                        Ver →
+                      </Link>
+                    ) : <span className="text-xs text-gray-300">—</span>}
                   </td>
                   <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center gap-1">

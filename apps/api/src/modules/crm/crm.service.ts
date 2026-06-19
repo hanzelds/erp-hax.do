@@ -18,7 +18,7 @@ export async function listOpportunities(query: any) {
 
   const [data, total] = await Promise.all([
     prisma.crmOpportunity.findMany({
-      where, skip, take: limit, orderBy: { createdAt: 'desc' },
+      where, skip, take: limit, orderBy: [{ probability: 'desc' }, { createdAt: 'desc' }],
       include: {
         client: { select: { id: true, name: true, email: true } },
         _count: { select: { activities: true, quotes: true } },
@@ -37,7 +37,7 @@ export async function getPipeline(businessUnit?: BusinessUnit) {
       const items = await prisma.crmOpportunity.findMany({
         where: { ...where, status },
         include: { client: { select: { id: true, name: true } } },
-        orderBy: { updatedAt: 'desc' },
+        orderBy: [{ probability: 'desc' }, { updatedAt: 'desc' }],
       })
       const totalValue = items.reduce((s: number, i: any) => s + (i.value ?? 0), 0)
       return [status, { items, count: items.length, totalValue }]

@@ -191,6 +191,7 @@ export default function NewCommissionPlanPage() {
               <Select value={form.businessUnit} onChange={f('businessUnit')} className={ic}>
                 <option value="HAX">HAX</option>
                 <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
               </Select>
             </div>
             <div>

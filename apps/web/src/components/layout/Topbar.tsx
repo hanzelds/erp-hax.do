@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Bell, Search, ChevronRight, CheckCircle2, AlertCircle, Info, AlertTriangle, X, ExternalLink } from 'lucide-react'
+import { Bell, Search, ChevronRight, CheckCircle2, AlertCircle, Info, AlertTriangle, X, ExternalLink, Menu } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { navigation } from '@/lib/navigation'
 import { useAuthStore } from '@/lib/auth-store'
@@ -11,6 +11,7 @@ import api from '@/lib/api'
 
 interface TopbarProps {
   sidebarCollapsed: boolean
+  onMobileMenuOpen: () => void
 }
 
 interface Notification {
@@ -46,13 +47,12 @@ const TYPE_DOT: Record<string, string> = {
   success: 'bg-emerald-500',
 }
 
-export function Topbar({ sidebarCollapsed }: TopbarProps) {
-  const pathname   = usePathname()
-  const router     = useRouter()
-  const { user, mode } = useAuthStore()
-  const isProforma = mode === 'proforma'
-  const crumb      = getBreadcrumb(pathname)
-  const today      = formatDate(new Date())
+export function Topbar({ sidebarCollapsed, onMobileMenuOpen }: TopbarProps) {
+  const pathname = usePathname()
+  const router   = useRouter()
+  const { user } = useAuthStore()
+  const crumb    = getBreadcrumb(pathname)
+  const today    = formatDate(new Date())
 
   const [open, setOpen]     = useState(false)
   const [readAt, setReadAt] = useState<number>(() => {
@@ -104,66 +104,57 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 z-30 h-16 flex items-center border-b transition-all duration-300 ease-in-out',
-        isProforma
-          ? 'bg-[#111827] border-white/[0.06]'
-          : 'bg-white border-gray-100',
-        sidebarCollapsed ? 'left-16' : 'left-60'
+        'fixed top-0 right-0 z-30 h-16 flex items-center border-b bg-white border-gray-100 transition-all duration-300 ease-in-out',
+        sidebarCollapsed ? 'left-0 md:left-16' : 'left-0 md:left-60'
       )}
     >
-      <div className="flex items-center w-full px-6 gap-4">
+      <div className="flex items-center w-full px-4 md:px-6 gap-3 md:gap-4">
+
+        {/* ── Hamburger (mobile only) ──────────────────── */}
+        <button
+          onClick={onMobileMenuOpen}
+          className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+        >
+          <Menu className="w-4.5 h-4.5" />
+        </button>
 
         {/* ── Breadcrumb ──────────────────────────────── */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className={cn('text-sm hidden sm:block', isProforma ? 'text-white/25' : 'text-gray-300')}>ERP Hax</span>
-          <ChevronRight className={cn('w-3.5 h-3.5 hidden sm:block', isProforma ? 'text-white/15' : 'text-gray-200')} />
+          <span className="text-sm hidden sm:block text-gray-300">ERP Hax</span>
+          <ChevronRight className="w-3.5 h-3.5 hidden sm:block text-gray-200" />
           <div>
-            <h1 className={cn('font-semibold text-sm leading-tight', isProforma ? 'text-white/80' : 'text-gray-700')}>
+            <h1 className="font-semibold text-sm leading-tight text-gray-700">
               {crumb.label}
             </h1>
             {crumb.description && (
-              <p className={cn('text-xs hidden md:block', isProforma ? 'text-white/30' : 'text-gray-400')}>
+              <p className="text-xs hidden md:block text-gray-400">
                 {crumb.description}
               </p>
             )}
           </div>
-          {isProforma && (
-            <span className="hidden sm:inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-medium text-amber-400">
-              <span className="w-1 h-1 rounded-full bg-amber-400" />
-              Proforma
-            </span>
-          )}
         </div>
 
         {/* ── Search ──────────────────────────────────── */}
-        <div className={cn(
-          'hidden md:flex items-center gap-2 border rounded-lg px-3 py-1.5 w-64 transition-all',
-          isProforma
-            ? 'bg-white/[0.04] border-white/[0.08] focus-within:bg-white/[0.07] focus-within:border-white/[0.15]'
-            : 'bg-gray-50 border-gray-100 focus-within:bg-white focus-within:border-gray-200',
-        )}>
-          <Search className={cn('w-3.5 h-3.5 shrink-0', isProforma ? 'text-white/25' : 'text-gray-300')} />
+        <div className="hidden md:flex items-center gap-2 border rounded-lg px-3 py-1.5 w-64 transition-all bg-gray-50 border-gray-100 focus-within:bg-white focus-within:border-gray-200">
+          <Search className="w-3.5 h-3.5 shrink-0 text-gray-300" />
           <input
             type="text"
             placeholder="Buscar..."
-            className={cn('bg-transparent text-sm outline-none w-full', isProforma ? 'text-white/60 placeholder:text-white/20' : 'text-gray-600 placeholder:text-gray-300')}
+            className="bg-transparent text-sm outline-none w-full text-gray-600 placeholder:text-gray-300"
           />
-          <kbd className={cn('hidden lg:inline text-xs font-mono border rounded px-1 py-0.5 shrink-0', isProforma ? 'text-white/20 border-white/10' : 'text-gray-300 border-gray-100')}>
+          <kbd className="hidden lg:inline text-xs font-mono border rounded px-1 py-0.5 shrink-0 text-gray-300 border-gray-100">
             ⌘K
           </kbd>
         </div>
 
         {/* ── Date ─────────────────────────────────────── */}
-        <span className={cn('hidden lg:block text-xs shrink-0', isProforma ? 'text-white/20' : 'text-gray-300')}>{today}</span>
+        <span className="hidden lg:block text-xs shrink-0 text-gray-300">{today}</span>
 
         {/* ── Notifications ────────────────────────────── */}
         <div className="relative" ref={panelRef}>
           <button
             onClick={handleOpen}
-            className={cn(
-              'relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-              isProforma ? 'text-white/30 hover:text-white/60 hover:bg-white/[0.05]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50',
-            )}
+            className="relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-50"
           >
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && (
@@ -233,16 +224,15 @@ export function Topbar({ sidebarCollapsed }: TopbarProps) {
         </div>
 
         {/* ── User avatar ──────────────────────────────── */}
-        <div className={cn('flex items-center gap-2.5 pl-3 border-l', isProforma ? 'border-white/[0.06]' : 'border-gray-100')}>
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0"
-            style={{ backgroundColor: isProforma ? '#92400e' : '#293c4f' }}>
+        <div className="flex items-center gap-2.5 pl-3 border-l border-gray-100">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0 bg-[#293c4f]">
             {user?.name?.charAt(0).toUpperCase() ?? 'U'}
           </div>
           <div className="hidden lg:block min-w-0">
-            <p className={cn('text-sm font-medium leading-tight truncate max-w-28', isProforma ? 'text-white/70' : 'text-gray-700')}>
+            <p className="text-sm font-medium leading-tight truncate max-w-28 text-gray-700">
               {user?.name?.split(' ')[0] ?? 'Usuario'}
             </p>
-            <p className={cn('text-xs', isProforma ? 'text-white/30' : 'text-gray-400')}>
+            <p className="text-xs text-gray-400">
               {user?.role === 'ADMIN' ? 'Admin' : 'Contabilidad'}
             </p>
           </div>

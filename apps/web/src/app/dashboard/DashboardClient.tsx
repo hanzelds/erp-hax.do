@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   DollarSign, FileText, Clock, TrendingUp,
-  ArrowUpRight, CheckCircle2, AlertCircle, Clock3,
+  ArrowUpRight, CheckCircle2, AlertCircle, Clock3, Receipt, Users,
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -31,7 +31,9 @@ interface DashboardData {
   pendingReceivables: {
     client: string; amount: number; days: number
   }[]
-  revenueChart: { month: string; hax: number; koder: number }[]
+  accountsPayable: { total: number; count: number }
+  payrollPayable:  { total: number; count: number }
+  revenueChart: { month: string; hax: number; koder: number; aldia: number }[]
   expenseChart: { category: string; amount: number }[]
 }
 
@@ -45,7 +47,7 @@ function CustomTooltip({ active, payload, label }: any) {
       {payload.map((p: any) => (
         <div key={p.name} className="flex items-center gap-2 mb-1">
           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-          <span className="text-gray-500">{p.name === 'hax' ? 'Hax' : 'Koder'}:</span>
+          <span className="text-gray-500">{p.name === 'hax' ? 'Hax' : p.name === 'koder' ? 'Koder' : 'Al Dia'}:</span>
           <span className="font-medium text-gray-800">{formatCurrency(p.value)}</span>
         </div>
       ))}
@@ -145,6 +147,24 @@ export function DashboardClient() {
         />
       </div>
 
+      {/* ── Obligaciones pendientes ───────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <StatCard
+          label="Cuentas por pagar"
+          value={formatCurrency(data?.accountsPayable.total ?? 0)}
+          sub={`${data?.accountsPayable.count ?? 0} gastos pendientes de pago`}
+          icon={<Receipt className="w-4 h-4" />}
+          accent="#dc2626"
+        />
+        <StatCard
+          label="Nómina por pagar"
+          value={formatCurrency(data?.payrollPayable.total ?? 0)}
+          sub={`${data?.payrollPayable.count ?? 0} período${(data?.payrollPayable.count ?? 0) !== 1 ? 's' : ''} aprobado${(data?.payrollPayable.count ?? 0) !== 1 ? 's' : ''}`}
+          icon={<Users className="w-4 h-4" />}
+          accent="#9333ea"
+        />
+      </div>
+
       {/* ── CRM Pipeline KPIs ────────────────────────── */}
       <div>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Pipeline CRM</h2>
@@ -197,6 +217,10 @@ export function DashboardClient() {
                   <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: '#4621a3' }} />
                   Koder
                 </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: '#a8ff00' }} />
+                  Al Dia
+                </span>
               </div>
             }
           />
@@ -211,6 +235,10 @@ export function DashboardClient() {
                   <stop offset="5%"  stopColor="#4621a3" stopOpacity={0.15} />
                   <stop offset="95%" stopColor="#4621a3" stopOpacity={0}    />
                 </linearGradient>
+                <linearGradient id="aldiaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#a8ff00" stopOpacity={0.20} />
+                  <stop offset="95%" stopColor="#a8ff00" stopOpacity={0}    />
+                </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
@@ -220,6 +248,7 @@ export function DashboardClient() {
               <Tooltip content={<CustomTooltip />} />
               <Area type="monotone" dataKey="hax"   stroke="#293c4f" strokeWidth={2} fill="url(#haxGrad)"   />
               <Area type="monotone" dataKey="koder" stroke="#4621a3" strokeWidth={2} fill="url(#koderGrad)" />
+              <Area type="monotone" dataKey="aldia" stroke="#a8ff00" strokeWidth={2} fill="url(#aldiaGrad)" />
             </AreaChart>
           </ResponsiveContainer>
         </Card>

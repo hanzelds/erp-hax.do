@@ -14,11 +14,11 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const [collapsed, setCollapsed] = useState(false)
-  const [mounted, setMounted]     = useState(false)
-  const { isAuthenticated, mode } = useAuthStore()
-  const router                    = useRouter()
-  const isProforma                = mode === 'proforma'
+  const [collapsed, setCollapsed]   = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [mounted, setMounted]       = useState(false)
+  const { isAuthenticated }         = useAuthStore()
+  const router                      = useRouter()
 
   useEffect(() => {
     const saved = localStorage.getItem('hax_sidebar_collapsed')
@@ -59,27 +59,40 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <ConfirmDialogProvider>
-    <div className={cn('min-h-screen transition-colors duration-300', isProforma ? 'bg-[#0d1117]' : 'bg-gray-50')}>
-      <Sidebar collapsed={collapsed} onToggle={handleToggle} />
+    <div className="min-h-screen bg-gray-50">
+      <Sidebar
+        collapsed={collapsed}
+        onToggle={handleToggle}
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
 
       <div
         className={cn(
           'flex flex-col min-h-screen transition-all duration-300 ease-in-out',
-          collapsed ? 'ml-16' : 'ml-60'
+          'ml-0',
+          collapsed ? 'md:ml-16' : 'md:ml-60'
         )}
       >
-        <Topbar sidebarCollapsed={collapsed} />
+        <Topbar sidebarCollapsed={collapsed} onMobileMenuOpen={() => setMobileOpen(true)} />
 
-        <main className="flex-1 mt-16 p-6 dashboard-scope">
+        <main className="flex-1 mt-16 p-4 md:p-6 dashboard-scope">
           <div className="animate-fade-in">
             {children}
           </div>
         </main>
 
-        <footer className={cn('px-6 py-3 border-t', isProforma ? 'border-white/[0.06]' : 'border-gray-100')}>
-          <p className={cn('text-xs text-center', isProforma ? 'text-white/20' : 'text-gray-300')}>
+        <footer className="px-6 py-3 border-t border-gray-100">
+          <p className="text-xs text-center text-gray-300">
             ERP Hax V1 · HAX ESTUDIO CREATIVO EIRL · RNC 133290251
-            {isProforma && <span className="ml-2 text-amber-500/60">· Modo Proforma</span>}
           </p>
         </footer>
       </div>

@@ -9,7 +9,7 @@ import { PageHeader, Button, Card, CardHeader, Skeleton, EmptyState } from '@/co
 import { useAuthStore } from '@/lib/auth-store'
 
 type BudgetCategory = 'OPERATIONS' | 'MARKETING' | 'TECHNOLOGY' | 'RENT' | 'UTILITIES' | 'SALARIES' | 'TAXES' | 'OTHER' | 'TOTAL'
-type BusinessUnit   = 'HAX' | 'KODER'
+type BusinessUnit   = 'HAX' | 'KODER' | 'ALDIA'
 type BudgetStatus   = 'ON_TRACK' | 'ALERT' | 'EXCEEDED'
 
 interface BudgetLine {
@@ -106,6 +106,14 @@ export default function BudgetsPage() {
     },
   })
 
+  const { data: aldiaBudgets = [], isLoading: loadingAldia } = useQuery<BudgetLine[]>({
+    queryKey: ['budgets', period, 'ALDIA'],
+    queryFn: async () => {
+      const { data } = await api.get('/budgets', { params: { period, businessUnit: 'ALDIA' } })
+      return data.data ?? data
+    },
+  })
+
   const { data: summary } = useQuery<BudgetSummary>({
     queryKey: ['budgets-summary', period],
     queryFn: async () => {
@@ -193,11 +201,22 @@ export default function BudgetsPage() {
         onEdit={() => setEditModal('KODER')}
       />
 
+      {/* Al Dia ERP */}
+      <BudgetSection
+        title="Al Dia ERP"
+        lines={aldiaBudgets}
+        isLoading={loadingAldia}
+        isAdmin={isAdmin}
+        isSyncing={syncingBu === 'ALDIA'}
+        onSync={() => { setSyncingBu('ALDIA'); syncBudget.mutate({ bu: 'ALDIA' }) }}
+        onEdit={() => setEditModal('ALDIA')}
+      />
+
       {editModal && (
         <EditBudgetModal
           bu={editModal}
           period={period}
-          lines={editModal === 'HAX' ? haxBudgets : koderBudgets}
+          lines={editModal === 'HAX' ? haxBudgets : editModal === 'KODER' ? koderBudgets : aldiaBudgets}
           onClose={() => setEditModal(null)}
         />
       )}

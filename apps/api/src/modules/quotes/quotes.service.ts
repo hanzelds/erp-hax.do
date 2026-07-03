@@ -140,10 +140,20 @@ export async function sendQuote(id: string) {
   if (!quote) throw new NotFoundError('Cotización')
   if (quote.status !== QuoteStatus.DRAFT) throw new AppError('Solo se pueden enviar cotizaciones en borrador', 400)
 
-  return prisma.quote.update({
+  const updated = await prisma.quote.update({
     where: { id },
     data: { status: QuoteStatus.SENT, sentAt: new Date() },
   })
+
+  // Auto-avance CRM: LEAD/CONTACT → PROPOSAL cuando se envía cotización vinculada
+  if (quote.opportunityId) {
+    await prisma.crmOpportunity.updateMany({
+      where: { id: quote.opportunityId, status: { in: ['LEAD', 'CONTACT'] } },
+      data: { status: 'PROPOSAL' },
+    })
+  }
+
+  return updated
 }
 
 export async function acceptQuote(id: string) {
@@ -153,10 +163,20 @@ export async function acceptQuote(id: string) {
     throw new AppError('La cotización debe estar en borrador o enviada para aceptar', 400)
   }
 
-  return prisma.quote.update({
+  const updated = await prisma.quote.update({
     where: { id },
     data: { status: QuoteStatus.ACCEPTED, acceptedAt: new Date() },
   })
+
+  // Auto-avance CRM: PROPOSAL → NEGOTIATION cuando se acepta cotización vinculada
+  if (quote.opportunityId) {
+    await prisma.crmOpportunity.updateMany({
+      where: { id: quote.opportunityId, status: 'PROPOSAL' },
+      data: { status: 'NEGOTIATION' },
+    })
+  }
+
+  return updated
 }
 
 export async function rejectQuote(id: string, reason?: string) {

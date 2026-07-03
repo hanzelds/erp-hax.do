@@ -260,6 +260,7 @@ export const RESET_MODULE_MAP: Record<string, () => Promise<any>> = {
     await prisma.bankTransaction.deleteMany()
   },
   reports:          () => prisma.fiscalReport.deleteMany(),
+  purchaseOrders:   () => prisma.purchaseOrder.deleteMany(),
 }
 
 export async function resetModules(modules: string[]) {

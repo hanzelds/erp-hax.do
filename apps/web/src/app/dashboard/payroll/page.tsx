@@ -15,7 +15,7 @@ type AdditionType  = 'COMMISSION' | 'OVERTIME' | 'INCENTIVE' | 'BONUS' | 'VACATI
 
 interface Employee {
   id: string; name: string; email: string; position?: string
-  type: EmployeeType; businessUnit: 'HAX' | 'KODER'
+  type: EmployeeType; businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   baseSalary: number; isActive: boolean; hiredAt: string
 }
 
@@ -33,7 +33,7 @@ interface PayrollItem {
 }
 
 interface Payroll {
-  id: string; businessUnit: 'HAX' | 'KODER'; period: string
+  id: string; businessUnit: 'HAX' | 'KODER' | 'ALDIA'; period: string
   status: PayrollStatus; totalGross: number; totalNet: number
   totalIsr: number; totalAfpEmployee: number; totalSfsEmployee: number
   totalEmployerCost: number; approvedAt?: string; paidAt?: string
@@ -162,6 +162,7 @@ function PayrollsTab() {
         ) : payrolls.length === 0 ? (
           <EmptyState icon={<DollarSign className="w-5 h-5" />} title="Sin nóminas" description="Calcula la primera nómina para comenzar." />
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
@@ -326,6 +327,7 @@ function PayrollsTab() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
 
@@ -503,6 +505,7 @@ function EmployeesTab() {
           <option value="">Ambas BU</option>
           <option value="HAX">HAX</option>
           <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
         </Select>
         {isAdmin && (
           <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowNew(true)}>
@@ -518,6 +521,7 @@ function EmployeesTab() {
           <EmptyState icon={<Users className="w-5 h-5" />} title="Sin empleados" description="Registra el primer empleado para calcular nóminas."
             action={isAdmin ? <Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowNew(true)}>Nuevo empleado</Button> : undefined} />
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
@@ -557,6 +561,7 @@ function EmployeesTab() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </div>
@@ -591,6 +596,7 @@ function CalculateModal({ onClose }: { onClose: () => void }) {
             <Select required value={bu} onChange={(e) => setBu(e.target.value)} className={ic}>
               <option value="HAX">HAX</option>
               <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
             </Select>
           </F>
           <F label="Mes *">
@@ -700,6 +706,7 @@ function NewEmployeePage({ onBack, onSaved }: { onBack: () => void; onSaved: () 
                 <Select required value={form.businessUnit} onChange={(e) => set('businessUnit', e.target.value)} className={ic}>
                   <option value="HAX">HAX</option>
                   <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
                 </Select>
               </F>
             </div>

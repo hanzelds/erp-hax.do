@@ -9,7 +9,6 @@ import {
 import api from '@/lib/api'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, Skeleton, EmptyState, Select, DatePicker } from '@/components/ui'
-import { useAuthStore } from '@/lib/auth-store'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Payment {
@@ -83,9 +82,6 @@ const EMPTY_FORM: PaymentForm = {
 
 // ─── New Payment Page ──────────────────────────────────────────────────────────
 function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
-  const { mode, proformaBankAccountId } = useAuthStore()
-  const isProforma = mode === 'proforma'
-
   const [form, setForm]               = useState<PaymentForm>(EMPTY_FORM)
   const [clientSearch, setClientSearch] = useState('')
   const [showClientDrop, setShowClientDrop] = useState(false)
@@ -113,21 +109,15 @@ function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () =
     enabled: showClientDrop,
   })
 
-  // Facturas pendientes del cliente filtradas por modo:
-  // Fiscal  → excluye PROFORMA; Proforma → solo PROFORMA (cualquier status con saldo)
   const { data: pendingInvoices = [], isLoading: loadingInvoices } = useQuery<PendingInvoice[]>({
-    queryKey: ['pending-invoices', form.clientId, mode],
+    queryKey: ['pending-invoices', form.clientId],
     queryFn: async () => {
       const params: Record<string, any> = {
         clientId:      form.clientId,
         paymentStatus: 'PENDING,PARTIAL',
+        status:        'APPROVED',
+        excludeProforma: 'true',
         limit:         100,
-      }
-      if (isProforma) {
-        params.type = 'PROFORMA'            // solo proformas con saldo
-      } else {
-        params.status        = 'APPROVED'   // solo aprobadas fiscales
-        params.excludeProforma = 'true'
       }
       const { data } = await api.get('/invoices', { params })
       return data.data ?? data
@@ -178,10 +168,6 @@ function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () =
         reference:     form.reference.trim() || null,
         notes:         form.notes.trim() || null,
         paidAt:        new Date(form.paidAt).toISOString(),
-        // En modo proforma: enviar la cuenta bancaria configurada para depósito
-        ...(isProforma && proformaBankAccountId
-          ? { bankAccountId: proformaBankAccountId }
-          : {}),
       })
     },
     onSuccess: () => {
@@ -531,22 +517,14 @@ function NewPaymentPage({ onBack, onSaved }: { onBack: () => void; onSaved: () =
 
 // ─── Payments List Page ────────────────────────────────────────────────────────
 export default function PaymentsPage() {
-  const { mode } = useAuthStore()
-  const isProforma = mode === 'proforma'
   const [showNew, setShowNew] = useState(false)
   const [search, setSearch]   = useState('')
   const qc = useQueryClient()
 
   const { data: payments = [], isLoading } = useQuery<Payment[]>({
-    queryKey: ['payments', mode],
+    queryKey: ['payments'],
     queryFn: async () => {
-      const params: Record<string, any> = { limit: 100 }
-      if (isProforma) {
-        params.proformaOnly = 'true'
-      } else {
-        params.excludeProforma = 'true'
-      }
-      const { data } = await api.get('/payments', { params })
+      const { data } = await api.get('/payments', { params: { limit: 100, excludeProforma: 'true' } })
       return data.data ?? data
     },
   })
@@ -659,6 +637,7 @@ export default function PaymentsPage() {
             }
           />
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
@@ -704,6 +683,7 @@ export default function PaymentsPage() {
               </tfoot>
             )}
           </table>
+          </div>
         )}
       </Card>
     </div>

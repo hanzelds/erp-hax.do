@@ -23,7 +23,7 @@ interface CommissionPlan {
   name: string
   beneficiary: string
   employeeId: string | null
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   rate: number
   base: CommissionBase
   clientScope: CommissionClientScope
@@ -49,7 +49,7 @@ interface CommissionEntry {
   approvedAt: string | null
   plan: {
     id: string; name: string; beneficiary: string
-    businessUnit: 'HAX' | 'KODER'; base: CommissionBase; rate: number
+    businessUnit: 'HAX' | 'KODER' | 'ALDIA'; base: CommissionBase; rate: number
     employee: { id: string; name: string } | null
   }
   meetsMinimum?: boolean
@@ -91,8 +91,6 @@ type Tab = 'calculator' | 'plans' | 'history'
 
 export default function CommissionsPage() {
   const [tab, setTab] = useState<Tab>('calculator')
-  const { mode } = useAuthStore()
-  const isProforma = mode === 'proforma'
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'calculator', label: 'Calculadora' },
@@ -104,15 +102,7 @@ export default function CommissionsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Comisiones"
-        subtitle={isProforma ? 'Calculadora de comisiones — Modo Proforma' : 'Calculadora de comisiones por ventas y cobranza'}
-        actions={
-          isProforma ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 text-xs font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              Calculando sobre proformas
-            </span>
-          ) : undefined
-        }
+        subtitle="Calculadora de comisiones por ventas y cobranza"
       />
 
       {/* Tab nav */}
@@ -139,9 +129,8 @@ export default function CommissionsPage() {
 
 function CalculatorTab() {
   const qc = useQueryClient()
-  const { user, mode } = useAuthStore()
-  const isAdmin    = user?.role === 'ADMIN'
-  const isProforma = mode === 'proforma'
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'ADMIN'
 
   const now = new Date()
   const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
@@ -155,7 +144,7 @@ function CalculatorTab() {
       const { data } = await api.post('/commissions/calculate', {
         period,
         businessUnit:  bu || undefined,
-        proformaOnly:  isProforma,
+        proformaOnly:  false,
       })
       return data.data ?? data
     },

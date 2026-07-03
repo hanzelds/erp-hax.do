@@ -21,7 +21,7 @@ interface Supplier {
   address: string | null
   category: string | null
   categoryCode: string | null
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   isActive: boolean
   createdAt: string
   _count?: { expenses: number }
@@ -129,6 +129,7 @@ export default function SuppliersPage() {
             }
           />
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
@@ -174,6 +175,7 @@ export default function SuppliersPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
       {/* Delete confirmation dialog */}
@@ -410,10 +412,11 @@ function EditSupplierPage({
             <Field label="Unidad de negocio">
               <Select
                 value={form.businessUnit}
-                onChange={(e) => set('businessUnit', e.target.value as 'HAX' | 'KODER')}
+                onChange={(e) => set('businessUnit', e.target.value as 'HAX' | 'KODER' | 'ALDIA')}
                 className={sel}>
                 <option value="HAX">HAX</option>
                 <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
               </Select>
             </Field>
           </div>

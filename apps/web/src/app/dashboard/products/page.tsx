@@ -17,7 +17,7 @@ interface Product {
   taxRate: number
   isExempt: boolean
   type: 'SERVICE' | 'PRODUCT'
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   isActive: boolean
   category?: { id: string; name: string } | null
 }
@@ -39,7 +39,7 @@ function NewProductPage({ onCreated, onBack }: { onCreated: () => void; onBack: 
   const [name, setName]               = useState('')
   const [description, setDescription] = useState('')
   const [code, setCode]               = useState('')
-  const [businessUnit, setBusinessUnit] = useState<'HAX' | 'KODER'>('HAX')
+  const [businessUnit, setBusinessUnit] = useState<'HAX' | 'KODER' | 'ALDIA'>('HAX')
   const [unitPrice, setUnitPrice]     = useState('')
   const [taxKey, setTaxKey]           = useState<'18' | '16' | '0' | 'exempt'>('18')
   const [err, setErr]                 = useState<string | null>(null)
@@ -155,9 +155,10 @@ function NewProductPage({ onCreated, onBack }: { onCreated: () => void; onBack: 
               <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Opcional" className={ic} />
             </F>
             <F label="Unidad de negocio">
-              <Select value={businessUnit} onChange={(e) => setBusinessUnit(e.target.value as 'HAX' | 'KODER')} className={sel}>
+              <Select value={businessUnit} onChange={(e) => setBusinessUnit(e.target.value as 'HAX' | 'KODER' | 'ALDIA')} className={sel}>
                 <option value="HAX">HAX</option>
                 <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
               </Select>
             </F>
           </div>
@@ -339,6 +340,7 @@ export default function ProductsPage() {
             <option value="">Ambas unidades</option>
             <option value="HAX">HAX</option>
             <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
           </Select>
         </div>
       </Card>
@@ -354,6 +356,7 @@ export default function ProductsPage() {
             action={<Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowNew(true)}>Nuevo producto</Button>}
           />
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
@@ -405,6 +408,7 @@ export default function ProductsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
 
@@ -490,9 +494,10 @@ function EditProductModal({ product, onClose }: { product: Product; onClose: () 
               <input type="text" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className={ic} placeholder="Opcional" />
             </F>
             <F label="Unidad">
-              <Select value={form.businessUnit} onChange={(e) => setForm({ ...form, businessUnit: e.target.value as 'HAX' | 'KODER' })} className={sel}>
+              <Select value={form.businessUnit} onChange={(e) => setForm({ ...form, businessUnit: e.target.value as 'HAX' | 'KODER' | 'ALDIA' })} className={sel}>
                 <option value="HAX">HAX</option>
                 <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
               </Select>
             </F>
           </div>

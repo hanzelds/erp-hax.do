@@ -12,7 +12,7 @@ import { formatCurrency, cn, openPdf } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader, Skeleton, StatCard, Select } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
-const TABS = ['P&L', 'Balance General', 'Flujo de Caja', '606 Compras', '607 Ventas'] as const
+const TABS = ['P&L', 'Balance General', 'Flujo de Caja', '606 Compras', '607 Ventas', 'CRM'] as const
 type Tab = typeof TABS[number]
 
 function periodOptions() {
@@ -103,6 +103,7 @@ export default function ReportsPage() {
       {tab === 'Flujo de Caja' && <CashFlowTab period={period} />}
       {tab === '606 Compras' && <Report606Tab period={period} />}
       {tab === '607 Ventas' && <Report607Tab period={period} />}
+      {tab === 'CRM' && <CrmAnalyticsTab />}
     </div>
   )
 }
@@ -389,5 +390,88 @@ function ReportTable({ headers, rows }: { headers: string[]; rows: string[][] })
         </table>
       </div>
     </Card>
+  )
+}
+
+// ── CRM Analytics Tab ─────────────────────────────────────────
+
+function CrmAnalyticsTab() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['crm-analytics-report'],
+    queryFn: async () => {
+      const res = await api.get('/crm/analytics')
+      return res.data?.data ?? res.data
+    },
+  })
+
+  if (isLoading) return <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div>
+
+  const totalPipeline   = data?.totalPipeline    ?? 0
+  const forecast        = data?.weightedForecast  ?? 0
+  const wonMonth        = data?.wonThisMonth       ?? 0
+  const winRate         = data?.winRate            ?? 0
+  const byStage: any[]  = data?.byStage            ?? []
+  const openOpps: any[] = data?.openOpportunities  ?? []
+
+  const STAGE_LABELS: Record<string, string> = {
+    LEAD: 'Lead', CONTACT: 'Contactado', PROPOSAL: 'Propuesta',
+    NEGOTIATION: 'Negociación', CLOSED_WON: 'Ganado', CLOSED_LOST: 'Perdido',
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Pipeline activo"   value={formatCurrency(totalPipeline)} accent="#2563eb" />
+        <StatCard label="Pronóstico"         value={formatCurrency(forecast)}      accent="#7c3aed" />
+        <StatCard label="Ganado este mes"    value={formatCurrency(wonMonth)}       accent="#16a34a" />
+        <StatCard label="Win rate (90d)"     value={`${winRate}%`}                 accent="#d97706" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <Card>
+          <CardHeader title="Oportunidades por etapa" />
+          <div className="space-y-2 mt-3">
+            {byStage.map((s: any) => (
+              <div key={s.status} className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">{STAGE_LABELS[s.status] ?? s.status}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-gray-400">{s.count} ops</span>
+                  <span className="font-medium text-gray-800">{formatCurrency(s.totalValue ?? 0)}</span>
+                </div>
+              </div>
+            ))}
+            {byStage.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Sin datos</p>}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Top oportunidades abiertas" />
+          <div className="mt-3">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  {['Título', 'Etapa', 'Valor', 'Prob.'].map(h => (
+                    <th key={h} className="text-left font-medium text-gray-400 px-2 py-2">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {openOpps.slice(0, 5).map((o: any) => (
+                  <tr key={o.id} className="border-b border-gray-50">
+                    <td className="px-2 py-2 text-gray-800 font-medium truncate max-w-[120px]">{o.title}</td>
+                    <td className="px-2 py-2 text-gray-500">{STAGE_LABELS[o.status] ?? o.status}</td>
+                    <td className="px-2 py-2 font-medium text-gray-800">{formatCurrency(o.value ?? 0)}</td>
+                    <td className="px-2 py-2 text-gray-500">{o.probability}%</td>
+                  </tr>
+                ))}
+                {openOpps.length === 0 && (
+                  <tr><td colSpan={4} className="px-2 py-4 text-center text-gray-400">Sin oportunidades abiertas</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+    </div>
   )
 }

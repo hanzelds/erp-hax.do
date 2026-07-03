@@ -20,7 +20,7 @@ interface Client  { id: string; name: string; rnc?: string | null; phone?: strin
 interface Product { id: string; name: string; code: string | null; unitPrice: number; taxRate: number; isExempt: boolean }
 interface QuoteItem { id?: string; description: string; quantity: number; unitPrice: number; taxRate: number; taxAmount: number; isExempt: boolean; sortOrder: number }
 interface Quote {
-  id: string; number: string; status: QuoteStatus; businessUnit: 'HAX' | 'KODER'
+  id: string; number: string; status: QuoteStatus; businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   subtotal: number; taxAmount: number; total: number; validUntil?: string
   notes?: string; terms?: string; createdAt: string
   opportunityId?: string | null
@@ -293,7 +293,7 @@ function NewQuotePage({ onClose, opportunityId: opId, clientId: initClientId }: 
   const today = new Date().toISOString().slice(0, 10)
 
   const [clientId, setClientId]     = useState(initClientId ?? '')
-  const [bu, setBu]                 = useState<'HAX' | 'KODER'>('HAX')
+  const [bu, setBu]                 = useState<'HAX' | 'KODER' | 'ALDIA'>('HAX')
   const [issueDate, setIssueDate]   = useState(today)
   const [validUntil, setValidUntil] = useState('')
   const [notes, setNotes]           = useState('')
@@ -395,7 +395,7 @@ function NewQuotePage({ onClose, opportunityId: opId, clientId: initClientId }: 
                 </div>
                 {/* BU pill toggle */}
                 <div className="flex rounded-lg overflow-hidden border border-gray-200">
-                  {(['HAX', 'KODER'] as const).map(b => (
+                  {(['HAX', 'KODER', 'ALDIA'] as const).map(b => (
                     <button key={b} type="button" onClick={() => setBu(b)}
                       className={cn(
                         'px-4 py-1.5 text-xs font-semibold transition-colors',
@@ -699,7 +699,7 @@ export default function QuotesPage() {
             ))}
           </div>
           <div className="flex items-center gap-1 rounded-lg border border-gray-200 overflow-hidden">
-            {[{ value: '', label: 'Todas' }, { value: 'HAX', label: 'HAX' }, { value: 'KODER', label: 'KODER' }].map(b => (
+            {[{ value: '', label: 'Todas' }, { value: 'HAX', label: 'HAX' }, { value: 'KODER', label: 'KODER' }, { value: 'ALDIA', label: 'Al Dia ERP' }].map(b => (
               <button key={b.value} onClick={() => setBu(b.value)}
                 className={cn('px-3 py-1.5 text-xs font-medium transition-colors', bu === b.value ? 'bg-[#293c4f] text-white' : 'text-gray-500 hover:bg-gray-50')}>
                 {b.label}

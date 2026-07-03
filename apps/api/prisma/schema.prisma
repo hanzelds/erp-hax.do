@@ -55,7 +55,7 @@ model Client {
 
 model CrmOpportunity {
   id           String       @id @default(cuid())
-  clientId     String
+  clientId     String?
   businessUnit BusinessUnit
   title        String
   description  String?
@@ -69,9 +69,10 @@ model CrmOpportunity {
   leadSource   LeadSource?
   contactName  String?
   contactPhone String?
+  notes        String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
-  client       Client       @relation(fields: [clientId], references: [id])
+  client       Client?      @relation(fields: [clientId], references: [id])
   quotes       Quote[]
   activities   CrmActivity[]
 
@@ -370,6 +371,9 @@ model PurchaseOrder {
   receivedAt   DateTime?
   cancelledAt  DateTime?
   expenseId    String?             @unique
+  isCredit     Boolean             @default(false)
+  paymentTerms Int?
+  dueDate      DateTime?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
   items        PurchaseOrderItem[]
@@ -934,6 +938,7 @@ enum PayrollAdditionType {
 }
 
 enum PdfTemplateType {
+  PURCHASE_ORDER
   INVOICE
   CREDIT_NOTE
   QUOTE
@@ -951,6 +956,7 @@ enum UserRole {
 enum BusinessUnit {
   HAX
   KODER
+  ALDIA
 }
 
 enum InvoiceStatus {

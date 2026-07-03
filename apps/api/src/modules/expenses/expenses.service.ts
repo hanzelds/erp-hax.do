@@ -46,7 +46,7 @@ function categoryToKey(category: string): 'GENERAL' | 'SALARIES' | 'MARKETING' {
 
 async function autoJournalEntry(opts: {
   type: 'INVOICE' | 'PAYMENT' | 'CREDIT_NOTE'
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   description: string
   debitCode: string
   creditCode: string
@@ -196,7 +196,7 @@ export async function approveExpense(id: string) {
     const debitCode = (expense as any).accountCode ?? codes[categoryToKey(expense.category)]
     await autoJournalEntry({
       type: 'INVOICE',
-      businessUnit: expense.businessUnit as 'HAX' | 'KODER',
+      businessUnit: expense.businessUnit as 'HAX' | 'KODER' | 'ALDIA',
       description: `Gasto registrado: ${expense.description}`,
       debitCode,
       creditCode: codes.SUPPLIERS,
@@ -226,7 +226,7 @@ export async function markPaid(id: string) {
     const codes = await getExpenseAcctCodes()
     await autoJournalEntry({
       type: 'PAYMENT',
-      businessUnit: expense.businessUnit as 'HAX' | 'KODER',
+      businessUnit: expense.businessUnit as 'HAX' | 'KODER' | 'ALDIA',
       description: `Pago gasto: ${expense.description}`,
       debitCode: codes.SUPPLIERS,
       creditCode: codes.BANK,

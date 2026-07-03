@@ -11,108 +11,58 @@ import { HaxLogo, HaxMark } from '@/components/ui/HaxLogo'
 interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
+  mobileOpen: boolean
+  onMobileClose: () => void
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname()
-  const { user, logout, can, mode, setMode } = useAuthStore()
-  const isProforma = mode === 'proforma'
-
-  // Paleta dinámica según el modo
-  const p = isProforma
-    ? {
-        aside:      'bg-[#111827] border-white/[0.06]',
-        logoBorder: 'border-white/[0.06]',
-        logoColor:  'white',
-        sectionLabel: 'text-white/30',
-        divider:    'bg-white/[0.05]',
-        navActive:  'bg-amber-500/15 text-amber-300',
-        navInactive:'text-white/50 hover:text-white/80 hover:bg-white/[0.04]',
-        iconActive: 'text-amber-400',
-        iconInact:  'text-white/30',
-        dot:        '#f59e0b',
-        footBorder: 'border-white/[0.06]',
-        userName:   'text-white/80',
-        userRole:   'text-white/30',
-        logoutBtn:  'text-white/25 hover:text-white/60 hover:bg-white/[0.05]',
-        expandBtn:  'bg-[#1a2533] border-white/10 text-white/40 hover:text-white/70',
-        toggleBtn:  'bg-amber-500/15 text-amber-400 border border-amber-500/25 hover:bg-amber-500/25',
-        collapseBtn:'text-white/25 hover:text-white/60 hover:bg-white/[0.05]',
-      }
-    : {
-        aside:      'bg-white border-gray-100',
-        logoBorder: 'border-gray-100',
-        logoColor:  '#293c4f',
-        sectionLabel: 'text-gray-400',
-        divider:    'bg-gray-100',
-        navActive:  'bg-[#293c4f]/10 text-[#293c4f]',
-        navInactive:'text-gray-500 hover:text-gray-700 hover:bg-gray-50',
-        iconActive: 'text-[#293c4f]',
-        iconInact:  'text-gray-400',
-        dot:        '#293c4f',
-        footBorder: 'border-gray-100',
-        userName:   'text-gray-700',
-        userRole:   'text-gray-400',
-        logoutBtn:  'text-gray-300 hover:text-gray-600 hover:bg-gray-50',
-        expandBtn:  'bg-white border-gray-200 text-gray-400 hover:text-gray-700',
-        toggleBtn:  'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 hover:bg-emerald-500/20',
-        collapseBtn:'text-gray-300 hover:text-gray-600 hover:bg-gray-50',
-      }
+  const { user, logout, can } = useAuthStore()
 
   return (
     <aside
       className={cn(
         'flex flex-col h-screen fixed left-0 top-0 z-40 transition-all duration-300 ease-in-out border-r',
-        p.aside,
-        collapsed ? 'w-16' : 'w-60'
+        'bg-white border-gray-100',
+        'w-60',
+        collapsed && 'md:w-16',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
       )}
     >
       {/* ── Logo ──────────────────────────────────────── */}
       <div
         className={cn(
-          'flex items-center h-16 px-4 border-b shrink-0',
-          p.logoBorder,
-          collapsed ? 'justify-center' : 'justify-between'
+          'flex items-center h-16 px-4 border-b border-gray-100 shrink-0',
+          collapsed ? 'md:justify-center' : 'justify-between'
         )}
       >
         {!collapsed && (
           <Link href="/dashboard" className="flex items-center min-w-0 flex-1">
-            <HaxLogo color={p.logoColor} className="h-7 w-auto" />
+            <HaxLogo color="#293c4f" className="h-7 w-auto" />
           </Link>
         )}
 
-        {collapsed && (
-          <Link href="/dashboard" title="ERP Hax" className="flex items-center justify-center">
-            <HaxMark color={p.logoColor} className="h-8 w-auto" />
-          </Link>
-        )}
-
-        {!collapsed && (
-          <button
-            onClick={onToggle}
-            className={cn('w-6 h-6 rounded flex items-center justify-center transition-all shrink-0', p.collapseBtn)}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-
-      {/* ── Modo toggle ───────────────────────────────── */}
-      <div className={cn('px-3 pt-3 pb-1', collapsed && 'flex justify-center')}>
-        <button
-          onClick={() => setMode(isProforma ? 'normal' : 'proforma')}
-          title={isProforma ? 'Modo Proforma activo — clic para cambiar a Fiscal' : 'Modo Fiscal activo — clic para cambiar a Proforma'}
-          className={cn(
-            'transition-all duration-200 font-medium rounded-full',
-            p.toggleBtn,
-            collapsed
-              ? 'w-8 h-8 flex items-center justify-center text-xs'
-              : 'w-full px-3 py-1.5 text-xs flex items-center gap-2',
+        <div className="hidden md:flex">
+          {collapsed && (
+            <Link href="/dashboard" title="ERP Hax" className="flex items-center justify-center">
+              <HaxMark color="#293c4f" className="h-8 w-auto" />
+            </Link>
           )}
-        >
-          <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', isProforma ? 'bg-amber-400' : 'bg-emerald-500')} />
-          {!collapsed && (isProforma ? 'Proforma' : 'Fiscal')}
-        </button>
+
+          {!collapsed && (
+            <button
+              onClick={onToggle}
+              className="w-6 h-6 rounded flex items-center justify-center transition-all shrink-0 text-gray-300 hover:text-gray-600 hover:bg-gray-50"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Mobile: always show logo */}
+        <div className="md:hidden flex items-center min-w-0 flex-1">
+          <HaxLogo color="#293c4f" className="h-7 w-auto" />
+        </div>
       </div>
 
       {/* ── Navigation ────────────────────────────────── */}
@@ -123,11 +73,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           return (
             <div key={section.title} className="mb-1">
               {!collapsed && (
-                <p className={cn('px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest', p.sectionLabel)}>
+                <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
                   {section.title}
                 </p>
               )}
-              {collapsed && <div className={cn('mx-3 my-1.5 h-px', p.divider)} />}
+              {collapsed && <div className="mx-3 my-1.5 h-px bg-gray-100 hidden md:block" />}
 
               {visibleItems.map((item) => {
                 const isActive =
@@ -139,25 +89,31 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     key={item.href}
                     href={item.href}
                     title={collapsed ? item.label : undefined}
+                    onClick={onMobileClose}
                     className={cn(
                       'flex items-center gap-3 mx-2 my-0.5 rounded-lg transition-all duration-150',
-                      collapsed ? 'px-2 py-2.5 justify-center' : 'px-3 py-2',
-                      isActive ? p.navActive : p.navInactive,
+                      collapsed ? 'md:px-2 md:py-2.5 md:justify-center px-3 py-2' : 'px-3 py-2',
+                      isActive
+                        ? 'bg-[#293c4f]/10 text-[#293c4f]'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50',
                     )}
                   >
                     <item.icon
                       className={cn(
                         'shrink-0 transition-colors',
-                        collapsed ? 'w-4.5 h-4.5' : 'w-4 h-4',
-                        isActive ? p.iconActive : p.iconInact,
+                        collapsed ? 'md:w-4.5 md:h-4.5 w-4 h-4' : 'w-4 h-4',
+                        isActive ? 'text-[#293c4f]' : 'text-gray-400',
                       )}
                     />
                     {!collapsed && (
                       <span className="text-sm font-medium truncate">{item.label}</span>
                     )}
+                    {/* Always show label on mobile */}
+                    {collapsed && (
+                      <span className="text-sm font-medium truncate md:hidden">{item.label}</span>
+                    )}
                     {!collapsed && isActive && (
-                      <div className="ml-auto w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ backgroundColor: p.dot, opacity: 0.5 }} />
+                      <div className="ml-auto w-1.5 h-1.5 rounded-full shrink-0 bg-[#293c4f] opacity-50" />
                     )}
                   </Link>
                 )
@@ -168,37 +124,35 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* ── User footer ───────────────────────────────── */}
-      <div className={cn('shrink-0 border-t p-3', p.footBorder)}>
+      <div className="shrink-0 border-t border-gray-100 p-3">
         {!collapsed ? (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold text-white"
-              style={{ backgroundColor: isProforma ? '#92400e' : '#293c4f' }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold text-white bg-[#293c4f]">
               {user?.name?.charAt(0).toUpperCase() ?? 'U'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className={cn('text-sm font-medium truncate', p.userName)}>{user?.name ?? 'Usuario'}</p>
-              <p className={cn('text-xs truncate', p.userRole)}>
+              <p className="text-sm font-medium truncate text-gray-700">{user?.name ?? 'Usuario'}</p>
+              <p className="text-xs truncate text-gray-400">
                 {user?.role === 'ADMIN' ? 'Administrador' : 'Contabilidad'}
               </p>
             </div>
             <button
               onClick={logout}
               title="Cerrar sesión"
-              className={cn('w-7 h-7 flex items-center justify-center rounded-lg transition-all shrink-0', p.logoutBtn)}
+              className="w-7 h-7 flex items-center justify-center rounded-lg transition-all shrink-0 text-gray-300 hover:text-gray-600 hover:bg-gray-50"
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
-              style={{ backgroundColor: isProforma ? '#92400e' : '#293c4f' }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white bg-[#293c4f]">
               {user?.name?.charAt(0).toUpperCase() ?? 'U'}
             </div>
             <button
               onClick={logout}
               title="Cerrar sesión"
-              className={cn('w-7 h-7 flex items-center justify-center rounded-lg transition-all', p.logoutBtn)}
+              className="w-7 h-7 flex items-center justify-center rounded-lg transition-all text-gray-300 hover:text-gray-600 hover:bg-gray-50"
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
@@ -206,14 +160,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
       </div>
 
-      {/* Collapsed: expand button */}
+      {/* Collapsed: expand button (desktop only) */}
       {collapsed && (
         <button
           onClick={onToggle}
-          className={cn(
-            'absolute -right-3 top-20 w-6 h-6 rounded-full border shadow-sm flex items-center justify-center transition-all z-50',
-            p.expandBtn,
-          )}
+          className="absolute -right-3 top-20 w-6 h-6 rounded-full border shadow-sm flex items-center justify-center transition-all z-50 hidden md:flex bg-white border-gray-200 text-gray-400 hover:text-gray-700"
         >
           <ChevronRight className="w-3.5 h-3.5" />
         </button>

@@ -17,7 +17,6 @@ import {
   Select,
   DatePicker,
 } from '@/components/ui'
-import { useAuthStore } from '@/lib/auth-store'
 
 type InvoiceStatus = 'DRAFT' | 'SENDING' | 'APPROVED' | 'REJECTED' | 'PAID' | 'CANCELLED'
 
@@ -25,7 +24,7 @@ interface Invoice {
   id: string
   number: string
   sequence: number
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   client: { id: string; name: string; rnc: string }
   issueDate: string
   dueDate: string | null
@@ -65,9 +64,6 @@ const TYPE_OPTIONS = [
 ]
 
 export default function InvoicesPage() {
-  const { mode } = useAuthStore()
-  const isProforma = mode === 'proforma'
-
   const [search, setSearch]   = useState('')
   const [status, setStatus]   = useState('')
   const [bu, setBu]           = useState('')
@@ -77,7 +73,7 @@ export default function InvoicesPage() {
   const [page, setPage]       = useState(1)
 
   const { data, isLoading, isFetching, refetch } = useQuery<InvoicesResponse>({
-    queryKey: ['invoices', { search, status, bu, type, from, to, page, mode }],
+    queryKey: ['invoices', { search, status, bu, type, from, to, page }],
     queryFn: async () => {
       const params: Record<string, any> = {
         search: search || undefined,
@@ -89,16 +85,10 @@ export default function InvoicesPage() {
         limit: 20,
       }
 
-      if (isProforma) {
-        // Modo proforma: mostrar solo PROFORMA (el filtro de tipo del usuario es ignorado)
-        params.type = 'PROFORMA'
+      if (type) {
+        params.type = type
       } else {
-        // Modo fiscal: excluir PROFORMA por defecto; respetar filtro manual de tipo
-        if (type) {
-          params.type = type
-        } else {
-          params.excludeProforma = 'true'
-        }
+        params.excludeProforma = 'true'
       }
 
       const { data } = await api.get('/invoices', { params })
@@ -112,8 +102,8 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={isProforma ? 'Facturación — Proforma' : 'Facturación'}
-        subtitle={isProforma ? 'Documentos proforma sin efecto fiscal' : 'Facturas electrónicas e-CF'}
+        title="Facturación"
+        subtitle="Facturas electrónicas e-CF"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={() => refetch()} disabled={isFetching}>
@@ -166,18 +156,16 @@ export default function InvoicesPage() {
             ))}
           </Select>
 
-          {/* Type filter — solo en modo fiscal */}
-          {!isProforma && (
-            <Select
-              value={type}
-              onChange={(e) => { setType(e.target.value); setPage(1) }}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
-            >
-              {TYPE_OPTIONS.filter(o => o.value !== 'PROFORMA').map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </Select>
-          )}
+          {/* Type filter */}
+          <Select
+            value={type}
+            onChange={(e) => { setType(e.target.value); setPage(1) }}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white text-gray-700"
+          >
+            {TYPE_OPTIONS.filter(o => o.value !== 'PROFORMA').map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </Select>
 
           {/* Date range */}
           <div className="flex items-center gap-1.5">
@@ -219,7 +207,29 @@ export default function InvoicesPage() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y divide-gray-50">
+              {invoices.map((inv) => (
+                <Link key={inv.id} href={`/dashboard/invoices/${inv.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50/60 transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-medium text-[#293c4f]">{inv.number}</span>
+                      <InvoiceStatusBadge status={inv.status} />
+                    </div>
+                    <p className="text-sm text-gray-800 font-medium truncate mt-0.5">{inv.client.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{formatDate(inv.issueDate)} · {inv.businessUnit}</p>
+                  </div>
+                  <div className="text-right shrink-0 ml-3">
+                    <p className="text-sm font-semibold text-gray-900">{formatCurrency(inv.total)}</p>
+                    {inv.amountDue > 0 && (
+                      <p className="text-xs text-amber-600">Pend. {formatCurrency(inv.amountDue)}</p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100">

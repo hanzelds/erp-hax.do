@@ -9,7 +9,7 @@ import { formatDate, cn } from '@/lib/utils'
 import { PageHeader, Button, Card, CardHeader, Select, useConfirm } from '@/components/ui'
 import { useAuthStore } from '@/lib/auth-store'
 
-const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Modo Proforma', 'Presupuestos', 'Activos Fijos', 'Nómina', 'Cuentas Contables', 'Correo', 'Plantillas PDF', 'Datos'] as const
+const TABS = ['Empresa', 'Usuarios', 'Facturación e-CF', 'Facturación General', 'Presupuestos', 'Activos Fijos', 'Nómina', 'Cuentas Contables', 'Correo', 'Plantillas PDF', 'Datos'] as const
 type Tab = typeof TABS[number]
 
 export default function SettingsPage() {
@@ -39,7 +39,6 @@ export default function SettingsPage() {
       {tab === 'Usuarios'             && <UsersTab />}
       {tab === 'Facturación e-CF'     && <EcfTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Facturación General'  && <GeneralTab isAdmin={user?.role === 'ADMIN'} />}
-      {tab === 'Modo Proforma'        && <ProformaTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Presupuestos'         && <BudgetsTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Activos Fijos'        && <FixedAssetsTab isAdmin={user?.role === 'ADMIN'} />}
       {tab === 'Nómina'               && <PayrollTab isAdmin={user?.role === 'ADMIN'} />}
@@ -142,11 +141,14 @@ const SYSTEM_MODULES = [
   { key: 'invoices',            label: 'Facturas',             group: 'Ventas' },
   { key: 'quotes',              label: 'Cotizaciones',         group: 'Ventas' },
   { key: 'clients',             label: 'Clientes',             group: 'Ventas' },
+  { key: 'crm',                 label: 'CRM',                  group: 'Ventas' },
   { key: 'payments',            label: 'Cobros',               group: 'Ventas' },
   { key: 'expenses',            label: 'Gastos',               group: 'Compras' },
+  { key: 'purchase-orders',     label: 'Órdenes de Compra',    group: 'Compras' },
   { key: 'suppliers',           label: 'Proveedores',          group: 'Compras' },
   { key: 'products',            label: 'Productos',            group: 'Compras' },
   { key: 'payroll',             label: 'Nómina',               group: 'RR.HH.' },
+  { key: 'commissions',         label: 'Comisiones',           group: 'RR.HH.' },
   { key: 'fixed-assets',        label: 'Activos Fijos',        group: 'Contabilidad' },
   { key: 'accounting',          label: 'Contabilidad',         group: 'Contabilidad' },
   { key: 'bank-accounts',       label: 'Cuentas Bancarias',    group: 'Contabilidad' },
@@ -778,109 +780,6 @@ function GeneralTab({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
     </Card>
-  )
-}
-
-// ── Proforma Tab ─────────────────────────────────────────────
-
-function ProformaTab({ isAdmin }: { isAdmin: boolean }) {
-  const { mode, setMode, proformaBankAccountId, setProformaBankAccount } = useAuthStore()
-  const isProforma = mode === 'proforma'
-
-  const { data: bankAccounts = [], isLoading: loadingBanks } = useQuery<{ id: string; name: string; bankName: string }[]>({
-    queryKey: ['bank-accounts-list'],
-    queryFn: async () => {
-      const { data } = await api.get('/bank-accounts', { params: { limit: 100 } })
-      return data.data ?? data
-    },
-  })
-
-  return (
-    <div className="space-y-4">
-      {/* Estado actual del modo */}
-      <Card>
-        <CardHeader
-          title="Modo de operación"
-          subtitle="Alterna entre ERP Fiscal completo y modo Proforma sin asientos fiscales"
-        />
-        <div className="flex items-start gap-4 p-1">
-          {/* Fiscal */}
-          <button
-            onClick={() => setMode('normal')}
-            className={cn(
-              'flex-1 text-left p-4 rounded-xl border-2 transition-all',
-              !isProforma
-                ? 'border-emerald-500 bg-emerald-50'
-                : 'border-gray-200 bg-white hover:border-gray-300',
-            )}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-gray-800">ERP Fiscal</span>
-              {!isProforma && <span className="text-[11px] text-emerald-600 font-medium bg-emerald-100 px-2 py-0.5 rounded-full">Activo</span>}
-            </div>
-            <p className="text-xs text-gray-500">NCF · Asientos automáticos · Reportes DGII · ITBIS</p>
-          </button>
-
-          {/* Proforma */}
-          <button
-            onClick={() => setMode('proforma')}
-            className={cn(
-              'flex-1 text-left p-4 rounded-xl border-2 transition-all',
-              isProforma
-                ? 'border-amber-500 bg-amber-50'
-                : 'border-gray-200 bg-white hover:border-gray-300',
-            )}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-gray-800">ERP Proforma</span>
-              {isProforma && <span className="text-[11px] text-amber-700 font-medium bg-amber-100 px-2 py-0.5 rounded-full">Activo</span>}
-            </div>
-            <p className="text-xs text-gray-500">Sin NCF · Sin asientos · Sin ITBIS · Dark mode</p>
-          </button>
-        </div>
-
-        <p className="text-xs text-gray-400 mt-3 px-1">
-          Este ajuste es por sesión y se guarda localmente. Puedes cambiarlo también desde el toggle en la barra lateral.
-        </p>
-      </Card>
-
-      {/* Cuenta banco proforma */}
-      <Card>
-        <CardHeader
-          title="Cuenta bancaria para modo Proforma"
-          subtitle="Cuenta por defecto para documentos y cobros en modo Proforma"
-        />
-        {loadingBanks ? (
-          <div className="animate-pulse bg-gray-100 rounded-xl h-12" />
-        ) : bankAccounts.length === 0 ? (
-          <p className="text-sm text-gray-400">No hay cuentas bancarias configuradas.</p>
-        ) : (
-          <div className="space-y-3">
-            <F label="Cuenta bancaria proforma">
-              <Select
-                value={proformaBankAccountId ?? ''}
-                onChange={e => setProformaBankAccount(e.target.value || null)}
-                disabled={!isAdmin}
-                className={cn(
-                  'w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] bg-white',
-                  !isAdmin && 'opacity-60 cursor-not-allowed',
-                )}
-              >
-                <option value="">— Sin cuenta específica —</option>
-                {bankAccounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name}{acc.bankName ? ` · ${acc.bankName}` : ''}
-                  </option>
-                ))}
-              </Select>
-              <p className="text-xs text-gray-400 mt-1">
-                Se guarda localmente por dispositivo. Cada usuario puede tener su propia preferencia.
-              </p>
-            </F>
-          </div>
-        )}
-      </Card>
-    </div>
   )
 }
 
@@ -1535,13 +1434,14 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
 // ── PDF Templates tab ─────────────────────────────────────────
 
 const TEMPLATE_TYPES = [
-  { value: 'INVOICE',         label: 'Factura',           desc: 'Crédito fiscal y consumidor final' },
-  { value: 'CREDIT_NOTE',     label: 'Nota de Crédito',   desc: 'Notas de crédito aprobadas' },
-  { value: 'QUOTE',           label: 'Cotización',        desc: 'Propuestas comerciales' },
+  { value: 'INVOICE',         label: 'Factura',            desc: 'Crédito fiscal y consumidor final' },
+  { value: 'CREDIT_NOTE',     label: 'Nota de Crédito',    desc: 'Notas de crédito aprobadas' },
+  { value: 'QUOTE',           label: 'Cotización',         desc: 'Propuestas comerciales' },
+  { value: 'PURCHASE_ORDER',  label: 'Orden de Compra',    desc: 'Órdenes a proveedores' },
   { value: 'PAYROLL_SLIP',    label: 'Comprobante Nómina', desc: 'Recibo de pago por empleado' },
-  { value: 'REPORT_PNL',      label: 'Reporte P&L',       desc: 'Estado de resultados' },
-  { value: 'REPORT_BALANCE',  label: 'Balance General',   desc: 'Balance general del período' },
-  { value: 'REPORT_CASHFLOW', label: 'Flujo de Caja',     desc: 'Flujo de efectivo mensual' },
+  { value: 'REPORT_PNL',      label: 'Reporte P&L',        desc: 'Estado de resultados' },
+  { value: 'REPORT_BALANCE',  label: 'Balance General',    desc: 'Balance general del período' },
+  { value: 'REPORT_CASHFLOW', label: 'Flujo de Caja',      desc: 'Flujo de efectivo mensual' },
 ]
 
 const VARS: Record<string, { name: string; example: string }[]> = {
@@ -1597,6 +1497,28 @@ const VARS: Record<string, { name: string; example: string }[]> = {
     { name: '{{#if isAccepted}}',        example: 'Bloque condicional' },
     { name: '{{#if isRejected}}',        example: 'Bloque condicional' },
     { name: '{{#if isConverted}}',       example: 'Bloque condicional' },
+  ],
+  PURCHASE_ORDER: [
+    { name: '{{po.number}}',           example: 'OC-H-00001' },
+    { name: '{{po.status}}',           example: 'BORRADOR' },
+    { name: '{{date po.createdAt}}',   example: '19 de abril de 2026' },
+    { name: '{{fmt po.subtotal}}',     example: 'RD$ 10,000.00' },
+    { name: '{{fmt po.taxAmount}}',    example: 'RD$ 1,800.00' },
+    { name: '{{fmt po.total}}',        example: 'RD$ 11,800.00' },
+    { name: '{{po.isCredit}}',         example: 'true / false' },
+    { name: '{{po.paymentTerms}}',     example: '30' },
+    { name: '{{date po.dueDate}}',     example: '19 de mayo de 2026' },
+    { name: '{{po.notes}}',            example: 'Notas internas' },
+    { name: '{{supplier.name}}',       example: 'Proveedor Ejemplo SRL' },
+    { name: '{{supplier.rnc}}',        example: '1-31-99999-9' },
+    { name: '{{supplier.email}}',      example: 'ventas@proveedor.com' },
+    { name: '{{company.name}}',        example: 'HAX ESTUDIO CREATIVO EIRL' },
+    { name: '{{company.rnc}}',         example: '133-290251' },
+    { name: '{{#each items}}…{{/each}}', example: 'Loop de ítems' },
+    { name: '{{description}}',         example: 'Dentro del loop de ítems' },
+    { name: '{{fmt unitPrice}}',       example: 'Dentro del loop de ítems' },
+    { name: '{{fmt total}}',           example: 'Dentro del loop de ítems' },
+    { name: '{{#if isCancelled}}',     example: 'Bloque condicional' },
   ],
   PAYROLL_SLIP: [
     { name: '{{employee.name}}',       example: 'Juan Pérez' },
@@ -1945,6 +1867,7 @@ const RESET_MODULES = [
   { key: 'invoices',         label: 'Facturas',              desc: 'Facturas, ítems, NCF y pagos vinculados' },
   { key: 'quotes',           label: 'Cotizaciones',          desc: 'Todas las cotizaciones e ítems' },
   { key: 'expenses',         label: 'Gastos',                desc: 'Todos los registros de gastos' },
+  { key: 'purchaseOrders',   label: 'Órdenes de Compra',    desc: 'Todas las órdenes de compra e ítems' },
   { key: 'payments',         label: 'Pagos recibidos',       desc: 'Todos los pagos registrados' },
   { key: 'payroll',          label: 'Nómina',                desc: 'Todos los periodos y entradas de nómina' },
   { key: 'products',         label: 'Productos / Servicios', desc: 'Catálogo completo de productos' },

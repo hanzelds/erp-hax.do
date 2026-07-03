@@ -2,129 +2,30 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, Loader2, ArrowRight, BarChart3, FileText, Check } from 'lucide-react'
-import { useAuthStore, type ErpMode } from '@/lib/auth-store'
+import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react'
+import { useAuthStore } from '@/lib/auth-store'
 import { cn } from '@/lib/utils'
 import { HaxLogo } from '@/components/ui/HaxLogo'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, isLoading, setMode } = useAuthStore()
+  const { login, isLoading } = useAuthStore()
 
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [error, setError]       = useState<string | null>(null)
-  // 'credentials' = paso 1 | 'mode' = paso 2 selección de modo
-  const [step, setStep]         = useState<'credentials' | 'mode'>('credentials')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     try {
       await login(email, password)
-      // Mostrar selector de modo antes de entrar al dashboard
-      setStep('mode')
+      router.replace('/dashboard')
     } catch (err: any) {
       setError(err?.response?.data?.error ?? err?.message ?? 'Credenciales incorrectas')
     }
   }
-
-  function handleModeSelect(mode: ErpMode) {
-    setMode(mode)
-    router.replace('/dashboard')
-  }
-
-  // ── Paso 2: Selección de modo ────────────────────────────────
-  if (step === 'mode') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0d1117] p-6">
-        {/* Background mesh */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[#293c4f]/30 rounded-full blur-[120px] -translate-x-1/3 -translate-y-1/3" />
-          <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-[#1e3a5f]/20 rounded-full blur-[100px] translate-x-1/4 translate-y-1/4" />
-          <div className="absolute inset-0 opacity-[0.025]"
-            style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '48px 48px' }}
-          />
-        </div>
-
-        <div className="relative z-10 w-full max-w-xl">
-          <div className="text-center mb-10">
-            <HaxLogo color="white" className="h-8 w-auto opacity-90 mx-auto mb-8" />
-            <h2 className="text-2xl font-bold text-white tracking-tight">¿Cómo vas a trabajar hoy?</h2>
-            <p className="text-white/40 text-sm mt-2">Elige el modo de operación. Puedes cambiarlo después desde la barra lateral.</p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            {/* ERP Fiscal */}
-            <button
-              onClick={() => handleModeSelect('normal')}
-              className={cn(
-                'group relative text-left p-6 rounded-2xl border transition-all duration-200',
-                'bg-white/[0.04] border-white/[0.08]',
-                'hover:bg-white/[0.08] hover:border-white/[0.18] hover:scale-[1.02]',
-                'focus:outline-none focus:ring-2 focus:ring-emerald-500/50',
-              )}
-            >
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center mb-4">
-                <BarChart3 className="w-5 h-5 text-emerald-400" />
-              </div>
-              <h3 className="text-white font-semibold text-base mb-1">ERP Fiscal</h3>
-              <p className="text-white/40 text-xs leading-relaxed mb-4">Operación completa con DGII, NCF y asientos contables automáticos.</p>
-              <ul className="space-y-1.5">
-                {['NCF + e-CF DGII', 'Asientos automáticos', 'Reportes 606 / 607', 'Conciliación bancaria'].map(f => (
-                  <li key={f} className="flex items-center gap-2 text-xs text-white/50">
-                    <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span className="text-emerald-400 text-[11px] font-medium">Modo activo</span>
-              </div>
-            </button>
-
-            {/* ERP Proforma */}
-            <button
-              onClick={() => handleModeSelect('proforma')}
-              className={cn(
-                'group relative text-left p-6 rounded-2xl border transition-all duration-200',
-                'bg-white/[0.04] border-white/[0.08]',
-                'hover:bg-amber-500/[0.08] hover:border-amber-500/[0.25] hover:scale-[1.02]',
-                'focus:outline-none focus:ring-2 focus:ring-amber-500/50',
-              )}
-            >
-              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/20 flex items-center justify-center mb-4">
-                <FileText className="w-5 h-5 text-amber-400" />
-              </div>
-              <h3 className="text-white font-semibold text-base mb-1">ERP Proforma</h3>
-              <p className="text-white/40 text-xs leading-relaxed mb-4">Documentos internos sin validez fiscal, para estimados y presupuestos.</p>
-              <ul className="space-y-1.5">
-                {['Sin NCF ni DGII', 'Sin asientos contables', 'Sin ITBIS automático', 'Cuenta banco separada'].map(f => (
-                  <li key={f} className="flex items-center gap-2 text-xs text-white/50">
-                    <Check className="w-3 h-3 text-amber-400 shrink-0" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <span className="text-amber-400 text-[11px] font-medium">Dark mode</span>
-              </div>
-            </button>
-          </div>
-
-          <p className="text-center text-white/20 text-xs mt-8">
-            Sesión iniciada como <span className="text-white/40 font-medium">{email}</span>
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  // ── Paso 1: Credenciales ─────────────────────────────────────
   return (
     <div className="min-h-screen flex bg-[#0d1117]">
 

@@ -14,7 +14,6 @@ import { formatCurrency, cn } from '@/lib/utils'
 import { Button, Select, DatePicker } from '@/components/ui'
 import { HaxLogo } from '@/components/ui/HaxLogo'
 import NewContactPage from '@/components/NewContactPage'
-import { useAuthStore } from '@/lib/auth-store'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Client  { id: string; name: string; rnc: string | null; phone?: string | null; email?: string | null }
@@ -305,16 +304,13 @@ function LineRow({ line, index, products, forceExempt, hideItbis, showDelete, on
 export default function NewInvoicePage() {
   const router     = useRouter()
   const qc         = useQueryClient()
-  const { mode }   = useAuthStore()
-  const isProforma = mode === 'proforma'
-
   const today = new Date().toISOString().slice(0, 10)
 
   const [clientId, setClientId]         = useState('')
-  const [bu, setBu]                     = useState<'HAX' | 'KODER'>('HAX')
+  const [bu, setBu]                     = useState<'HAX' | 'KODER' | 'ALDIA'>('HAX')
   const [issueDate, setIssueDate]       = useState(today)
   const [dueDate, setDueDate]           = useState('')
-  const [ncfType, setNcfType]           = useState(isProforma ? 'PROFORMA' : 'E31')
+  const [ncfType, setNcfType]           = useState('E31')
   const [paymentTerms, setPaymentTerms] = useState('NET_30')
   const [notes, setNotes]               = useState('')
   const [lines, setLines]               = useState<LineItem[]>([EMPTY_LINE()])
@@ -412,17 +408,12 @@ export default function NewInvoicePage() {
       })
       const invoiceId = resp.data?.id ?? resp.id
       if (payEnabled && parseFloat(payAmount) > 0) {
-        const { proformaBankAccountId } = useAuthStore.getState()
         await api.post(`/invoices/${invoiceId}/payments`, {
           amount:    parseFloat(payAmount),
           method:    payMethod,
           reference: payRef || undefined,
           paidAt:    payDate || undefined,
           notes:     'Pago inicial al crear factura',
-          // En modo proforma, depósito en cuenta proforma configurada
-          ...(isProforma && proformaBankAccountId
-            ? { bankAccountId: proformaBankAccountId }
-            : {}),
         })
       }
       return { data: resp, invoiceId }
@@ -438,7 +429,7 @@ export default function NewInvoicePage() {
 
   // ── Catalog confirm modal ────────────────────────────────────────────────
   if (catalogPrompt.length > 0 && pendingInvoiceId) {
-    return <CatalogConfirmModal items={catalogPrompt} onDone={() => router.push(`/dashboard/invoices/${pendingInvoiceId}`)} hideItbis={isProforma} />
+    return <CatalogConfirmModal items={catalogPrompt} onDone={() => router.push(`/dashboard/invoices/${pendingInvoiceId}`)} hideItbis={false} />
   }
 
   if (showNewClient) {
@@ -470,15 +461,6 @@ export default function NewInvoicePage() {
 
       <div className="px-6 pb-28 max-w-5xl mx-auto space-y-4">
 
-        {/* ── Banner modo proforma ── */}
-        {isProforma && (
-          <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3">
-            <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse" />
-            <p className="text-amber-700 text-sm font-medium">
-              Modo Proforma activo — este documento no generará NCF, ITBIS ni asientos contables
-            </p>
-          </div>
-        )}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
 
           {/* ── Document Header ── */}
@@ -500,7 +482,7 @@ export default function NewInvoicePage() {
                 </div>
                 {/* BU toggle */}
                 <div className="flex rounded-lg overflow-hidden border border-gray-200">
-                  {(['HAX', 'KODER'] as const).map(b => (
+                  {(['HAX', 'KODER', 'ALDIA'] as const).map(b => (
                     <button key={b} type="button" onClick={() => setBu(b)}
                       className={cn('px-4 py-1.5 text-xs font-semibold transition-colors',
                         bu === b ? 'bg-[#293c4f] text-white' : 'bg-white text-gray-500 hover:bg-gray-50')}>
@@ -555,12 +537,8 @@ export default function NewInvoicePage() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Tipo de documento</label>
                 <Select
                   value={ncfType}
-                  onChange={e => { if (!isProforma) setNcfType(e.target.value) }}
-                  disabled={isProforma}
-                  className={cn(
-                    'w-full text-sm border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] bg-white',
-                    isProforma ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed opacity-70' : 'border-gray-200',
-                  )}
+                  onChange={e => setNcfType(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#293c4f]/15 focus:border-[#293c4f] bg-white"
                 >
                   <optgroup label="Fiscal (e-CF DGII)">
                     {NCF_TYPES.filter(n => n.fiscal).map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
@@ -569,12 +547,12 @@ export default function NewInvoicePage() {
                     {NCF_TYPES.filter(n => !n.fiscal).map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
                   </optgroup>
                 </Select>
-                {ncfInfo.exempt && !isProforma && (
+                {ncfInfo.exempt && (
                   <p className="text-[11px] text-amber-600 mt-1.5 flex items-center gap-1">
                     <span>⚠</span> Tipo {ncfType.replace('E', '')} — exento de ITBIS en todos los ítems
                   </p>
                 )}
-                {ncfType === 'PROFORMA' && !isProforma && (
+                {ncfType === 'PROFORMA' && (
                   <p className="text-[11px] text-purple-600 mt-1.5 flex items-center gap-1">
                     <span>ℹ</span> Proforma — sin efecto fiscal ni asientos contables
                   </p>
@@ -623,17 +601,12 @@ export default function NewInvoicePage() {
             </div>
 
             {/* Column headers */}
-            <div className={cn(
-              'gap-2.5 mb-2 px-1 grid',
-              isProforma
-                ? 'grid-cols-[1fr_64px_112px_64px_88px_28px]'
-                : 'grid-cols-[1fr_64px_112px_64px_96px_88px_28px]',
-            )}>
+            <div className="gap-2.5 mb-2 px-1 grid grid-cols-[1fr_64px_112px_64px_96px_88px_28px]">
               <p className="text-[11px] font-semibold text-gray-400">Descripción</p>
               <p className="text-[11px] font-semibold text-gray-400 text-center">Cant.</p>
               <p className="text-[11px] font-semibold text-gray-400 text-right">Precio unit.</p>
               <p className="text-[11px] font-semibold text-gray-400 text-center">Desc. %</p>
-              {!isProforma && <p className="text-[11px] font-semibold text-gray-400 text-center">ITBIS</p>}
+              <p className="text-[11px] font-semibold text-gray-400 text-center">ITBIS</p>
               <p className="text-[11px] font-semibold text-gray-400 text-right">Total</p>
               <span />
             </div>
@@ -643,7 +616,7 @@ export default function NewInvoicePage() {
                 <LineRow key={i}
                   line={line} index={i} products={products}
                   forceExempt={forceExempt}
-                  hideItbis={isProforma}
+                  hideItbis={false}
                   showDelete={lines.length > 1}
                   onChange={patch => setLine(i, patch)}
                   onDelete={() => setLines(prev => prev.filter((_, idx) => idx !== i))}
@@ -826,14 +799,12 @@ export default function NewInvoicePage() {
                     <span className="font-medium">-{formatCurrency(globalDiscAmt)}</span>
                   </div>
                 )}
-                {!isProforma && (
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>ITBIS</span>
-                    {forceExempt
-                      ? <span className="font-medium text-amber-600">Exento</span>
-                      : <span className="font-medium">{formatCurrency(totalTax)}</span>}
-                  </div>
-                )}
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>ITBIS</span>
+                  {forceExempt
+                    ? <span className="font-medium text-amber-600">Exento</span>
+                    : <span className="font-medium">{formatCurrency(totalTax)}</span>}
+                </div>
                 <div className="flex justify-between items-center pt-2 mt-1 border-t border-gray-200">
                   <span className="text-base font-bold text-gray-900">Total</span>
                   <span className="text-xl font-bold text-[#293c4f]">{formatCurrency(grandTotal)}</span>

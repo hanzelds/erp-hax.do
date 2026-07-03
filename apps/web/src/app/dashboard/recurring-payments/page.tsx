@@ -16,7 +16,7 @@ interface RecurringPayment {
   frequency: Frequency
   nextDueDate: string
   category: string | null
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   isActive: boolean
   autoGenerate: boolean
 }
@@ -162,6 +162,7 @@ export default function RecurringPaymentsPage() {
                 <Select value={editing.businessUnit} onChange={(e) => setEditing({ ...editing, businessUnit: e.target.value })} className={ic}>
                   <option value="HAX">HAX</option>
                   <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
                 </Select>
               </F>
               <label className="flex items-center gap-2 text-sm text-gray-700">

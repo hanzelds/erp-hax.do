@@ -7,7 +7,7 @@ export const ALL_MODULES = [
   'dashboard', 'invoices', 'quotes', 'clients', 'payments',
   'expenses', 'suppliers', 'products', 'payroll', 'commissions', 'fixed-assets',
   'accounting', 'bank-accounts', 'bank-reconciliation', 'budgets',
-  'reports', 'settings',
+  'reports', 'settings', 'crm', 'purchase-orders',
 ]
 const ADMIN_MODULES      = ALL_MODULES
 const ACCOUNTANT_MODULES = ALL_MODULES.filter(m => m !== 'settings')

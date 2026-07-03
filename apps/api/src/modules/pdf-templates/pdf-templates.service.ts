@@ -103,6 +103,32 @@ export async function previewTemplate(id: string): Promise<Uint8Array> {
 function getSampleData(type: PdfTemplateType): object {
   const company = { name: 'HAX ESTUDIO CREATIVO EIRL', rnc: '133-290251', address: 'Santo Domingo, RD' }
 
+  if ((type as string) === 'PURCHASE_ORDER') {
+    return {
+      company,
+      po: {
+        number: 'OC-H-00001',
+        status: 'BORRADOR',
+        businessUnit: 'HAX',
+        createdAt: new Date().toISOString(),
+        subtotal: 10000,
+        taxAmount: 1800,
+        total: 11800,
+        isCredit: true,
+        paymentTerms: 30,
+        dueDate: new Date(Date.now() + 30 * 86400000).toISOString(),
+        notes: 'Favor confirmar disponibilidad antes de procesar.',
+      },
+      supplier: { name: 'Proveedor Ejemplo SRL', rnc: '1-31-99999-9', email: 'ventas@proveedor.com', phone: '809-555-0200' },
+      items: [
+        { description: 'Insumos de oficina', quantity: 5, unitPrice: 1000, taxAmount: 900, total: 5900, isExempt: false },
+        { description: 'Material de diseño', quantity: 1, unitPrice: 5000, taxAmount: 900, total: 5900, isExempt: false },
+      ],
+      isCancelled: false,
+      generatedAt: new Date().toLocaleDateString('es-DO'),
+    }
+  }
+
   if (type === 'QUOTE') {
     return {
       company,

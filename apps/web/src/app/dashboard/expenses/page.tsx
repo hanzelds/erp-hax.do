@@ -14,7 +14,7 @@ import NewContactPage from '@/components/NewContactPage'
 
 // ── Types ─────────────────────────────────────────────────────────
 type ExpenseStatus  = 'DRAFT' | 'APPROVED' | 'PAID' | 'CANCELLED'
-type BusinessUnit   = 'HAX' | 'KODER'
+type BusinessUnit   = 'HAX' | 'KODER' | 'ALDIA'
 type PayMethod      = 'CASH' | 'TRANSFER' | 'CHECK' | 'CREDIT_CARD' | 'DEBIT_CARD'
 type NcfType        = '' | 'B11' | 'B13'
 
@@ -408,6 +408,7 @@ export default function ExpensesPage() {
                     >
                       <option value="HAX">HAX</option>
                       <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
                     </Select>
                   </F>
                 </div>
@@ -634,6 +635,7 @@ export default function ExpensesPage() {
             <option value="">Todas las unidades</option>
             <option value="HAX">HAX</option>
             <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
           </Select>
         </div>
       </Card>
@@ -652,6 +654,7 @@ export default function ExpensesPage() {
               onClick={() => { setForm({ ...EMPTY }); setView('new') }}>Nuevo gasto</Button>}
           />
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
@@ -742,6 +745,7 @@ export default function ExpensesPage() {
               </tfoot>
             )}
           </table>
+          </div>
         )}
       </Card>
     </div>

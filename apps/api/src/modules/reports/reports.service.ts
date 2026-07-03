@@ -35,6 +35,8 @@ export async function getDashboard(businessUnit?: BusinessUnit) {
     invoiceCount, approvedToday,
     recentInvoices, pendingInvoices,
     expensesByCategory,
+    accountsPayable,
+    payrollPayable,
   ] = await Promise.all([
     prisma.invoice.aggregate({
       where: { ...buWhere, ...NO_PROFORMA, issueDate: { gte: monthStart }, status: { not: InvoiceStatus.CANCELLED } },
@@ -79,12 +81,24 @@ export async function getDashboard(businessUnit?: BusinessUnit) {
       where: { ...buWhere, expenseDate: { gte: monthStart }, status: { not: ExpenseStatus.CANCELLED } },
       _sum: { total: true },
     }),
+    // Cuentas por pagar: gastos aprobados aún no pagados
+    prisma.expense.aggregate({
+      where: { ...buWhere, status: ExpenseStatus.APPROVED },
+      _sum: { total: true },
+      _count: { id: true },
+    }),
+    // Nómina por pagar: nóminas aprobadas no pagadas
+    prisma.payroll.aggregate({
+      where: { ...buWhere, status: 'APPROVED' as any },
+      _sum: { totalNet: true },
+      _count: { id: true },
+    }),
   ])
 
   // Revenue chart: last 6 months by BU (fiscal only)
   const revenueChart = await Promise.all(
     months.map(async (m) => {
-      const [hax, koder] = await Promise.all([
+      const [hax, koder, aldia] = await Promise.all([
         prisma.invoice.aggregate({
           where: { ...NO_PROFORMA, businessUnit: 'HAX', issueDate: { gte: m.start, lte: m.end }, status: { not: InvoiceStatus.CANCELLED } },
           _sum: { total: true },
@@ -93,8 +107,12 @@ export async function getDashboard(businessUnit?: BusinessUnit) {
           where: { ...NO_PROFORMA, businessUnit: 'KODER', issueDate: { gte: m.start, lte: m.end }, status: { not: InvoiceStatus.CANCELLED } },
           _sum: { total: true },
         }),
+        prisma.invoice.aggregate({
+          where: { ...NO_PROFORMA, businessUnit: 'ALDIA' as any, issueDate: { gte: m.start, lte: m.end }, status: { not: InvoiceStatus.CANCELLED } },
+          _sum: { total: true },
+        }),
       ])
-      return { month: m.label, hax: hax._sum.total ?? 0, koder: koder._sum.total ?? 0 }
+      return { month: m.label, hax: hax._sum.total ?? 0, koder: koder._sum.total ?? 0, aldia: aldia._sum.total ?? 0 }
     })
   )
 
@@ -127,6 +145,14 @@ export async function getDashboard(businessUnit?: BusinessUnit) {
     },
     invoices:  { total: invoiceCount, approvedToday },
     netIncome: { current: net, margin: current > 0 ? (net / current) * 100 : 0 },
+    accountsPayable: {
+      total: accountsPayable._sum.total ?? 0,
+      count: accountsPayable._count.id ?? 0,
+    },
+    payrollPayable: {
+      total: payrollPayable._sum.totalNet ?? 0,
+      count: payrollPayable._count.id ?? 0,
+    },
     recentInvoices,
     pendingReceivables,
     revenueChart,

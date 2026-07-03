@@ -13,7 +13,7 @@ import { useAuthStore } from '@/lib/auth-store'
 interface InvoiceDetail {
   id: string
   number: string
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   type: string
   status: string
   paymentStatus: string
@@ -69,9 +69,8 @@ export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router   = useRouter()
   const qc       = useQueryClient()
-  const { user, mode, proformaBankAccountId } = useAuthStore()
-  const isAdmin    = user?.role === 'ADMIN'
-  const isProforma = mode === 'proforma'
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'ADMIN'
 
   const [payModal, setPayModal] = useState(false)
   const [payForm, setPayForm]   = useState({ amount: 0, method: 'TRANSFER', reference: '' })
@@ -86,13 +85,7 @@ export default function InvoiceDetailPage() {
   })
 
   const addPayment = useMutation({
-    mutationFn: async (body: typeof payForm) => api.post(`/invoices/${id}/payments`, {
-      ...body,
-      // En modo proforma, enviar la cuenta bancaria proforma configurada
-      ...(isProforma && proformaBankAccountId
-        ? { bankAccountId: proformaBankAccountId }
-        : {}),
-    }),
+    mutationFn: async (body: typeof payForm) => api.post(`/invoices/${id}/payments`, body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoice', id] }); setPayModal(false) },
   })
 

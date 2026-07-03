@@ -40,8 +40,9 @@ export const navigation: NavSection[] = [
   {
     title: 'Compras',
     items: [
-      { label: 'Gastos',       href: '/dashboard/expenses',  icon: Receipt,       module: 'expenses',  description: 'Control de gastos' },
-      { label: 'Proveedores',  href: '/dashboard/suppliers', icon: Truck,         module: 'suppliers', description: 'Gestión de proveedores' },
+      { label: 'Gastos',          href: '/dashboard/expenses',        icon: Receipt,      module: 'expenses',        description: 'Control de gastos' },
+      { label: 'Órdenes de Compra', href: '/dashboard/purchase-orders', icon: ShoppingCart, module: 'purchase-orders', description: 'Órdenes a proveedores y compras a crédito' },
+      { label: 'Proveedores',     href: '/dashboard/suppliers',       icon: Truck,        module: 'suppliers',       description: 'Gestión de proveedores' },
     ],
   },
   {

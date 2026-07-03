@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Plus, X, Phone, Mail, Calendar, CheckCircle2,
-  Circle, FileText, TrendingUp, Edit2, Save, ExternalLink,
+  Circle, FileText, TrendingUp, Edit2, Save, ExternalLink, Trash2,
 } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
@@ -29,18 +29,19 @@ interface Activity {
 interface Opportunity {
   id: string
   title: string
-  clientId: string
-  client: { id: string; name: string; email?: string; phone?: string; rnc?: string }
+  clientId: string | null
+  client?: { id: string; name: string; email?: string; phone?: string; rnc?: string } | null
   description?: string
   value?: number
   probability: number
   expectedDate?: string
   status: LeadStatus
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   assignedTo?: string
   leadSource?: string
   contactName?: string
   contactPhone?: string
+  notes?: string
   closedAt?: string
   closedReason?: string
   createdAt: string
@@ -97,8 +98,11 @@ export default function CrmDetailPage() {
 
   const [editingFields, setEditingFields] = useState(false)
   const [fieldDraft, setFieldDraft] = useState<any>(null)
+  const [editingNotes, setEditingNotes] = useState(false)
+  const [notesDraft, setNotesDraft] = useState('')
   const [showActivityForm, setShowActivityForm] = useState(false)
   const [actDraft, setActDraft] = useState({ ...NEW_ACTIVITY })
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const { data: opp, isLoading } = useQuery<Opportunity>({
     queryKey: ['crm-opp', id],
@@ -143,6 +147,14 @@ export default function CrmDetailPage() {
     onSuccess: () => refetchActivities(),
   })
 
+  const deleteOpp = useMutation({
+    mutationFn: () => api.delete(`/crm/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['crm-pipeline'] })
+      router.push('/dashboard/crm')
+    },
+  })
+
   if (isLoading) {
     return (
       <div className="space-y-5">
@@ -171,10 +183,14 @@ export default function CrmDetailPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">{opp.title}</h1>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <Link href={`/dashboard/clients/${opp.clientId}`} className="text-sm text-[#293c4f] hover:underline font-medium flex items-center gap-1">
-                {opp.client.name} <ExternalLink className="w-3 h-3" />
-              </Link>
-              <span className="text-gray-300">·</span>
+              {opp.client && opp.clientId ? (
+                <>
+                  <Link href={`/dashboard/clients/${opp.clientId}`} className="text-sm text-[#293c4f] hover:underline font-medium flex items-center gap-1">
+                    {opp.client.name} <ExternalLink className="w-3 h-3" />
+                  </Link>
+                  <span className="text-gray-300">·</span>
+                </>
+              ) : null}
               <span className={cn('px-2 py-0.5 rounded text-xs font-medium',
                 opp.businessUnit === 'HAX' ? 'bg-[#eef1f4] text-[#293c4f]' : 'bg-slate-100 text-slate-600'
               )}>{opp.businessUnit}</span>
@@ -188,6 +204,32 @@ export default function CrmDetailPage() {
           <span className={cn('px-3 py-1 rounded-full text-xs font-semibold border', currentStage?.color)}>
             {currentStage?.label}
           </span>
+          {confirmDelete ? (
+            <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-lg px-2 py-1">
+              <span className="text-xs text-red-700 font-medium">¿Eliminar?</span>
+              <button
+                onClick={() => deleteOpp.mutate()}
+                disabled={deleteOpp.isPending}
+                className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+              >
+                {deleteOpp.isPending ? '...' : 'Sí'}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="text-xs text-red-500 hover:text-red-700 px-1"
+              >
+                No
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Eliminar oportunidad"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -300,12 +342,50 @@ export default function CrmDetailPage() {
             )}
           </Card>
 
+          {/* Notes */}
+          <Card padding="sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900">Notas internas</h3>
+              {!editingNotes ? (
+                <button
+                  onClick={() => { setEditingNotes(true); setNotesDraft(opp.notes ?? '') }}
+                  className="text-xs text-[#293c4f] hover:underline flex items-center gap-1"
+                >
+                  <Edit2 className="w-3.5 h-3.5" /> Editar
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => setEditingNotes(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancelar</button>
+                  <button
+                    onClick={() => { updateOpp.mutate({ notes: notesDraft }); setEditingNotes(false) }}
+                    className="text-xs text-[#293c4f] font-medium hover:underline flex items-center gap-1"
+                  >
+                    <Save className="w-3.5 h-3.5" /> Guardar
+                  </button>
+                </div>
+              )}
+            </div>
+            {editingNotes ? (
+              <textarea
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                rows={4}
+                placeholder="Notas del equipo, contexto interno, acuerdos verbales…"
+                className={cn(ic, 'resize-none w-full')}
+              />
+            ) : opp.notes ? (
+              <p className="text-sm text-gray-600 whitespace-pre-line">{opp.notes}</p>
+            ) : (
+              <p className="text-xs text-gray-400 italic">Sin notas. Haz click en Editar para añadir.</p>
+            )}
+          </Card>
+
           {/* Quotes linked */}
           <Card padding="sm">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900">Cotizaciones vinculadas</h3>
               <Link
-                href={`/dashboard/quotes/new?opportunityId=${opp.id}&clientId=${opp.clientId}`}
+                href={`/dashboard/quotes?open=new&opportunityId=${opp.id}${opp.clientId ? `&clientId=${opp.clientId}` : ''}`}
                 className="text-xs text-[#293c4f] hover:underline flex items-center gap-1 font-medium"
               >
                 <Plus className="w-3.5 h-3.5" /> Nueva cotización
@@ -452,17 +532,23 @@ export default function CrmDetailPage() {
           {/* Quick info card */}
           <Card padding="sm">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Cliente</h3>
-            <dl className="space-y-2">
-              <Detail label="Empresa" value={opp.client.name} />
-              {opp.client.rnc && <Detail label="RNC" value={opp.client.rnc} />}
-              {opp.client.email && <Detail label="Email" value={opp.client.email} />}
-              {opp.client.phone && <Detail label="Teléfono" value={opp.client.phone} />}
-            </dl>
-            <Link href={`/dashboard/clients/${opp.clientId}`}
-              className="mt-3 flex items-center gap-1 text-xs text-[#293c4f] hover:underline font-medium"
-            >
-              Ver ficha completa <ExternalLink className="w-3 h-3" />
-            </Link>
+            {opp.client && opp.clientId ? (
+              <>
+                <dl className="space-y-2">
+                  <Detail label="Empresa" value={opp.client.name} />
+                  {opp.client.rnc && <Detail label="RNC" value={opp.client.rnc} />}
+                  {opp.client.email && <Detail label="Email" value={opp.client.email} />}
+                  {opp.client.phone && <Detail label="Teléfono" value={opp.client.phone} />}
+                </dl>
+                <Link href={`/dashboard/clients/${opp.clientId}`}
+                  className="mt-3 flex items-center gap-1 text-xs text-[#293c4f] hover:underline font-medium"
+                >
+                  Ver ficha completa <ExternalLink className="w-3 h-3" />
+                </Link>
+              </>
+            ) : (
+              <p className="text-xs text-gray-400 italic">Sin cliente asociado a esta oportunidad.</p>
+            )}
           </Card>
         </div>
       </div>

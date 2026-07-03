@@ -48,13 +48,16 @@ function sanitize(f: ClientForm) {
   }
 }
 
+type ActiveFilter = 'all' | 'active' | 'inactive'
+
 export default function ClientsPage() {
   const router = useRouter()
   const qc = useQueryClient()
-  const [search, setSearch]     = useState('')
-  const [editing, setEditing]   = useState<ClientForm | null>(null)
-  const [isNew, setIsNew]       = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [search, setSearch]         = useState('')
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all')
+  const [editing, setEditing]       = useState<ClientForm | null>(null)
+  const [isNew, setIsNew]           = useState(false)
+  const [error, setError]           = useState<string | null>(null)
   const [showNewContact, setShowNewContact] = useState(false)
   const [confirmDelete, setConfirmDelete]   = useState<Client | null>(null)
 
@@ -67,13 +70,25 @@ export default function ClientsPage() {
     handleRncFound
   )
 
-  const { data: clients = [], isLoading } = useQuery<Client[]>({
-    queryKey: ['clients', search],
+  const { data: stats } = useQuery<{ total: number; active: number; withInvoices: number }>({
+    queryKey: ['clients-stats'],
     queryFn: async () => {
-      const { data } = await api.get('/clients', { params: { search: search || undefined } })
+      const { data } = await api.get('/clients/stats')
       return data.data ?? data
     },
   })
+
+  const { data: listResp, isLoading } = useQuery<{ data: Client[]; total: number }>({
+    queryKey: ['clients', search, activeFilter],
+    queryFn: async () => {
+      const params: any = { search: search || undefined, limit: 200 }
+      if (activeFilter !== 'all') params.isActive = activeFilter === 'active'
+      const { data } = await api.get('/clients', { params })
+      return { data: data.data ?? data, total: data.total ?? (data.data ?? data).length }
+    },
+  })
+  const clients = listResp?.data ?? []
+  const total   = listResp?.total ?? 0
 
   const save = useMutation({
     mutationFn: async (form: ClientForm) => {
@@ -87,6 +102,7 @@ export default function ClientsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients'] })
       qc.invalidateQueries({ queryKey: ['clients-list'] })
+      qc.invalidateQueries({ queryKey: ['clients-stats'] })
       setEditing(null)
       setIsNew(false)
       setError(null)
@@ -102,6 +118,7 @@ export default function ClientsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients'] })
       qc.invalidateQueries({ queryKey: ['clients-list'] })
+      qc.invalidateQueries({ queryKey: ['clients-stats'] })
       setConfirmDelete(null)
     },
     onError: (err: any) => {
@@ -117,6 +134,7 @@ export default function ClientsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients'] })
       qc.invalidateQueries({ queryKey: ['clients-list'] })
+      qc.invalidateQueries({ queryKey: ['clients-stats'] })
     },
   })
 
@@ -170,17 +188,57 @@ export default function ClientsPage() {
         }
       />
 
-      {/* Search */}
+      {/* Stats chips */}
+      {stats && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#293c4f]/8 text-xs font-medium text-[#293c4f]">
+            <span className="font-bold">{stats.total}</span> clientes en total
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50 text-xs font-medium text-green-700">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+            {stats.active} activos
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-xs font-medium text-gray-500">
+            {stats.total - stats.active} inactivos
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-xs font-medium text-blue-600">
+            {stats.withInvoices} con facturas
+          </span>
+        </div>
+      )}
+
+      {/* Search + filter */}
       <Card padding="sm">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, RNC, email…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white placeholder-gray-400"
-          />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre, RNC, email…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#293c4f] bg-white placeholder-gray-400"
+            />
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 p-0.5 shrink-0">
+            {(['all', 'active', 'inactive'] as ActiveFilter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setActiveFilter(f)}
+                className={cn(
+                  'px-3 py-1 rounded-md text-xs font-medium transition-colors',
+                  activeFilter === f ? 'bg-[#293c4f] text-white' : 'text-gray-500 hover:text-gray-800'
+                )}
+              >
+                {f === 'all' ? 'Todos' : f === 'active' ? 'Activos' : 'Inactivos'}
+              </button>
+            ))}
+          </div>
+          {total > 0 && (
+            <span className="text-xs text-gray-400 shrink-0">
+              {total} resultado{total !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
       </Card>
 
@@ -197,7 +255,34 @@ export default function ClientsPage() {
             action={<Button variant="primary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowNewContact(true)}>Nuevo cliente</Button>}
           />
         ) : (
-          <table className="w-full text-sm">
+          <>
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y divide-gray-50">
+              {clients.map((c) => (
+                <div
+                  key={c.id}
+                  className={cn('flex items-center justify-between px-4 py-3 hover:bg-gray-50/60 transition-colors cursor-pointer', !c.isActive && 'opacity-50')}
+                  onClick={() => router.push(`/dashboard/clients/${c.id}`)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-gray-800 font-medium truncate">{c.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{c.rnc ?? c.email ?? '—'}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="sm" title="Editar" onClick={() => openEdit(c)}>
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="sm" title={c.isActive ? 'Desactivar' : 'Activar'}
+                      onClick={() => toggle.mutate({ id: c.id, isActive: c.isActive })}>
+                      {c.isActive ? <UserX className="w-3.5 h-3.5 text-amber-400" /> : <UserCheck className="w-3.5 h-3.5 text-green-500" />}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
                 {['Nombre', 'RNC / Cédula', 'Email', 'Teléfono', 'Creado', ''].map((h) => (
@@ -246,6 +331,8 @@ export default function ClientsPage() {
               ))}
             </tbody>
           </table>
+          </div>
+          </>
         )}
       </Card>
 

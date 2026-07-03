@@ -37,9 +37,8 @@ const ACCOUNT_TYPE_LABEL: Record<string, string> = {
 export default function AccountingPage() {
   const [tab, setTab] = useState<Tab>('journal')
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7))
-  const { user, mode } = useAuthStore()
-  const isAdmin    = user?.role === 'ADMIN'
-  const isProforma = mode === 'proforma'
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'ADMIN'
 
   return (
     <div className="space-y-5">
@@ -62,13 +61,13 @@ export default function AccountingPage() {
         ))}
       </div>
 
-      {tab === 'journal'       && <JournalTab period={period} proformaOnly={isProforma} />}
+      {tab === 'journal'       && <JournalTab period={period} proformaOnly={false} />}
       {tab === 'accounts'      && <AccountsTab />}
-      {tab === 'trial-balance' && <TrialBalanceTab period={period} proformaOnly={isProforma} />}
-      {tab === 'balance-sheet' && <BalanceSheetTab period={period} proformaOnly={isProforma} />}
-      {tab === 'pnl'           && <PnLTab period={period} proformaOnly={isProforma} />}
-      {tab === 'margins'       && <MarginsTab year={parseInt(period.slice(0, 4))} proformaOnly={isProforma} />}
-      {tab === 'itbis'         && <ItbisTab proformaOnly={isProforma} />}
+      {tab === 'trial-balance' && <TrialBalanceTab period={period} proformaOnly={false} />}
+      {tab === 'balance-sheet' && <BalanceSheetTab period={period} proformaOnly={false} />}
+      {tab === 'pnl'           && <PnLTab period={period} proformaOnly={false} />}
+      {tab === 'margins'       && <MarginsTab year={parseInt(period.slice(0, 4))} proformaOnly={false} />}
+      {tab === 'itbis'         && <ItbisTab proformaOnly={false} />}
       {tab === 'periods'       && <PeriodsTab isAdmin={isAdmin} />}
     </div>
   )

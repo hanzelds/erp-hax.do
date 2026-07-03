@@ -58,7 +58,7 @@ const ITBIS_EXEMPT_TYPES = new Set([
 
 async function autoJournalEntry(opts: {
   type: 'INVOICE' | 'PAYMENT' | 'CREDIT_NOTE'
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   description: string
   debitCode: string
   creditCode: string
@@ -274,7 +274,7 @@ export async function cancelInvoice(id: string) {
       // Reverso: Dr Ingresos / Cr CxC
       await autoJournalEntry({
         type: 'CREDIT_NOTE',
-        businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+        businessUnit: invoice.businessUnit as 'HAX' | 'KODER' | 'ALDIA',
         description: `Anulación factura ${invoice.number}`,
         debitCode:  incomeCode,
         creditCode: cxcCode,
@@ -388,7 +388,7 @@ export async function addPayment(invoiceId: string, data: any) {
       const period = `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}`
       await autoJournalEntry({
         type: 'PAYMENT',
-        businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+        businessUnit: invoice.businessUnit as 'HAX' | 'KODER' | 'ALDIA',
         description: `Pago factura ${invoice.number}`,
         debitCode:  bankCode,
         creditCode: cxcCode,
@@ -479,7 +479,7 @@ export async function emitInvoice(id: string) {
     if (invoice.subtotal > 0) {
       await autoJournalEntry({
         type: 'INVOICE',
-        businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+        businessUnit: invoice.businessUnit as 'HAX' | 'KODER' | 'ALDIA',
         description: `Factura aprobada ${invoice.number} - subtotal`,
         debitCode:  acctReceivables,
         creditCode: incomeAccount,
@@ -491,7 +491,7 @@ export async function emitInvoice(id: string) {
     if (invoice.taxAmount > 0) {
       await autoJournalEntry({
         type: 'INVOICE',
-        businessUnit: invoice.businessUnit as 'HAX' | 'KODER',
+        businessUnit: invoice.businessUnit as 'HAX' | 'KODER' | 'ALDIA',
         description: `Factura aprobada ${invoice.number} - ITBIS`,
         debitCode:  acctReceivables,
         creditCode: acctItbisPayable,

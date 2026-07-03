@@ -59,23 +59,59 @@ export async function getOpportunity(id: string) {
   return opp
 }
 
+function sanitizeOpportunityInput(data: any) {
+  const clean: any = { ...data }
+  if (clean.value === '' || clean.value === undefined) clean.value = null
+  else if (clean.value !== null) clean.value = parseFloat(clean.value) || null
+  if (clean.probability !== undefined && clean.probability !== null) clean.probability = parseInt(clean.probability) || 0
+  if (clean.expectedDate === '') clean.expectedDate = null
+  if (clean.closedAt === '') clean.closedAt = null
+  if (clean.contactName === '') clean.contactName = null
+  if (clean.contactPhone === '') clean.contactPhone = null
+  if (clean.assignedTo === '') clean.assignedTo = null
+  if (clean.description === '') clean.description = null
+  if (clean.notes === '') clean.notes = null
+  if (clean.closedReason === '') clean.closedReason = null
+  return clean
+}
+
 export async function createOpportunity(data: any) {
+  const clean = sanitizeOpportunityInput(data)
   return prisma.crmOpportunity.create({
-    data,
+    data: clean,
     include: { client: { select: { id: true, name: true } } },
   })
+}
+
+export async function bulkCreateOpportunities(items: any[]) {
+  if (!Array.isArray(items) || !items.length) throw new Error('No hay oportunidades para crear')
+  const sanitized = items.map(sanitizeOpportunityInput)
+  return prisma.$transaction(
+    sanitized.map((data) => prisma.crmOpportunity.create({
+      data,
+      include: { client: { select: { id: true, name: true } } },
+    }))
+  )
 }
 
 export async function updateOpportunity(id: string, data: any) {
   const exists = await prisma.crmOpportunity.findUnique({ where: { id } })
   if (!exists) throw new NotFoundError('Oportunidad')
+
+  // Sanitize: empty strings → null for typed optional fields
+  const clean: any = { ...data }
+  if (clean.value === '' || clean.value === undefined) clean.value = null
+  else if (clean.value !== null) clean.value = parseFloat(clean.value) || null
+  if (clean.probability !== undefined) clean.probability = parseInt(clean.probability) || 0
+  if (clean.expectedDate === '') clean.expectedDate = null
+
   return prisma.crmOpportunity.update({
     where: { id },
     data: {
-      ...data,
-      closedAt: (data.status === LeadStatus.CLOSED_WON || data.status === LeadStatus.CLOSED_LOST) && !exists.closedAt
+      ...clean,
+      closedAt: (clean.status === LeadStatus.CLOSED_WON || clean.status === LeadStatus.CLOSED_LOST) && !exists.closedAt
         ? new Date()
-        : (data.status && data.status !== LeadStatus.CLOSED_WON && data.status !== LeadStatus.CLOSED_LOST ? null : undefined),
+        : (clean.status && clean.status !== LeadStatus.CLOSED_WON && clean.status !== LeadStatus.CLOSED_LOST ? null : undefined),
     },
     include: { client: { select: { id: true, name: true } } },
   })
@@ -93,7 +129,7 @@ export async function getAnalytics(businessUnit?: BusinessUnit) {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
-  const [all, wonMonth, lostThisMonth, recentWon, recentLost] = await Promise.all([
+  const [all, wonMonth, lostThisMonth, recentWon, recentLost, openOpportunities] = await Promise.all([
     prisma.crmOpportunity.findMany({
       where,
       select: { status: true, value: true, probability: true, businessUnit: true },
@@ -111,6 +147,12 @@ export async function getAnalytics(businessUnit?: BusinessUnit) {
     }),
     prisma.crmOpportunity.count({
       where: { ...where, status: LeadStatus.CLOSED_LOST, closedAt: { gte: ninetyDaysAgo } },
+    }),
+    prisma.crmOpportunity.findMany({
+      where: { ...where, status: { notIn: [LeadStatus.CLOSED_WON, LeadStatus.CLOSED_LOST] } },
+      select: { id: true, title: true, status: true, value: true, probability: true },
+      orderBy: [{ value: 'desc' }],
+      take: 10,
     }),
   ])
 
@@ -130,7 +172,7 @@ export async function getAnalytics(businessUnit?: BusinessUnit) {
   })
 
   const byBusinessUnit = !businessUnit
-    ? (['HAX', 'KODER'] as BusinessUnit[]).map((unit) => {
+    ? (['HAX', 'KODER', 'ALDIA'] as BusinessUnit[]).map((unit) => {
         const items = all.filter((o: any) => o.businessUnit === unit && o.status !== LeadStatus.CLOSED_LOST)
         return { unit, count: items.length, totalValue: items.reduce((s: number, o: any) => s + (o.value ?? 0), 0) }
       })
@@ -145,7 +187,67 @@ export async function getAnalytics(businessUnit?: BusinessUnit) {
     winRate,
     byStage,
     byBusinessUnit,
+    openOpportunities,
   }
+}
+
+export async function bulkUpdateStatus(ids: string[], status: LeadStatus) {
+  if (!ids.length) throw new Error('No IDs provided')
+  const isClosing = status === LeadStatus.CLOSED_WON || status === LeadStatus.CLOSED_LOST
+  return prisma.crmOpportunity.updateMany({
+    where: { id: { in: ids } },
+    data: { status, ...(isClosing ? { closedAt: new Date() } : { closedAt: null }) },
+  })
+}
+
+export async function bulkAssign(ids: string[], assignedTo: string) {
+  if (!ids.length) throw new Error('No IDs provided')
+  return prisma.crmOpportunity.updateMany({
+    where: { id: { in: ids } },
+    data: { assignedTo },
+  })
+}
+
+export async function exportCsv(query: any): Promise<string> {
+  const where: any = {}
+  if (query.businessUnit) where.businessUnit = query.businessUnit
+  if (query.status)       where.status = query.status
+  if (query.leadSource)   where.leadSource = query.leadSource
+
+  const rows = await prisma.crmOpportunity.findMany({
+    where,
+    include: { client: { select: { name: true } } },
+    orderBy: [{ probability: 'desc' }, { createdAt: 'desc' }],
+  })
+
+  const STAGE: Record<string, string> = {
+    LEAD: 'Lead', CONTACT: 'Contactado', PROPOSAL: 'Propuesta',
+    NEGOTIATION: 'Negociación', CLOSED_WON: 'Ganado', CLOSED_LOST: 'Perdido',
+  }
+  const SOURCE: Record<string, string> = {
+    COLD_OUTREACH: 'Prospección fría', REFERRAL: 'Referido', INBOUND: 'Inbound',
+    SOCIAL_MEDIA: 'Redes sociales', EVENT: 'Evento', REPEAT: 'Recurrente',
+  }
+
+  const header = 'Título,Cliente,Etapa,Valor DOP,Probabilidad %,Origen,Asignado,Contacto,Teléfono,Unidad,Cierre esperado,Creado'
+  const escape = (v: any) => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`
+
+  const lines = rows.map((r: any) => [
+    escape(r.title),
+    escape(r.client?.name),
+    escape(STAGE[r.status] ?? r.status),
+    r.value ?? '',
+    r.probability,
+    escape(SOURCE[r.leadSource] ?? r.leadSource),
+    escape(r.assignedTo),
+    escape(r.contactName),
+    escape(r.contactPhone),
+    escape(r.businessUnit),
+    r.expectedDate ? new Date(r.expectedDate).toLocaleDateString('es-DO') : '',
+    new Date(r.createdAt).toLocaleDateString('es-DO'),
+  ].join(','))
+
+  return [header, ...lines].join('\n')
 }
 
 export async function listActivities(opportunityId: string) {

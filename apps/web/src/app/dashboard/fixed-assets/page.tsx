@@ -22,7 +22,7 @@ interface FixedAsset {
   id: string
   name: string
   category: AssetCategory
-  businessUnit: 'HAX' | 'KODER'
+  businessUnit: 'HAX' | 'KODER' | 'ALDIA'
   purchaseDate: string
   purchaseValue: number
   accumulatedDepreciation: number
@@ -467,7 +467,7 @@ function NewAssetModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({
     name: '',
     category: 'EQUIPMENT' as AssetCategory,
-    businessUnit: 'HAX' as 'HAX' | 'KODER',
+    businessUnit: 'HAX' as 'HAX' | 'KODER' | 'ALDIA',
     purchaseDate: '',
     purchaseValue: '',
     usefulLifeMonths: '',
@@ -523,9 +523,10 @@ function NewAssetModal({ onClose }: { onClose: () => void }) {
               </Select>
             </F>
             <F label="Unidad de Negocio *">
-              <Select required value={form.businessUnit} onChange={(e) => set('businessUnit', e.target.value as 'HAX' | 'KODER')} className={ic}>
+              <Select required value={form.businessUnit} onChange={(e) => set('businessUnit', e.target.value as 'HAX' | 'KODER' | 'ALDIA')} className={ic}>
                 <option value="HAX">HAX</option>
                 <option value="KODER">KODER</option>
+                <option value="ALDIA">Al Dia ERP</option>
               </Select>
             </F>
           </div>

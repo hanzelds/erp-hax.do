@@ -23,7 +23,7 @@ import { useAuthStore } from '@/lib/auth-store'
 interface BankAccount {
   id: string; name: string; accountNumber: string | null
   bank: string | null; currency: string; balance: number
-  businessUnit?: 'HAX' | 'KODER' | null; isActive: boolean
+  businessUnit?: 'HAX' | 'KODER' | 'ALDIA' | null; isActive: boolean
 }
 interface BankTransaction {
   id: string; type: 'CREDIT' | 'DEBIT'; amount: number
